@@ -1,2 +1,2 @@
 # cadlad
-Specialized clause code 3d modeling flow
+Specialized claud code 3d modeling flow
