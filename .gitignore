@@ -40,6 +40,9 @@ ENV/
 *.svg
 *.dxf
 
+# Exception: Include example preview files
+!examples/**/render.stl
+
 # OS
 .DS_Store
 Thumbs.db
