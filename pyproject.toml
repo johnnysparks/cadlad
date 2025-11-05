@@ -1,0 +1,27 @@
+[project]
+name = "cadlad-mcp"
+version = "0.1.0"
+description = "MCP server for 3D CAD modeling with inline visualization"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=0.9.0",
+    "cadquery>=2.4.0",
+    "cadquery-ocp>=7.7.2",
+    "Pillow>=10.0.0",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+]
+rendering = [
+    "cairosvg>=2.7.0",
+    "svglib>=1.5.0",
+    "reportlab>=4.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
