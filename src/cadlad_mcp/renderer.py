@@ -11,21 +11,26 @@ import cadquery as cq
 from PIL import Image, ImageDraw, ImageFont
 
 
-def render_to_png(result: Any, width: int = 800, height: int = 600, view_angle: tuple = (45, 45, 0)) -> bytes:
+def render_to_png(result: Any, width: int = 800, height: int = 600, view_angle: tuple = (45, 45, 0), components: dict = None) -> bytes:
     """Render a CadQuery object to PNG bytes using multiple rendering strategies.
 
     Args:
-        result: CadQuery Workplane or Shape object
+        result: CadQuery Workplane or Shape object (or dict of components)
         width: Image width in pixels
         height: Image height in pixels
         view_angle: Tuple of (rotation_x, rotation_y, rotation_z) in degrees
+        components: Optional dict mapping component names to (object, color) tuples
+                   where color is RGB tuple like (139, 90, 43) for brown
 
     Returns:
         PNG image as bytes
     """
     # Strategy 1: Try using CadQuery's exporters to SVG
     try:
-        return _render_via_svg(result, width, height)
+        if components:
+            return _render_components_via_svg(components, width, height)
+        else:
+            return _render_via_svg(result, width, height)
     except Exception as e:
         print(f"SVG rendering failed: {e}", flush=True)
         pass
@@ -42,7 +47,7 @@ def _render_via_svg(result: Any, width: int, height: int) -> bytes:
         svg_path = f.name
 
     try:
-        # Export to SVG
+        # Export to SVG with finer lines
         exporters.export(result, svg_path, opt={
             'width': width,
             'height': height,
@@ -50,7 +55,7 @@ def _render_via_svg(result: Any, width: int, height: int) -> bytes:
             'marginTop': 10,
             'showAxes': True,
             'projectionDir': (1, -1, 0.5),
-            'strokeWidth': 1,
+            'strokeWidth': 0.3,  # Much finer lines
             'strokeColor': (0, 0, 0),
             'hiddenColor': (160, 160, 160),
             'showHidden': True,
@@ -77,6 +82,75 @@ def _render_via_svg(result: Any, width: int, height: int) -> bytes:
     finally:
         if os.path.exists(svg_path):
             os.unlink(svg_path)
+
+
+def _render_components_via_svg(components: dict, width: int, height: int) -> bytes:
+    """Render multiple components with different colors by combining SVGs."""
+    from cadquery import exporters
+    import xml.etree.ElementTree as ET
+
+    svg_files = []
+    try:
+        # Render each component to its own SVG with specified color
+        for name, (obj, color) in components.items():
+            with tempfile.NamedTemporaryFile(suffix='.svg', delete=False, mode='w') as f:
+                svg_path = f.name
+                svg_files.append((svg_path, color))
+
+            # Export with component-specific color
+            exporters.export(obj, svg_path, opt={
+                'width': width,
+                'height': height,
+                'marginLeft': 10,
+                'marginTop': 10,
+                'showAxes': False,
+                'projectionDir': (1, -1, 0.5),
+                'strokeWidth': 0.3,  # Much finer lines
+                'strokeColor': color,
+                'hiddenColor': tuple(int(c * 0.7) for c in color),  # Darker version for hidden lines
+                'showHidden': True,
+            })
+
+        # Combine SVGs by merging their content
+        combined_svg = None
+        for svg_path, color in svg_files:
+            tree = ET.parse(svg_path)
+            root = tree.getroot()
+
+            if combined_svg is None:
+                combined_svg = root
+            else:
+                # Append all children from this SVG to the combined one
+                for child in root:
+                    combined_svg.append(child)
+
+        # Write combined SVG to temp file
+        with tempfile.NamedTemporaryFile(suffix='.svg', delete=False, mode='wb') as f:
+            combined_path = f.name
+            ET.ElementTree(combined_svg).write(f, encoding='utf-8', xml_declaration=True)
+
+        svg_files.append((combined_path, None))
+
+        # Convert combined SVG to PNG
+        try:
+            import cairosvg
+            png_bytes = cairosvg.svg2png(url=combined_path, output_width=width, output_height=height)
+            return png_bytes
+        except ImportError:
+            try:
+                from svglib.svglib import svg2rlg
+                from reportlab.graphics import renderPM
+                drawing = svg2rlg(combined_path)
+                png_bytes = renderPM.drawToString(drawing, fmt='PNG')
+                return png_bytes
+            except ImportError:
+                raise Exception("No SVG renderer available")
+
+    finally:
+        # Clean up all temp files
+        for svg_path, _ in svg_files:
+            if os.path.exists(svg_path):
+                os.unlink(svg_path)
 
 
 def _render_info_image(result: Any, width: int, height: int) -> bytes:
