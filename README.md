@@ -23,6 +23,9 @@ pip install -e .
 pip install -e ".[rendering]"
 ```
 
+> **Tip for Claude Code & Kodex**  
+> Both assistants respond well when you explicitly ask them to run `pip install -e .` (and optionally `pip install -e ".[rendering]"`) inside the repository before attempting any renders. Mention this in your first request so they queue the install step automatically.
+
 ### 2. Configure Claude Code
 
 Add the MCP server to your Claude Code configuration:
@@ -45,6 +48,16 @@ Add the MCP server to your Claude Code configuration:
 ### 3. Restart Claude Code
 
 The MCP server will automatically start when you launch Claude Code.
+
+### 4. Troubleshooting First-Time Renders
+
+Claude Code occasionally stalls the very first time it tries to render if the optional dependencies are missing. If you notice the tool hanging on "creating preview" for more than a minute, prompt Claude Code (or Kodex) to:
+
+1. Re-run the installation commands above to ensure dependencies are present.
+2. Execute `python -m cadlad_mcp.server --ping` from the repository root. This forces a warm-up import of CadQuery and confirms the server starts cleanly.
+3. If the ping succeeds but rendering still hangs, ask the assistant to restart the MCP server session (close and reopen the Claude Code/Kodex workspace) so the environment picks up the fresh install.
+
+These steps typically unblock the first render so subsequent iterations work smoothly.
 
 ## Usage Examples
 
