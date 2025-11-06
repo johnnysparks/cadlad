@@ -211,6 +211,20 @@ pytest
 black src/
 ```
 
+### Updating Examples
+
+When modifying example models in `examples/*/model.py`, you **must** regenerate the output files:
+
+```bash
+# Regenerate all examples
+python regenerate_examples.py
+
+# Or regenerate a specific example
+python regenerate_examples.py simple_box
+```
+
+This ensures that `render.png` and `render.stl` stay in sync with the model code. The GitHub Actions workflow will also check this on PRs.
+
 ## License
 
 MIT

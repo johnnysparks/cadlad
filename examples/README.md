@@ -87,12 +87,33 @@ exporters.export(result, "output.stl")
 exporters.export(result, "output.step")
 ```
 
+## Regenerating Example Outputs
+
+**IMPORTANT**: Whenever you update an example's `model.py` file, you **must** regenerate both the PNG render and STL model to keep them in sync.
+
+### Regenerate All Examples
+
+```bash
+# From the repository root
+python regenerate_examples.py
+```
+
+### Regenerate a Specific Example
+
+```bash
+python regenerate_examples.py simple_box
+```
+
+This ensures that:
+- `render.png` - PNG visualization is up to date
+- `render.stl` - STL model file is up to date
+
 ## Creating Your Own Examples
 
 1. Create a new folder in `examples/`
 2. Create `model.py` with your CadQuery code (must define a `result` variable)
-3. Copy `render.py` from another example
-4. Run `python3 render.py` to generate the PNG
+3. Add the example name to the `EXAMPLES` list in `regenerate_examples.py`
+4. Run `python regenerate_examples.py your_example_name` to generate PNG and STL
 5. (Optional) Add a `README.md` with detailed documentation
 
 ## Requirements
