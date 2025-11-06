@@ -68,6 +68,14 @@ for i in range(num_boards):
         deck_surface = deck_surface.union(board)
 
 # 2. Foundation Posts (4 corners)
+# Posts should support the beams, so calculate their height based on beam position
+deck_board_bottom = DECK_HEIGHT - DECK_BOARD_THICKNESS
+joist_top = deck_board_bottom
+joist_bottom = joist_top - JOIST_HEIGHT
+beam_bottom = joist_bottom - BEAM_HEIGHT
+# Posts go from ground to bottom of beams
+actual_post_height = beam_bottom
+
 post_inset = 8  # Inset from edges
 post_locations = [
     (-DECK_WIDTH/2 + post_inset, -DECK_LENGTH/2 + post_inset),  # Bottom-left
@@ -80,8 +88,8 @@ posts = cq.Workplane("XY")
 for i, loc in enumerate(post_locations):
     post = (
         cq.Workplane("XY")
-        .box(POST_SIZE, POST_SIZE, POST_HEIGHT)
-        .translate((loc[0], loc[1], POST_HEIGHT/2))
+        .box(POST_SIZE, POST_SIZE, actual_post_height)
+        .translate((loc[0], loc[1], actual_post_height/2))
     )
     if i == 0:
         posts = post
@@ -89,7 +97,12 @@ for i, loc in enumerate(post_locations):
         posts = posts.union(post)
 
 # 3. Perimeter Beams (2×6 flat around the edges)
-beam_z = POST_HEIGHT + BEAM_HEIGHT/2
+# Beams should support the joists, so position them below the joists
+# Calculate beam position based on where joists need to be
+deck_board_bottom = DECK_HEIGHT - DECK_BOARD_THICKNESS
+joist_top = deck_board_bottom
+joist_bottom = joist_top - JOIST_HEIGHT
+beam_z = joist_bottom - BEAM_HEIGHT/2
 
 beams = cq.Workplane("XY")
 
@@ -117,7 +130,10 @@ for i, (x, y, length, is_horizontal) in enumerate(beam_configs):
 
 # 4. Joists (2×6 on edge, running perpendicular to deck boards)
 # Joists run along X-axis (perpendicular to the deck boards which run along Y-axis)
-joist_z = POST_HEIGHT + BEAM_HEIGHT + JOIST_HEIGHT/2
+# Joists should be BELOW the deck surface, supporting it from underneath
+# Position them so their top surface is just below the deck boards
+deck_board_bottom = DECK_HEIGHT - DECK_BOARD_THICKNESS
+joist_z = deck_board_bottom - JOIST_HEIGHT/2
 
 num_joists = int(DECK_LENGTH / JOIST_SPACING) + 1
 
@@ -153,9 +169,12 @@ print(f"  2×6 Redwood: {deck_board_count} boards @ {deck_board_length_ft:.0f}' 
 
 # Posts
 post_count = len(post_locations)
-post_length_ft = math.ceil(POST_HEIGHT / 12)
+post_length_ft = math.ceil(actual_post_height / 12)
+if post_length_ft < 1:
+    post_length_ft = 1  # Minimum 1' boards
 print(f"\nPOSTS:")
 print(f"  4×4 Pressure-treated: {post_count} posts @ {post_length_ft}' each")
+print(f"  (Actual height needed: {actual_post_height:.1f}\")")
 
 # Beams
 beam_total_length = 2 * DECK_WIDTH + 2 * DECK_LENGTH
@@ -188,9 +207,17 @@ print(f"\n{'='*60}")
 print(f"ASSEMBLY NOTES:")
 print(f"{'='*60}")
 print(f"1. Dig {post_count} post footings 18\" deep, 12\" diameter")
-print(f"2. Set 4×4 posts in concrete footings")
+print(f"2. Set 4×4 posts in concrete footings (height: {actual_post_height:.1f}\")")
 print(f"3. Install perimeter 2×6 beams (flat) on top of posts")
-print(f"4. Install {joist_count} joists (2×6 on edge) at {JOIST_SPACING}\" OC")
-print(f"5. Install {deck_board_count} deck boards (2×6) with {DECK_BOARD_GAP}\" gaps")
-print(f"6. Total deck height: {DECK_HEIGHT}\" including all layers")
+print(f"4. Install {joist_count} joists (2×6 on edge) UNDERNEATH deck surface")
+print(f"   - Joists run perpendicular to deck boards at {JOIST_SPACING}\" OC")
+print(f"   - Joists rest on beams and support deck from below")
+print(f"5. Install {deck_board_count} deck boards (2×6) ON TOP of joists")
+print(f"   - Leave {DECK_BOARD_GAP}\" gaps between boards")
+print(f"6. Total deck height: {DECK_HEIGHT}\" (ground to deck surface)")
+print(f"\nSTRUCTURE (bottom to top):")
+print(f"  Posts: {0}\" - {actual_post_height:.1f}\"")
+print(f"  Beams: {beam_bottom:.1f}\" - {joist_bottom:.1f}\"")
+print(f"  Joists: {joist_bottom:.1f}\" - {joist_top:.1f}\"")
+print(f"  Deck surface: {deck_board_bottom:.1f}\" - {DECK_HEIGHT}\"")
 print(f"\n{'='*60}\n")
