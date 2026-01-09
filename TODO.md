@@ -17,7 +17,7 @@ While creating the `soccer_ball` example, the following issues were encountered:
 **Problem**: New examples must be manually added to the `EXAMPLES` list in `regenerate_examples.py`.
 **Solution**: Implemented `discover_examples()` function that auto-discovers examples by scanning for `examples/*/model.py` files. The hardcoded list has been removed.
 **Location**: `regenerate_examples.py:65-86`
-**Impact**: Discovered 7 examples including `opus_outdoor_counter_frame` which was missing from the original hardcoded list!
+**Impact**: Discovered 7 examples including `opus_outdoor_counter_cabinet` which was missing from the original hardcoded list!
 
 ### 3. Redundant render.py Files
 **Problem**: Each example has a `render.py` script, but `regenerate_examples.py` doesn't use them - it duplicates the rendering logic.
@@ -99,7 +99,7 @@ Three high-priority workflow improvements have been completed:
 
 1. **Dependency Check**: The script now checks for missing dependencies before attempting to import them and provides clear installation instructions.
 
-2. **Auto-Discovery**: Examples are automatically discovered by scanning the `examples/` directory for subdirectories containing `model.py` files. This eliminated the need to manually maintain the EXAMPLES list and immediately discovered a previously missing example (`opus_outdoor_counter_frame`).
+2. **Auto-Discovery**: Examples are automatically discovered by scanning the `examples/` directory for subdirectories containing `model.py` files. This eliminated the need to manually maintain the EXAMPLES list and immediately discovered a previously missing example (`opus_outdoor_counter_cabinet`).
 
 3. **CI Auto-Discovery**: The GitHub Actions workflow now triggers on any new `model.py` file and uses the auto-discovery feature to validate all examples, including new ones.
 

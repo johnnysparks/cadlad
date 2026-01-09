@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate PNG rendering of Opus's Outdoor Counter Frame with colors."""
+"""Generate PNG rendering of Opus's Outdoor Counter Cabinet with colors."""
 
 import sys
 import os
@@ -16,8 +16,8 @@ model_code = open(Path(__file__).parent / 'model.py').read()
 
 # Replace the final result line to keep components separate
 model_code = model_code.replace(
-    "# 8. COMBINE ALL COMPONENTS\nresult = (",
-    "# 8. Keep components separate for colored rendering\n_skip = ("
+    "# 9. COMBINE ALL COMPONENTS\nresult = (",
+    "# 9. Keep components separate for colored rendering\n_skip = ("
 )
 
 exec(model_code)
@@ -31,6 +31,7 @@ COLORS = {
     'joists': (120, 105, 70),           # Pressure-treated wood
     'deck': (200, 180, 140),            # Plywood (light tan)
     'panels': (180, 160, 120),          # Plywood panels (slightly darker)
+    'doors': (90, 70, 50),              # Cabinet doors (dark brown HDPE/plywood)
 }
 
 # Add a ground plane for context
@@ -55,10 +56,11 @@ components = {
     'joists': (joists, COLORS['joists']),
     'deck': (deck, COLORS['deck']),
     'panels': (shear_panels, COLORS['panels']),
+    'doors': (all_doors, COLORS['doors']),
 }
 
 # Render to PNG with dimensions suitable for construction review
-print("\nRendering Opus's Outdoor Counter Frame with colors (isometric view)...")
+print("\nRendering Opus's Outdoor Counter Cabinet with colors (isometric view)...")
 png_bytes = render_to_png(None, width=1600, height=1200, components=components)
 
 # Save PNG
