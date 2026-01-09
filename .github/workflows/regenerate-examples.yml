@@ -1,14 +1,20 @@
 name: Regenerate Example Outputs
 
+# This workflow auto-discovers and validates ALL examples by scanning
+# for examples/*/model.py files. New examples trigger this workflow
+# automatically when their model.py is added.
+
 on:
   push:
     paths:
-      - 'examples/**/model.py'
+      - 'examples/**/model.py'  # Triggers on any new or modified model.py
       - 'regenerate_examples.py'
+      - 'src/cadlad_mcp/renderer.py'  # Renderer changes affect all outputs
   pull_request:
     paths:
       - 'examples/**/model.py'
       - 'regenerate_examples.py'
+      - 'src/cadlad_mcp/renderer.py'
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
@@ -38,7 +44,7 @@ jobs:
         run: |
           pip install -e ".[rendering]"
 
-      - name: Regenerate example outputs
+      - name: Regenerate example outputs (auto-discovers all examples)
         run: |
           python regenerate_examples.py
 
