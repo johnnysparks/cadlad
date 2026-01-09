@@ -9,6 +9,7 @@ from typing import Any
 
 import cadquery as cq
 from PIL import Image, ImageDraw, ImageFont
+import numpy as np
 
 
 def render_to_png(result: Any, width: int = 800, height: int = 600, view_angle: tuple = (45, 45, 0), components: dict = None) -> bytes:
@@ -25,7 +26,17 @@ def render_to_png(result: Any, width: int = 800, height: int = 600, view_angle: 
     Returns:
         PNG image as bytes
     """
-    # Strategy 1: Try using CadQuery's exporters to SVG
+    # Strategy 1: Try 3D rendering with proper depth perception (trimesh + pyrender)
+    try:
+        if components:
+            return _render_components_via_3d(components, width, height, view_angle)
+        else:
+            return _render_via_3d(result, width, height, view_angle)
+    except Exception as e:
+        print(f"3D rendering failed: {e}, falling back to SVG", flush=True)
+        pass
+
+    # Strategy 2: Try using CadQuery's exporters to SVG (fallback)
     try:
         if components:
             return _render_components_via_svg(components, width, height)
@@ -35,8 +46,233 @@ def render_to_png(result: Any, width: int = 800, height: int = 600, view_angle: 
         print(f"SVG rendering failed: {e}", flush=True)
         pass
 
-    # Strategy 2: Create an info image with model stats
+    # Strategy 3: Create an info image with model stats
     return _render_info_image(result, width, height)
+
+
+def _render_via_3d(result: Any, width: int, height: int, view_angle: tuple = (45, 45, 0)) -> bytes:
+    """Render using 3D engine (PyVista) for proper depth perception.
+
+    Args:
+        result: CadQuery Workplane or Shape object
+        width: Image width in pixels
+        height: Image height in pixels
+        view_angle: Tuple of (rotation_x, rotation_y, rotation_z) in degrees
+
+    Returns:
+        PNG image as bytes
+    """
+    import pyvista as pv
+    from cadquery import exporters
+
+    # Export to STL mesh format
+    with tempfile.NamedTemporaryFile(suffix='.stl', delete=False) as f:
+        stl_path = f.name
+
+    try:
+        exporters.export(result, stl_path)
+
+        # Load mesh with PyVista
+        mesh = pv.read(stl_path)
+
+        # Render the mesh
+        return _render_mesh_to_png_pyvista(mesh, width, height, view_angle)
+
+    finally:
+        if os.path.exists(stl_path):
+            os.unlink(stl_path)
+
+
+def _render_components_via_3d(components: dict, width: int, height: int, view_angle: tuple = (45, 45, 0)) -> bytes:
+    """Render multiple components with different colors using 3D engine.
+
+    Args:
+        components: Dict mapping component names to (object, color) tuples
+        width: Image width in pixels
+        height: Image height in pixels
+        view_angle: Tuple of (rotation_x, rotation_y, rotation_z) in degrees
+
+    Returns:
+        PNG image as bytes
+    """
+    import pyvista as pv
+    from cadquery import exporters
+
+    stl_files = []
+    meshes_with_colors = []
+
+    try:
+        # Export each component to STL
+        for name, (obj, color) in components.items():
+            with tempfile.NamedTemporaryFile(suffix='.stl', delete=False) as f:
+                stl_path = f.name
+                stl_files.append(stl_path)
+
+            exporters.export(obj, stl_path)
+            mesh = pv.read(stl_path)
+
+            # Normalize RGB color from 0-255 to 0-1
+            color_normalized = tuple(c / 255.0 for c in color)
+            meshes_with_colors.append((mesh, color_normalized))
+
+        # Render all meshes together
+        return _render_meshes_to_png_pyvista(meshes_with_colors, width, height, view_angle)
+
+    finally:
+        # Clean up temp files
+        for stl_path in stl_files:
+            if os.path.exists(stl_path):
+                os.unlink(stl_path)
+
+
+def _render_mesh_to_png_pyvista(mesh, width: int, height: int, view_angle: tuple = (45, 45, 0),
+                                 color: tuple = None) -> bytes:
+    """Render a single PyVista mesh to PNG with proper lighting and shading.
+
+    Args:
+        mesh: PyVista mesh object
+        width: Image width
+        height: Image height
+        view_angle: (rx, ry, rz) rotation angles in degrees
+        color: Optional RGB color tuple (0-1 range), defaults to light gray
+
+    Returns:
+        PNG bytes
+    """
+    import pyvista as pv
+
+    # Default material color (light gray with slight blue tint for better depth)
+    if color is None:
+        color = (0.7, 0.75, 0.8)  # RGB
+
+    # Create plotter with offscreen rendering
+    plotter = pv.Plotter(off_screen=True, window_size=(width, height))
+
+    # Add mesh with lighting for depth perception
+    plotter.add_mesh(
+        mesh,
+        color=color,
+        smooth_shading=True,
+        specular=0.5,  # Specular highlights for depth
+        specular_power=15,
+        ambient=0.3,  # Ambient lighting
+        diffuse=0.7,  # Diffuse lighting for better depth
+        show_edges=False,
+    )
+
+    # Set up camera position based on view angle
+    _setup_camera_pyvista(plotter, mesh, view_angle)
+
+    # Enable better lighting with SSAO (Screen Space Ambient Occlusion) for depth
+    plotter.enable_ssao(radius=12, bias=0.5, kernel_size=64, blur=True)
+
+    # Set background to white
+    plotter.background_color = 'white'
+
+    # Render and capture screenshot
+    img_array = plotter.screenshot(return_img=True, transparent_background=False)
+    plotter.close()
+
+    # Convert numpy array to PNG bytes
+    img = Image.fromarray(img_array)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    return buf.getvalue()
+
+
+def _render_meshes_to_png_pyvista(meshes_with_colors: list, width: int, height: int,
+                                  view_angle: tuple = (45, 45, 0)) -> bytes:
+    """Render multiple PyVista meshes with different colors to PNG.
+
+    Args:
+        meshes_with_colors: List of (mesh, color) tuples where color is RGB 0-1 range
+        width: Image width
+        height: Image height
+        view_angle: (rx, ry, rz) rotation angles in degrees
+
+    Returns:
+        PNG bytes
+    """
+    import pyvista as pv
+
+    # Create plotter with offscreen rendering
+    plotter = pv.Plotter(off_screen=True, window_size=(width, height))
+
+    # Add each mesh with its color
+    for mesh, color in meshes_with_colors:
+        plotter.add_mesh(
+            mesh,
+            color=color,
+            smooth_shading=True,
+            specular=0.5,
+            specular_power=15,
+            ambient=0.3,
+            diffuse=0.7,
+            show_edges=False,
+        )
+
+    # Use first mesh for camera setup (all meshes should be in same scene)
+    first_mesh = meshes_with_colors[0][0]
+    _setup_camera_pyvista(plotter, first_mesh, view_angle)
+
+    # Enable SSAO for depth perception
+    plotter.enable_ssao(radius=12, bias=0.5, kernel_size=64, blur=True)
+
+    # Set background to white
+    plotter.background_color = 'white'
+
+    # Render and capture screenshot
+    img_array = plotter.screenshot(return_img=True, transparent_background=False)
+    plotter.close()
+
+    # Convert numpy array to PNG bytes
+    img = Image.fromarray(img_array)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    return buf.getvalue()
+
+
+def _setup_camera_pyvista(plotter, mesh, view_angle: tuple = (45, 45, 0)) -> None:
+    """Set up camera with proper perspective and viewing angle for PyVista.
+
+    Args:
+        plotter: PyVista plotter object
+        mesh: PyVista mesh for bounds calculation
+        view_angle: (rotation_x, rotation_y, rotation_z) in degrees
+    """
+    import pyvista as pv
+
+    # Get mesh bounds and center
+    bounds = mesh.bounds
+    center = mesh.center
+
+    # Calculate bounding box size
+    size = np.sqrt(
+        (bounds[1] - bounds[0])**2 +
+        (bounds[3] - bounds[2])**2 +
+        (bounds[5] - bounds[4])**2
+    )
+
+    # Convert view angles to radians
+    rx, ry, rz = [np.radians(angle) for angle in view_angle]
+
+    # Calculate camera position using spherical coordinates
+    camera_distance = size * 2.0
+    cam_x = camera_distance * np.cos(ry) * np.cos(rx)
+    cam_y = camera_distance * np.sin(rx)
+    cam_z = camera_distance * np.sin(ry) * np.cos(rx)
+
+    camera_pos = center + np.array([cam_x, cam_y, cam_z])
+
+    # Set camera position and point it at the center
+    plotter.camera_position = [
+        camera_pos,  # Camera position
+        center,      # Focal point
+        (0, 0, 1)    # View up direction
+    ]
+
+    # Enable perspective projection for better depth perception
+    plotter.camera.parallel_projection = False
 
 
 def _render_via_svg(result: Any, width: int, height: int) -> bytes:
