@@ -6,10 +6,12 @@ import os
 from pathlib import Path
 import cadquery as cq
 
-# Add src to path
+# Add src and examples to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from cadlad_mcp.renderer import render_to_png
+from materials import SEMANTIC_GROUPS
 
 # Import the model (this creates separate component variables)
 model_code = open(Path(__file__).parent / 'model.py').read()
@@ -22,17 +24,8 @@ model_code = model_code.replace(
 
 exec(model_code)
 
-# Define colors for each component (RGB tuples)
-COLORS = {
-    'ledger': (120, 105, 70),           # Pressure-treated wood (greenish-brown)
-    'front_beam': (120, 105, 70),       # Pressure-treated wood
-    'base_frame': (100, 85, 50),        # Pressure-treated wood (darker for base)
-    'walls': (140, 125, 90),            # Framed walls (lighter PT wood + plywood)
-    'joists': (120, 105, 70),           # Pressure-treated wood
-    'deck': (200, 180, 140),            # Plywood (light tan)
-    'panels': (180, 160, 120),          # Plywood panels (slightly darker)
-    'doors': (90, 70, 50),              # Cabinet doors (dark brown HDPE/plywood)
-}
+# Use semantic material colors for clarity
+COLORS = SEMANTIC_GROUPS['cabinet_structure']
 
 # Add a ground plane for context
 ground_margin = 20
@@ -46,16 +39,15 @@ ground_plane = (
     .translate((0, 0, -0.25))
 )
 
-# Create component dictionary for colored rendering
+# Create component dictionary for colored rendering with semantic materials
 components = {
-    'ground': (ground_plane, (140, 130, 120)),    # Concrete/patio gray-brown
+    'ground': (ground_plane, COLORS['ground']),
     'base_frame': (base_frame, COLORS['base_frame']),
-    'walls': (walls, COLORS['walls']),
+    'walls': (all_walls, COLORS['walls']),
     'ledger': (ledger, COLORS['ledger']),
     'front_beam': (front_beam, COLORS['front_beam']),
     'joists': (joists, COLORS['joists']),
     'deck': (deck, COLORS['deck']),
-    'panels': (shear_panels, COLORS['panels']),
     'doors': (all_doors, COLORS['doors']),
 }
 
