@@ -15,6 +15,7 @@ from mcp.server import Server
 from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
 
 from .renderer import render_to_png
+from .exporter_3mf import export_to_3mf
 
 # Storage for models
 MODELS_DIR = Path.home() / ".cadlad" / "models"
@@ -96,7 +97,7 @@ The model will be saved and can be exported to various formats (STL, STEP, etc.)
         ),
         Tool(
             name="export_model",
-            description="Export a model to STL, STEP, or other CAD format.",
+            description="Export a model to STL, STEP, 3MF (Bambu Lab), or other CAD format.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -106,8 +107,8 @@ The model will be saved and can be exported to various formats (STL, STEP, etc.)
                     },
                     "format": {
                         "type": "string",
-                        "enum": ["stl", "step", "svg", "dxf"],
-                        "description": "Export format"
+                        "enum": ["stl", "step", "3mf", "svg", "dxf"],
+                        "description": "Export format (3mf recommended for Bambu Lab printers)"
                     },
                     "output_path": {
                         "type": "string",
@@ -179,6 +180,10 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
             step_path = MODELS_DIR / f"{model_name}.step"
             exporters.export(result, str(step_path))
 
+            # Export 3MF for Bambu Lab printers
+            mf_path = MODELS_DIR / f"{model_name}.3mf"
+            export_to_3mf(result, str(mf_path))
+
             # Render to image
             png_bytes = render_to_png(result)
             png_base64 = base64.b64encode(png_bytes).decode('utf-8')
@@ -190,7 +195,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
 
 Description: {description if description else 'No description'}
 Saved to: {model_file}
-Exported formats: STL, STEP
+Exported formats: STL, STEP, 3MF (Bambu Lab ready)
 
 Model visualization rendered below."""
                 ),
@@ -266,9 +271,14 @@ Model visualization rendered below."""
                 exports_dir.mkdir(parents=True, exist_ok=True)
                 export_path = exports_dir / f"{model_name}.{format_type}"
 
-            # Export
-            from cadquery import exporters
-            exporters.export(result, str(export_path))
+            # Export based on format
+            if format_type == "3mf":
+                # Use our custom 3MF exporter
+                export_to_3mf(result, str(export_path))
+            else:
+                # Use CadQuery's native exporters for other formats
+                from cadquery import exporters
+                exporters.export(result, str(export_path))
 
             return [TextContent(
                 type="text",

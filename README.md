@@ -7,7 +7,7 @@ An MCP (Model Context Protocol) server that enables Claude Code to create, itera
 - **Create 3D Models**: Generate parametric CAD models using Python/CadQuery
 - **Inline Visualization**: See rendered previews of your models directly in Claude Code
 - **Iteration Loop**: Claude can iteratively refine designs based on your feedback
-- **Export Support**: Save models as STL, STEP, SVG, or DXF formats
+- **Export Support**: Save models as STL, STEP, 3MF (Bambu Lab), SVG, or DXF formats
 - **Local & Fast**: No cloud dependencies, runs entirely on your machine
 
 ## Quick Start
@@ -111,12 +111,14 @@ Creates or updates a 3D model from CadQuery code.
 Lists all created models with descriptions.
 
 ### `export_model`
-Exports a model to STL, STEP, SVG, or DXF format.
+Exports a model to STL, STEP, 3MF, SVG, or DXF format.
 
 **Parameters:**
 - `name`: Model name
-- `format`: Export format (stl, step, svg, dxf)
+- `format`: Export format (stl, step, 3mf, svg, dxf)
 - `output_path`: Optional custom path
+
+**Note:** 3MF format is recommended for Bambu Lab printers. See [docs/BAMBU_PRINTING_GUIDE.md](docs/BAMBU_PRINTING_GUIDE.md) for details.
 
 ### `get_model_code`
 Retrieves the CadQuery code for a specific model.
@@ -159,10 +161,17 @@ result = (
 
 Models are saved to `~/.cadlad/models/` as:
 - `.json` - Model metadata and code
-- `.stl` - 3D printable format
+- `.stl` - Universal 3D printable format
 - `.step` - Parametric CAD format
+- `.3mf` - Bambu Lab native format (recommended for printing)
 
 Exports go to `~/.cadlad/exports/` by default.
+
+## 3D Printing with Bambu Lab
+
+All models are automatically exported in 3MF format, the native format for Bambu Studio. Simply drag the `.3mf` file from `~/.cadlad/models/` into Bambu Studio to start printing!
+
+For detailed instructions on Bambu Lab printing, multi-color AMS support, and print settings, see [docs/BAMBU_PRINTING_GUIDE.md](docs/BAMBU_PRINTING_GUIDE.md).
 
 ## Example Iteration Session
 
