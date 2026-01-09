@@ -35,10 +35,20 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Cairo system dependencies
+      - name: Install system dependencies (Cairo + PyVista/OpenGL)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcairo2-dev pkg-config
+          sudo apt-get install -y \
+            libcairo2-dev \
+            pkg-config \
+            xvfb \
+            libgl1-mesa-glx \
+            libgl1-mesa-dri \
+            libglu1-mesa \
+            libsm6 \
+            libxext6 \
+            libxrender1 \
+            libgomp1
 
       - name: Install dependencies
         run: |
@@ -46,7 +56,8 @@ jobs:
 
       - name: Regenerate example outputs (auto-discovers all examples)
         run: |
-          python regenerate_examples.py
+          # Use xvfb-run to provide virtual display for PyVista 3D rendering
+          xvfb-run -a -s "-screen 0 1024x768x24" python regenerate_examples.py
 
       - name: Check for changes
         id: check_changes
