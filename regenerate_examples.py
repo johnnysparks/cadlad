@@ -27,7 +27,8 @@ EXAMPLES = [
     "parametric_gear",
     "platform_deck",
     "lumber_storage_rack",
-    "outdoor_countertop"
+    "outdoor_countertop",
+    "soccer_ball"
 ]
 
 
