@@ -116,6 +116,52 @@ This ensures that:
 4. Run `python regenerate_examples.py your_example_name` to generate PNG and STL
 5. (Optional) Add a `README.md` with detailed documentation
 
+## Code Organization Best Practices
+
+When creating models, follow these principles for maintainable, scalable designs:
+
+### Be Heavily Semantic
+
+Use descriptive variable names that keep the purpose of parts top of mind:
+
+```python
+# Good - purpose is clear
+vertical_bracket = cq.Workplane("XY").box(5.5, 1.5, 36)
+mounting_holes = vertical_bracket.faces("<Y").pushPoints([...]).hole(0.1875)
+left_arm = cq.Workplane("XY").box(5.5, 24, 1.5)
+
+# Avoid - unclear purpose
+b1 = cq.Workplane("XY").box(5.5, 1.5, 36)
+holes = b1.faces("<Y").pushPoints([...]).hole(0.1875)
+a = cq.Workplane("XY").box(5.5, 24, 1.5)
+```
+
+### Use Assemblies for Complex Designs
+
+As parts become more complicated, break them into semantic sub-assemblies:
+
+```python
+# Build individual components
+vertical_support = create_vertical_support()
+horizontal_arms = create_horizontal_arms()
+
+# Assemble into logical units
+single_bracket = vertical_support.union(horizontal_arms)
+
+# Create final assembly
+left_bracket = single_bracket.translate((-POST_SPACING/2, 0, 0))
+right_bracket = single_bracket.translate((POST_SPACING/2, 0, 0))
+result = left_bracket.union(right_bracket)
+```
+
+This approach:
+- Maintains healthy abstractions
+- Makes designs more scalable and modifiable
+- Keeps code readable as complexity grows
+- Mirrors real-world manufacturing and assembly processes
+
+See `lumber_storage_rack/model.py` for a complete example of these patterns.
+
 ## Requirements
 
 All examples require:

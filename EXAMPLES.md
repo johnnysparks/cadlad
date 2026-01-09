@@ -139,7 +139,9 @@ Export each as a separate STL file
 2. **Iterate Gradually**: Make one change at a time for complex designs
 3. **Ask for Views**: Request different angles to verify the design
 4. **Use Parametric Thinking**: Define key dimensions so they're easy to change
-5. **Export When Done**: Save your models in appropriate formats
+5. **Be Semantic in Code**: Use descriptive variable names that keep the purpose of parts top of mind (e.g., `vertical_bracket`, `mounting_holes`, `left_arm`)
+6. **Use Assemblies for Complex Designs**: As parts become more complicated, break them into semantic sub-assemblies to maintain healthy abstractions and scalable designs
+7. **Export When Done**: Save your models in appropriate formats
 
 ## CadQuery Code Patterns
 
