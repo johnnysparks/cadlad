@@ -6,10 +6,12 @@ import os
 from pathlib import Path
 import cadquery as cq
 
-# Add src to path
+# Add src and examples to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from cadlad_mcp.renderer import render_to_png
+from materials import SEMANTIC_GROUPS
 
 # Import the model (this creates separate component variables)
 # We need to modify the model to export components separately
@@ -23,13 +25,8 @@ model_code = model_code.replace(
 
 exec(model_code)
 
-# Define colors for each component (RGB tuples)
-COLORS = {
-    'deck': (139, 90, 43),          # Wood brown (redwood)
-    'posts': (120, 105, 70),        # Pressure-treated wood (greenish-brown)
-    'beams': (120, 105, 70),        # Pressure-treated wood
-    'joists': (120, 105, 70),       # Pressure-treated wood
-}
+# Use semantic material colors for clarity
+COLORS = SEMANTIC_GROUPS['deck_structure']
 
 # Add a ground plane for context
 ground_margin = 40
@@ -43,9 +40,9 @@ ground_plane = (
     .translate((0, 0, -0.25))
 )
 
-# Create component dictionary for colored rendering
+# Create component dictionary for colored rendering with semantic materials
 components = {
-    'ground': (ground_plane, (85, 140, 70)),     # Grass green
+    'ground': (ground_plane, COLORS['ground']),
     'posts': (posts, COLORS['posts']),
     'beams': (beams, COLORS['beams']),
     'joists': (joists, COLORS['joists']),
