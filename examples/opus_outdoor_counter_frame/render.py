@@ -16,8 +16,8 @@ model_code = open(Path(__file__).parent / 'model.py').read()
 
 # Replace the final result line to keep components separate
 model_code = model_code.replace(
-    "# 7. COMBINE ALL COMPONENTS\nresult = (",
-    "# 7. Keep components separate for colored rendering\n_skip = ("
+    "# 8. COMBINE ALL COMPONENTS\nresult = (",
+    "# 8. Keep components separate for colored rendering\n_skip = ("
 )
 
 exec(model_code)
@@ -26,7 +26,8 @@ exec(model_code)
 COLORS = {
     'ledger': (120, 105, 70),           # Pressure-treated wood (greenish-brown)
     'front_beam': (120, 105, 70),       # Pressure-treated wood
-    'legs': (120, 105, 70),             # Pressure-treated wood
+    'base_frame': (100, 90, 60),        # Pressure-treated wood (slightly darker for ground contact)
+    'support_walls': (140, 120, 85),    # Pressure-treated 2x4s (lighter framing)
     'joists': (120, 105, 70),           # Pressure-treated wood
     'deck': (200, 180, 140),            # Plywood (light tan)
     'panels': (180, 160, 120),          # Plywood panels (slightly darker)
@@ -47,7 +48,8 @@ ground_plane = (
 # Create component dictionary for colored rendering
 components = {
     'ground': (ground_plane, (140, 130, 120)),    # Concrete/patio gray-brown
-    'legs': (legs, COLORS['legs']),
+    'base_frame': (base_frame, COLORS['base_frame']),
+    'support_walls': (support_walls, COLORS['support_walls']),
     'ledger': (ledger, COLORS['ledger']),
     'front_beam': (front_beam, COLORS['front_beam']),
     'joists': (joists, COLORS['joists']),
