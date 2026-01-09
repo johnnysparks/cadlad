@@ -1,6 +1,6 @@
-"""Opus's Outdoor Counter Frame — Construction-Ready CAD Model
+"""Opus's Outdoor Counter Cabinet — Construction-Ready CAD Model
 
-A fence-mounted outdoor counter/cabinet frame for a concrete countertop pour.
+A fence-mounted outdoor counter/cabinet with concrete countertop.
 Perfect for outdoor kitchens, BBQ stations, or potting benches.
 
 Design specifications:
@@ -13,7 +13,8 @@ Design specifications:
 - 2×6 joists at 12" on center spanning front to back
 - 3/4" plywood deck for concrete form base
 - 1/2" plywood shear panels on ends for anti-racking
-- 4 equal bays (~30" each) for cabinet doors
+- 4 equal bays (~36" each) with double doors per bay
+- Router-recessed pull handles on each door
 
 Based on the "ladder frame" concept:
 - Back ledger = one long rail
@@ -75,8 +76,20 @@ WALL_2_POSITION = 2 * COUNTER_LENGTH / 3  # At 96" from left
 # Air gap from fence
 FENCE_GAP = 3  # 3" gap from fence boards
 
+# Door specifications (double doors per bay)
+DOOR_THICKNESS = 0.75  # 3/4" plywood or HDPE
+DOOR_GAP = 0.25  # 1/4" gap between doors and frame
+DOOR_CLEARANCE = 1.0  # 1" clearance from bay edges
+DOOR_INSET = 0.5  # 1/2" inset from front face
+
+# Router-recessed pull handles
+HANDLE_HEIGHT = 6.0  # 6" tall
+HANDLE_WIDTH = 2.0   # 2" wide
+HANDLE_DEPTH = 0.5   # 1/2" deep router recess
+HANDLE_TOP_MARGIN = 3.0  # 3" from top of door
+
 print(f"\n{'='*60}")
-print(f"OPUS'S OUTDOOR COUNTER FRAME — 12' × 18\"")
+print(f"OPUS'S OUTDOOR COUNTER CABINET — 12' × 18\"")
 print(f"{'='*60}")
 print(f"\nDimensions: {COUNTER_LENGTH}\" × {COUNTER_DEPTH}\" ({COUNTER_LENGTH/12:.1f}' × {COUNTER_DEPTH/12:.1f}')")
 print(f"Finished counter height: {COUNTER_HEIGHT}\"")
@@ -296,7 +309,91 @@ right_panel = (
 
 shear_panels = left_panel.union(right_panel)
 
-# 8. COMBINE ALL COMPONENTS
+# 8. CABINET DOORS (double doors per bay with router-recessed pulls)
+# Each bay gets two doors side-by-side
+
+def create_double_doors(bay_index, bay_x_center, bay_width):
+    """Create double doors for a bay with router-recessed pull handles"""
+
+    # Door dimensions
+    door_height = panel_height - 2 * DOOR_CLEARANCE  # Height with top/bottom clearance
+    single_door_width = (bay_width - 2 * DOOR_CLEARANCE - DOOR_GAP) / 2  # Width for each door
+
+    # Y position: doors are inset from front face
+    door_y = COUNTER_DEPTH/2 - DOOR_INSET - DOOR_THICKNESS/2
+
+    # Z position: doors start from bottom with clearance
+    door_z = DOOR_CLEARANCE + door_height/2
+
+    # Left door X position
+    left_door_x = bay_x_center - DOOR_GAP/2 - single_door_width/2
+
+    # Right door X position
+    right_door_x = bay_x_center + DOOR_GAP/2 + single_door_width/2
+
+    # Create left door
+    left_door = (
+        cq.Workplane("XY")
+        .box(single_door_width, DOOR_THICKNESS, door_height)
+        .translate((left_door_x, door_y, door_z))
+    )
+
+    # Add router-recessed pull handle to left door (right side of door)
+    handle_x = left_door_x + single_door_width/2 - HANDLE_WIDTH/2 - 1.0  # 1" from right edge
+    handle_y = door_y + DOOR_THICKNESS/2 - HANDLE_DEPTH/2
+    handle_z = door_z + door_height/2 - HANDLE_TOP_MARGIN - HANDLE_HEIGHT/2
+
+    handle = (
+        cq.Workplane("XY")
+        .box(HANDLE_WIDTH, HANDLE_DEPTH, HANDLE_HEIGHT)
+        .translate((handle_x, handle_y, handle_z))
+    )
+    left_door = left_door.cut(handle)
+
+    # Create right door
+    right_door = (
+        cq.Workplane("XY")
+        .box(single_door_width, DOOR_THICKNESS, door_height)
+        .translate((right_door_x, door_y, door_z))
+    )
+
+    # Add router-recessed pull handle to right door (left side of door)
+    handle_x = right_door_x - single_door_width/2 + HANDLE_WIDTH/2 + 1.0  # 1" from left edge
+    handle_y = door_y + DOOR_THICKNESS/2 - HANDLE_DEPTH/2
+    handle_z = door_z + door_height/2 - HANDLE_TOP_MARGIN - HANDLE_HEIGHT/2
+
+    handle = (
+        cq.Workplane("XY")
+        .box(HANDLE_WIDTH, HANDLE_DEPTH, HANDLE_HEIGHT)
+        .translate((handle_x, handle_y, handle_z))
+    )
+    right_door = right_door.cut(handle)
+
+    return left_door.union(right_door)
+
+# Create doors for all 4 bays
+bay_width = COUNTER_LENGTH / NUM_BAYS
+
+# Bay 1 (leftmost)
+bay_1_center = -COUNTER_LENGTH/2 + bay_width/2
+doors_bay_1 = create_double_doors(0, bay_1_center, bay_width)
+
+# Bay 2
+bay_2_center = -COUNTER_LENGTH/2 + bay_width * 1.5
+doors_bay_2 = create_double_doors(1, bay_2_center, bay_width)
+
+# Bay 3
+bay_3_center = -COUNTER_LENGTH/2 + bay_width * 2.5
+doors_bay_3 = create_double_doors(2, bay_3_center, bay_width)
+
+# Bay 4 (rightmost)
+bay_4_center = -COUNTER_LENGTH/2 + bay_width * 3.5
+doors_bay_4 = create_double_doors(3, bay_4_center, bay_width)
+
+# Combine all doors
+all_doors = doors_bay_1.union(doors_bay_2).union(doors_bay_3).union(doors_bay_4)
+
+# 9. COMBINE ALL COMPONENTS
 result = (
     base_frame
     .union(walls)
@@ -305,6 +402,7 @@ result = (
     .union(joists)
     .union(deck)
     .union(shear_panels)
+    .union(all_doors)
 )
 
 # ===== MATERIALS CUT LIST =====
@@ -362,6 +460,18 @@ print(f"\nSHEAR PANELS (anti-racking):")
 print(f"  1/2\" Exterior plywood: {panel_sheets} sheet(s) (4'×8')")
 print(f"  (2 end panels @ {COUNTER_DEPTH}\" × {panel_height:.1f}\")")
 
+# Cabinet doors
+door_height = panel_height - 2 * DOOR_CLEARANCE
+single_door_width = (bay_width - 2 * DOOR_CLEARANCE - DOOR_GAP) / 2
+num_doors = NUM_BAYS * 2  # 2 doors per bay
+door_area = num_doors * single_door_width * door_height
+door_sheets = math.ceil(door_area / (96 * 48))
+print(f"\nCABINET DOORS ({NUM_BAYS} bays, double doors):")
+print(f"  3/4\" HDPE or Exterior plywood: {door_sheets} sheet(s) (4'×8')")
+print(f"  ({num_doors} doors @ {single_door_width:.1f}\" × {door_height:.1f}\" each)")
+print(f"  Router-recessed pulls: {HANDLE_WIDTH}\" × {HANDLE_HEIGHT}\" × {HANDLE_DEPTH}\" deep")
+print(f"  (Positioned {HANDLE_TOP_MARGIN}\" from top, 1\" from center edge)")
+
 # Hardware
 print(f"\nHARDWARE:")
 print(f"  1/2\" × 6\" Through-bolts for ledger: 6-8 (into 6×6 posts)")
@@ -371,6 +481,9 @@ print(f"  Joist hangers (2×6): {num_joists * 2} (both ends)")
 print(f"  1-1/4\" Exterior screws for plywood deck: ~100")
 print(f"  2-1/2\" Exterior screws for shear panels: ~50")
 print(f"  1-5/8\" Screws for wall sheathing: ~{wall_sheathing_sheets * 50}")
+print(f"  Outdoor cabinet hinges: {num_doors * 2} pairs (2 per door)")
+print(f"  Magnetic catches: {num_doors} (1 per door)")
+print(f"  1-1/4\" Screws for door installation: ~{num_doors * 8}")
 
 # Foundation
 print(f"\nFOUNDATION:")
@@ -379,15 +492,15 @@ print(f"  Landscape fabric: {COUNTER_LENGTH}\" × {COUNTER_DEPTH}\" (optional)")
 print(f"  Note: Deck base sits directly on prepared, level ground")
 
 # Cabinet/door notes
-bay_width = COUNTER_LENGTH / NUM_BAYS
 print(f"\n{'='*60}")
 print(f"CABINET CONFIGURATION")
 print(f"{'='*60}")
 print(f"\nBay layout: {NUM_BAYS} bays @ {bay_width:.1f}\" each")
-print(f"Suggested door size: {bay_width - 2:.1f}\" wide (1\" clearance each side)")
-print(f"Door opening height: {panel_height - 4:.1f}\" (2\" top/bottom rail)")
-print(f"\nFace frame material (not included in model):")
-print(f"  1×4 Cedar/HDPE: ~{math.ceil((COUNTER_LENGTH + panel_height * (NUM_BAYS + 1)) / 12)}' linear")
+print(f"Double doors per bay: {num_doors} total doors")
+print(f"Single door size: {single_door_width:.1f}\" × {door_height:.1f}\"")
+print(f"Door clearance: {DOOR_CLEARANCE}\" top/bottom/sides, {DOOR_GAP}\" center gap")
+print(f"Router-recessed pulls: {HANDLE_WIDTH}\" × {HANDLE_HEIGHT}\" × {HANDLE_DEPTH}\" deep")
+print(f"Handle position: {HANDLE_TOP_MARGIN}\" from top, 1\" from center edge")
 
 # Control joint note
 print(f"\n{'='*60}")
@@ -427,6 +540,11 @@ print(f"6. Install joist hangers and hang 2×6 joists:")
 print(f"   - {JOIST_SPACING}\" on center, {num_joists} total")
 print(f"7. Screw down 3/4\" plywood deck")
 print(f"8. Install 1/2\" plywood shear panels on ends")
-print(f"9. Build concrete edge forms on deck")
-print(f"10. Pour and finish concrete countertop")
+print(f"9. Cut and router cabinet doors:")
+print(f"   - {num_doors} doors @ {single_door_width:.1f}\" × {door_height:.1f}\" each")
+print(f"   - Router {HANDLE_WIDTH}\" × {HANDLE_HEIGHT}\" × {HANDLE_DEPTH}\" recesses for pulls")
+print(f"   - Install hinges and magnetic catches")
+print(f"   - Mount doors with {DOOR_CLEARANCE}\" clearance and {DOOR_GAP}\" center gap")
+print(f"10. Build concrete edge forms on deck")
+print(f"11. Pour and finish concrete countertop")
 print(f"\n{'='*60}\n")
