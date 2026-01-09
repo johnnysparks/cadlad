@@ -1,12 +1,12 @@
 """Outdoor Countertop with Concrete Surface and Cabinet Base
 
-A 10' long outdoor countertop structure designed for a concrete pour-in-place surface
+A 12' long outdoor countertop structure designed for a concrete pour-in-place surface
 with integrated cabinet storage below. Features a ledger bolted to existing 6×6 fence
 posts at the rear, a front beam on adjustable legs with pad footings, and a complete
 structural deck for forming the concrete countertop.
 
 Design specifications:
-- 10' (120") length × 30" depth
+- 12' (144") length × 18" depth
 - Rear ledger (2×8) bolted to 6×6 fence posts
 - Front beam (double 2×8) on 4×4 legs with pad footings
 - 2×6 joists at 12" OC spanning front-to-back
@@ -23,8 +23,8 @@ import math
 # ===== DESIGN PARAMETERS =====
 
 # Overall dimensions
-STRUCTURE_LENGTH = 120  # 10 feet
-STRUCTURE_DEPTH = 30    # Front to back depth
+STRUCTURE_LENGTH = 144  # 12 feet
+STRUCTURE_DEPTH = 18    # Front to back depth
 
 # Heights
 FINISHED_COUNTER_HEIGHT = 36  # Standard counter height
@@ -69,11 +69,11 @@ FACE_FRAME_DEPTH = 3.5    # Face frame depth
 # Fence integration
 FENCE_POST_SIZE = 5.5     # 6×6 actual size
 FENCE_POST_HEIGHT = 96    # 8' posts
-FENCE_POST_SPACING = 60   # 5' on center (2 posts for 10' structure)
+FENCE_POST_SPACING = 72   # 6' on center (2 posts for 12' structure)
 AIR_GAP = 3               # 3" gap from fence boards
 
 print(f"\n{'='*70}")
-print(f"OUTDOOR COUNTERTOP — 10' × 30\" WITH CONCRETE SURFACE")
+print(f"OUTDOOR COUNTERTOP — 12' × 18\" WITH CONCRETE SURFACE")
 print(f"{'='*70}")
 print(f"\nDimensions: {STRUCTURE_LENGTH}\" × {STRUCTURE_DEPTH}\" ({STRUCTURE_LENGTH/12:.1f}' × {STRUCTURE_DEPTH/12:.1f}')")
 print(f"Finished counter height: {FINISHED_COUNTER_HEIGHT}\"")

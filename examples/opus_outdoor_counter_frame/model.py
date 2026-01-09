@@ -4,8 +4,8 @@ A fence-mounted outdoor counter/cabinet frame for a concrete countertop pour.
 Perfect for outdoor kitchens, BBQ stations, or potting benches.
 
 Design specifications:
-- 10' (120") length along fence line
-- 30" depth (front to back)
+- 12' (144") length along fence line
+- 18" depth (front to back)
 - 36" finished counter height
 - Back ledger bolted to 6×6 fence posts
 - Front beam (double 2×8) on 4×4 legs with pads
@@ -26,8 +26,8 @@ import math
 # ===== DESIGN PARAMETERS =====
 
 # Overall dimensions
-COUNTER_LENGTH = 120  # 10 feet in inches
-COUNTER_DEPTH = 30    # 30" front to back
+COUNTER_LENGTH = 144  # 12 feet in inches
+COUNTER_DEPTH = 18    # 18" front to back
 COUNTER_HEIGHT = 36   # 36" finished counter height
 
 # Rear ledger (bolted to 6×6 fence posts)
@@ -63,7 +63,7 @@ NUM_LEGS = 5  # Legs at both ends + 3 intermediate
 FENCE_GAP = 3  # 3" gap from fence boards
 
 print(f"\n{'='*60}")
-print(f"OPUS'S OUTDOOR COUNTER FRAME — 10' × 30\"")
+print(f"OPUS'S OUTDOOR COUNTER FRAME — 12' × 18\"")
 print(f"{'='*60}")
 print(f"\nDimensions: {COUNTER_LENGTH}\" × {COUNTER_DEPTH}\" ({COUNTER_LENGTH/12:.1f}' × {COUNTER_DEPTH/12:.1f}')")
 print(f"Finished counter height: {COUNTER_HEIGHT}\"")
