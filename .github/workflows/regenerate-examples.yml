@@ -42,7 +42,9 @@ jobs:
             libcairo2-dev \
             pkg-config \
             xvfb \
-            libgl1-mesa-glx \
+            libgl1 \
+            libegl1-mesa \
+            libgbm1 \
             libgl1-mesa-dri \
             libglu1-mesa \
             libsm6 \
