@@ -121,9 +121,15 @@ def regenerate_example(example_name: str) -> bool:
             print(f"  ✗ No 'result' variable found in {example_name}")
             return False
 
+        # Check if the model provides colored components
+        components = namespace.get('components')
+
         # Generate PNG render
         print(f"  → Rendering PNG...")
-        png_bytes = render_to_png(result, width=800, height=600)
+        if components:
+            png_bytes = render_to_png(result, width=800, height=600, components=components)
+        else:
+            png_bytes = render_to_png(result, width=800, height=600)
         with open(png_output, 'wb') as f:
             f.write(png_bytes)
         print(f"  ✓ Generated: {png_output}")
