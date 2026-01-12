@@ -26,7 +26,10 @@ Based on the "ladder frame" concept:
 - Joists = rungs every 12" (2×6 on edge)
 - Support walls at bay boundaries for structural integrity
 
-NOTE: Keep in sync with full opus_outdoor_counter_cabinet design.
+TODO: Keep this frame design in sync with opus_outdoor_counter_cabinet
+When updating dimensions or bay configuration in either design, update both:
+- opus_outdoor_counter_cabinet (full design with finish work)
+- opus_outdoor_counter_cabinet_frame (frame-only with 2×6s only)
 """
 
 import cadquery as cq

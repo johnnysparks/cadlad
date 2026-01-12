@@ -22,6 +22,10 @@ Based on the "ladder frame" concept:
 - Front beam = other long rail
 - Joists = rungs every 12"
 - Support walls at bay boundaries for structural integrity and door mounting
+
+TODO: Keep in sync with opus_outdoor_counter_cabinet_frame
+When updating dimensions or bay configuration, also update:
+- opus_outdoor_counter_cabinet_frame (frame-only construction version)
 """
 
 import cadquery as cq
