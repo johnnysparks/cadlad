@@ -43,7 +43,7 @@ jobs:
             pkg-config \
             xvfb \
             libgl1 \
-            libegl1-mesa \
+            libegl-mesa0 \
             libgbm1 \
             libgl1-mesa-dri \
             libglu1-mesa \
