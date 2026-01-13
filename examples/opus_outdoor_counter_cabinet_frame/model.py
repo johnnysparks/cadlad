@@ -10,21 +10,24 @@ Design specifications:
 - ALL LUMBER: 2×6 pressure-treated (5.5" × 1.5" actual)
 - Back ledger bolted to 6×6 fence posts
 - Front beam supported by five framed walls
-- Deck-style base frame for level platform
+- Standard deck-style base frame with 2×6s ON EDGE (5.5" toe kick)
 - 2×6 joists at 12" on center spanning front to back
 - 5 support walls: 2 outer (at cabinet ends) + 3 internal (at bay divisions)
+- Support walls protrude past base frame for door mounting surface
 - 4 equal bays (36" each) for future door installation
 
 This version focuses on:
 1. Cut list with exact lengths and quantities
 2. Orientation (flat vs on-edge)
 3. Material counts for construction
+4. Minimizing cuts while maintaining structural integrity
 
-Based on the "ladder frame" concept:
-- Back ledger = one long rail (2×6 on edge)
+Based on standard deck framing:
+- Base frame = perimeter 2×6s ON EDGE (creates 5.5" toe kick)
+- Back ledger = one long rail (2×6 on edge, bolted to fence)
 - Front beam = one long rail (2×6 on edge)
 - Joists = rungs every 12" (2×6 on edge)
-- Support walls at bay boundaries for structural integrity
+- Support walls span base to countertop, protrude at front
 
 TODO: Keep this frame design in sync with opus_outdoor_counter_cabinet
 When updating dimensions or bay configuration in either design, update both:
@@ -59,10 +62,13 @@ WALL_STUD_SIZE = LUMBER_WIDTH  # 2×6 actual dimension (5.5")
 WALL_STUD_THICKNESS = LUMBER_THICKNESS  # 2×6 actual thickness (1.5")
 WALL_STUD_SPACING = 16  # 16" on center for studs
 
-# Deck-style base frame (pressure treated platform)
-BASE_BOARD_WIDTH = LUMBER_WIDTH  # 2×6 actual width
-BASE_BOARD_THICKNESS = LUMBER_THICKNESS  # 2×6 actual thickness
-BASE_BOARD_SPACING = 16  # 16" on center
+# Deck-style base frame (2×6s ON EDGE for toe kick)
+# Standard deck framing: perimeter boards on edge create 5.5" toe kick
+BASE_FRAME_HEIGHT = LUMBER_WIDTH  # 2×6 on edge = 5.5" toe kick height
+BASE_FRAME_THICKNESS = LUMBER_THICKNESS  # 1.5" board thickness
+
+# Wall protrusion: walls extend past base frame at front for door mounting
+WALL_PROTRUSION = 3  # 3" protrusion past front of base frame
 
 # Joists (2×6 on edge, spanning front to back)
 JOIST_WIDTH = LUMBER_THICKNESS     # 2×6 actual thickness (1.5")
@@ -115,15 +121,20 @@ ledger_bottom = ledger_top - LEDGER_WIDTH  # 2×6 on edge
 front_beam_top = joist_top
 front_beam_bottom = front_beam_top - FRONT_BEAM_WIDTH
 
-# Midsection walls go from base to bottom of front beam
-wall_height = front_beam_bottom
+# Base frame height (2×6 on edge = 5.5" toe kick)
+base_top = BASE_FRAME_HEIGHT  # Top of base frame
 
-# Deck base sits on ground
-base_height = BASE_BOARD_THICKNESS
+# Midsection walls go from base top to bottom of front beam
+wall_bottom = base_top  # Walls sit on top of base frame
+wall_top = front_beam_bottom  # Walls support front beam
+wall_height = wall_top - wall_bottom  # Height of wall framing above base
+
+# Total wall depth including protrusion
+wall_total_depth = COUNTER_DEPTH + WALL_PROTRUSION  # 18" + 3" = 21"
 
 print(f"\nFRAME STRUCTURE (bottom to top):")
-print(f"  Deck base platform: 0\" - {base_height:.2f}\"")
-print(f"  Support walls: {base_height:.2f}\" - {wall_height:.2f}\"")
+print(f"  Base frame (2×6 on edge): 0\" - {base_top:.2f}\" (creates {BASE_FRAME_HEIGHT:.1f}\" toe kick)")
+print(f"  Support walls: {wall_bottom:.2f}\" - {wall_top:.2f}\" (protrude {WALL_PROTRUSION}\" at front)")
 print(f"  Ledger (2×6 on edge): {ledger_bottom:.2f}\" - {ledger_top:.2f}\"")
 print(f"  Front beam (2×6 on edge): {front_beam_bottom:.2f}\" - {front_beam_top:.2f}\"")
 print(f"  Joists (2×6 on edge): {joist_bottom:.2f}\" - {joist_top:.2f}\"")
@@ -154,93 +165,93 @@ front_beam = (
     .translate((0, COUNTER_DEPTH/2 - FRONT_BEAM_THICKNESS/2, front_beam_bottom + FRONT_BEAM_WIDTH/2))
 )
 
-# 3. DECK-STYLE BASE FRAME (pressure treated 2×6 platform)
-# Create a grid of boards running both directions for stability
+# 3. DECK-STYLE BASE FRAME (2×6s ON EDGE - creates toe kick)
+# Standard deck framing: perimeter boards on edge
+# This creates a 5.5" toe kick and provides structural base for walls
 
-# Longitudinal boards (running along X axis, parallel to counter length)
-base_longitudinal = cq.Workplane("XY")
-num_longitudinal = int(COUNTER_DEPTH / BASE_BOARD_SPACING) + 1
+# Front rim board (creates toe kick face) - full length
+front_rim = (
+    cq.Workplane("XY")
+    .box(COUNTER_LENGTH, BASE_FRAME_THICKNESS, BASE_FRAME_HEIGHT)
+    .translate((0, COUNTER_DEPTH/2 - BASE_FRAME_THICKNESS/2, BASE_FRAME_HEIGHT/2))
+)
 
-for i in range(num_longitudinal):
-    board_y = -COUNTER_DEPTH/2 + i * BASE_BOARD_SPACING
-    if board_y > COUNTER_DEPTH/2:
-        break
+# Back rim board - full length (parallel to fence)
+back_rim = (
+    cq.Workplane("XY")
+    .box(COUNTER_LENGTH, BASE_FRAME_THICKNESS, BASE_FRAME_HEIGHT)
+    .translate((0, -COUNTER_DEPTH/2 + BASE_FRAME_THICKNESS/2, BASE_FRAME_HEIGHT/2))
+)
 
-    board = (
-        cq.Workplane("XY")
-        .box(COUNTER_LENGTH, BASE_BOARD_WIDTH, BASE_BOARD_THICKNESS)
-        .translate((0, board_y, BASE_BOARD_THICKNESS/2))
-    )
+# Left end board (connects front to back)
+# Length = depth minus two board thicknesses (fits between front and back)
+end_board_length = COUNTER_DEPTH - 2 * BASE_FRAME_THICKNESS
+left_end = (
+    cq.Workplane("XY")
+    .box(BASE_FRAME_THICKNESS, end_board_length, BASE_FRAME_HEIGHT)
+    .translate((-COUNTER_LENGTH/2 + BASE_FRAME_THICKNESS/2, 0, BASE_FRAME_HEIGHT/2))
+)
 
-    if i == 0:
-        base_longitudinal = board
-    else:
-        base_longitudinal = base_longitudinal.union(board)
+# Right end board
+right_end = (
+    cq.Workplane("XY")
+    .box(BASE_FRAME_THICKNESS, end_board_length, BASE_FRAME_HEIGHT)
+    .translate((COUNTER_LENGTH/2 - BASE_FRAME_THICKNESS/2, 0, BASE_FRAME_HEIGHT/2))
+)
 
-# Cross boards (running along Y axis, perpendicular to length)
-base_cross = cq.Workplane("XY")
-num_cross = int(COUNTER_LENGTH / BASE_BOARD_SPACING) + 1
-
-for i in range(num_cross):
-    board_x = -COUNTER_LENGTH/2 + i * BASE_BOARD_SPACING
-    if board_x > COUNTER_LENGTH/2:
-        break
-
-    board = (
-        cq.Workplane("XY")
-        .box(BASE_BOARD_WIDTH, COUNTER_DEPTH, BASE_BOARD_THICKNESS)
-        .translate((board_x, 0, BASE_BOARD_THICKNESS/2))
-    )
-
-    if i == 0:
-        base_cross = board
-    else:
-        base_cross = base_cross.union(board)
-
-base_frame = base_longitudinal.union(base_cross)
+base_frame = front_rim.union(back_rim).union(left_end).union(right_end)
 
 # 4. MIDSECTION WALL SUPPORTS (2×6 framing instead of 2×4)
 # Five framed walls total: 3 internal + 2 outer
 
 def create_wall(x_position):
-    """Create a framed wall with 2×6 studs (no sheathing - frame only)"""
-    wall_parts = cq.Workplane("XY")
+    """Create a framed wall with 2×6 studs (no sheathing - frame only)
 
-    # Wall framing: top plate, bottom plate, and vertical studs
-    # Bottom plate (2×6 flat on base)
+    Walls sit on top of base frame and extend to front beam.
+    They protrude past the base frame at front for door mounting.
+    """
+    # Wall depth includes protrusion at front
+    plate_length = wall_total_depth  # 18" + 3" protrusion = 21"
+
+    # Y position: centered on counter depth but shifted forward for protrusion
+    plate_center_y = WALL_PROTRUSION / 2  # Shift forward by half the protrusion
+
+    # Bottom plate (2×6 flat on top of base frame)
     bottom_plate = (
         cq.Workplane("XY")
-        .box(WALL_STUD_THICKNESS, COUNTER_DEPTH, WALL_STUD_SIZE)
-        .translate((x_position, 0, base_height + WALL_STUD_SIZE/2))
+        .box(WALL_STUD_THICKNESS, plate_length, WALL_STUD_SIZE)
+        .translate((x_position, plate_center_y, base_top + WALL_STUD_SIZE/2))
     )
 
     # Top plate (2×6 flat under front beam)
     top_plate = (
         cq.Workplane("XY")
-        .box(WALL_STUD_THICKNESS, COUNTER_DEPTH, WALL_STUD_SIZE)
-        .translate((x_position, 0, wall_height - WALL_STUD_SIZE/2))
+        .box(WALL_STUD_THICKNESS, plate_length, WALL_STUD_SIZE)
+        .translate((x_position, plate_center_y, wall_top - WALL_STUD_SIZE/2))
     )
 
-    # Vertical studs at 16" on center
+    # Vertical studs - one at back, one at front (protrusion)
+    # This minimizes cuts while providing structural support
     studs = cq.Workplane("XY")
-    num_studs = int(COUNTER_DEPTH / WALL_STUD_SPACING) + 1
+    stud_height = wall_height - 2 * WALL_STUD_SIZE  # Between plates
 
-    for i in range(num_studs):
-        stud_y = -COUNTER_DEPTH/2 + i * WALL_STUD_SPACING
-        if stud_y > COUNTER_DEPTH/2:
-            break
+    # Back stud (at back of cabinet)
+    back_stud = (
+        cq.Workplane("XY")
+        .box(WALL_STUD_SIZE, WALL_STUD_THICKNESS, stud_height)
+        .translate((x_position, -COUNTER_DEPTH/2 + WALL_STUD_THICKNESS/2,
+                   base_top + WALL_STUD_SIZE + stud_height/2))
+    )
 
-        stud_height = wall_height - base_height - 2 * WALL_STUD_SIZE  # Between plates
-        stud = (
-            cq.Workplane("XY")
-            .box(WALL_STUD_SIZE, WALL_STUD_THICKNESS, stud_height)
-            .translate((x_position, stud_y, base_height + WALL_STUD_SIZE + stud_height/2))
-        )
+    # Front stud (at front of protrusion - door mounting surface)
+    front_stud = (
+        cq.Workplane("XY")
+        .box(WALL_STUD_SIZE, WALL_STUD_THICKNESS, stud_height)
+        .translate((x_position, COUNTER_DEPTH/2 + WALL_PROTRUSION - WALL_STUD_THICKNESS/2,
+                   base_top + WALL_STUD_SIZE + stud_height/2))
+    )
 
-        if i == 0:
-            studs = stud
-        else:
-            studs = studs.union(stud)
+    studs = back_stud.union(front_stud)
 
     return bottom_plate.union(top_plate).union(studs)
 
@@ -284,45 +295,13 @@ for i in range(num_joists):
 # These provide structural support and future door anchor points
 
 def create_outer_wall(x_position):
-    """Create a framed outer wall with 2×6 studs (frame only)"""
-    wall_parts = cq.Workplane("XY")
+    """Create a framed outer wall with 2×6 studs (frame only)
 
-    # Bottom plate (2×6 flat on base)
-    bottom_plate = (
-        cq.Workplane("XY")
-        .box(WALL_STUD_THICKNESS, COUNTER_DEPTH, WALL_STUD_SIZE)
-        .translate((x_position, 0, base_height + WALL_STUD_SIZE/2))
-    )
-
-    # Top plate (2×6 flat under front beam)
-    top_plate = (
-        cq.Workplane("XY")
-        .box(WALL_STUD_THICKNESS, COUNTER_DEPTH, WALL_STUD_SIZE)
-        .translate((x_position, 0, wall_height - WALL_STUD_SIZE/2))
-    )
-
-    # Vertical studs at 16" on center
-    studs = cq.Workplane("XY")
-    num_studs = int(COUNTER_DEPTH / WALL_STUD_SPACING) + 1
-
-    for i in range(num_studs):
-        stud_y = -COUNTER_DEPTH/2 + i * WALL_STUD_SPACING
-        if stud_y > COUNTER_DEPTH/2:
-            break
-
-        stud_height = wall_height - base_height - 2 * WALL_STUD_SIZE  # Between plates
-        stud = (
-            cq.Workplane("XY")
-            .box(WALL_STUD_SIZE, WALL_STUD_THICKNESS, stud_height)
-            .translate((x_position, stud_y, base_height + WALL_STUD_SIZE + stud_height/2))
-        )
-
-        if i == 0:
-            studs = stud
-        else:
-            studs = studs.union(stud)
-
-    return bottom_plate.union(top_plate).union(studs)
+    Outer walls use the same construction as internal walls.
+    They protrude past the base frame at front for door mounting.
+    """
+    # Use same construction as internal walls
+    return create_wall(x_position)
 
 # Left outer wall (at left end of cabinet)
 left_outer_wall = create_outer_wall(-COUNTER_LENGTH/2 + WALL_STUD_THICKNESS/2)
@@ -375,62 +354,67 @@ print(f"   Length: {front_beam_length/12:.0f}' ({front_beam_length}\")")
 print(f"   Orientation: ON EDGE (5.5\" height)")
 print(f"   Notes: Sits on wall tops at {front_beam_bottom:.1f}\" - {front_beam_top:.1f}\" height")
 
-# 3. Base frame
-longitudinal_length = COUNTER_LENGTH
-cross_length = COUNTER_DEPTH
+# 3. Base frame (perimeter 2×6s on edge - creates toe kick)
+rim_length = COUNTER_LENGTH  # Front and back rim boards
 
-print(f"\n3. BASE FRAME (deck-style platform):")
-print(f"   Longitudinal boards (run along length):")
-print(f"     Qty: {num_longitudinal}")
-print(f"     Length: {longitudinal_length/12:.0f}' each ({longitudinal_length}\")")
-print(f"     Orientation: FLAT")
-print(f"     Spacing: {BASE_BOARD_SPACING}\" on center")
-total_linear_feet += (num_longitudinal * longitudinal_length) / 12
+print(f"\n3. BASE FRAME (2×6s ON EDGE - creates {BASE_FRAME_HEIGHT:.1f}\" toe kick):")
+print(f"   Front rim board (toe kick face):")
+print(f"     Qty: 1")
+print(f"     Length: {rim_length/12:.0f}' ({rim_length}\")")
+print(f"     Orientation: ON EDGE (5.5\" height)")
+total_linear_feet += rim_length / 12
+cut_list.append(("BASE FRONT RIM", 1, rim_length, "ON EDGE", "Toe kick face"))
 
-print(f"   Cross boards (run across depth):")
-print(f"     Qty: {num_cross}")
-print(f"     Length: {math.ceil(cross_length/12)*12}\" (cut to {cross_length}\")")
-print(f"     Orientation: FLAT")
-print(f"     Spacing: {BASE_BOARD_SPACING}\" on center")
-total_linear_feet += (num_cross * cross_length) / 12
+print(f"   Back rim board:")
+print(f"     Qty: 1")
+print(f"     Length: {rim_length/12:.0f}' ({rim_length}\")")
+print(f"     Orientation: ON EDGE (5.5\" height)")
+total_linear_feet += rim_length / 12
+cut_list.append(("BASE BACK RIM", 1, rim_length, "ON EDGE", "Back of base frame"))
 
-for i in range(num_longitudinal):
-    cut_list.append((f"BASE LONGITUDINAL #{i+1}", 1, longitudinal_length, "FLAT", f"Base frame @ {-COUNTER_DEPTH/2 + i * BASE_BOARD_SPACING:.1f}\" Y"))
+print(f"   End boards (left and right):")
+print(f"     Qty: 2")
+print(f"     Length: {end_board_length:.1f}\" (fits between front/back rims)")
+print(f"     Orientation: ON EDGE (5.5\" height)")
+total_linear_feet += (2 * end_board_length) / 12
+cut_list.append(("BASE LEFT END", 1, end_board_length, "ON EDGE", "Left end cap"))
+cut_list.append(("BASE RIGHT END", 1, end_board_length, "ON EDGE", "Right end cap"))
 
-for i in range(num_cross):
-    cut_list.append((f"BASE CROSS #{i+1}", 1, cross_length, "FLAT", f"Base frame @ {-COUNTER_LENGTH/2 + i * BASE_BOARD_SPACING:.1f}\" X"))
-
-# 4. Support walls
+# 4. Support walls (with protrusion for door mounting)
 NUM_TOTAL_WALLS = NUM_INTERNAL_WALLS + 2  # 3 internal + 2 outer walls
-studs_per_wall = int(COUNTER_DEPTH / WALL_STUD_SPACING) + 1
-wall_stud_length = wall_height - base_height - 2 * WALL_STUD_SIZE
+studs_per_wall = 2  # Front stud + back stud (minimizes cuts)
+wall_stud_length = wall_height - 2 * WALL_STUD_SIZE  # Between plates
 total_studs = studs_per_wall * NUM_TOTAL_WALLS
 total_plates = NUM_TOTAL_WALLS * 2  # Top and bottom plates
+plate_length = wall_total_depth  # 21" (includes 3" protrusion)
 
 print(f"\n4. SUPPORT WALLS ({NUM_INTERNAL_WALLS} internal + 2 outer = {NUM_TOTAL_WALLS} total):")
 print(f"   Wall positions from left: 0\" (outer), {BAY_WIDTH:.0f}\", {2*BAY_WIDTH:.0f}\", {3*BAY_WIDTH:.0f}\", {COUNTER_LENGTH:.0f}\" (outer)")
+print(f"   Walls protrude {WALL_PROTRUSION}\" past base frame at front for door mounting")
 print(f"   ")
 print(f"   Vertical studs (2×6 on edge):")
-print(f"     Qty: {total_studs} total ({studs_per_wall} per wall)")
+print(f"     Qty: {total_studs} total ({studs_per_wall} per wall - front and back)")
 print(f"     Length: {math.ceil(wall_stud_length/12)*12}\" (cut to {wall_stud_length:.1f}\")")
 print(f"     Orientation: ON EDGE (5.5\" width)")
-print(f"     Spacing: {WALL_STUD_SPACING}\" on center")
+print(f"     Notes: One stud at back, one at front (protrusion) for door mounting")
 total_linear_feet += (total_studs * wall_stud_length) / 12
 
 print(f"   ")
-print(f"   Top/Bottom plates (2×6 flat):")
+print(f"   Top/Bottom plates (2×6 on edge for strength):")
 print(f"     Qty: {total_plates} ({NUM_TOTAL_WALLS} walls × 2 plates)")
-print(f"     Length: {math.ceil(COUNTER_DEPTH/12)*12}\" (cut to {COUNTER_DEPTH}\")")
-print(f"     Orientation: FLAT (5.5\" width)")
-total_linear_feet += (total_plates * COUNTER_DEPTH) / 12
+print(f"     Length: {math.ceil(plate_length/12)*12}\" (cut to {plate_length:.1f}\")")
+print(f"     Orientation: ON EDGE (5.5\" height)")
+print(f"     Notes: Extended length includes {WALL_PROTRUSION}\" protrusion")
+total_linear_feet += (total_plates * plate_length) / 12
 
 # Add wall components to cut list
+wall_names = ["LEFT OUTER", "INTERNAL #1", "INTERNAL #2", "INTERNAL #3", "RIGHT OUTER"]
 for wall_idx in range(NUM_TOTAL_WALLS):
-    wall_name = "OUTER" if wall_idx in [0, NUM_TOTAL_WALLS-1] else f"INTERNAL #{wall_idx}"
-    cut_list.append((f"{wall_name} WALL - BOTTOM PLATE", 1, COUNTER_DEPTH, "FLAT", "Bottom plate"))
-    cut_list.append((f"{wall_name} WALL - TOP PLATE", 1, COUNTER_DEPTH, "FLAT", "Top plate"))
-    for stud_idx in range(studs_per_wall):
-        cut_list.append((f"{wall_name} WALL - STUD #{stud_idx+1}", 1, wall_stud_length, "ON EDGE", f"Vertical stud @ {WALL_STUD_SPACING * stud_idx}\" spacing"))
+    wall_name = wall_names[wall_idx]
+    cut_list.append((f"{wall_name} WALL - BOTTOM PLATE", 1, plate_length, "ON EDGE", "Bottom plate (on base frame)"))
+    cut_list.append((f"{wall_name} WALL - TOP PLATE", 1, plate_length, "ON EDGE", "Top plate (under front beam)"))
+    cut_list.append((f"{wall_name} WALL - BACK STUD", 1, wall_stud_length, "ON EDGE", "Back vertical stud"))
+    cut_list.append((f"{wall_name} WALL - FRONT STUD", 1, wall_stud_length, "ON EDGE", "Front stud (door mounting)"))
 
 # 5. Joists
 joist_cut_length = math.ceil(joist_length/12)*12  # Round up to nearest foot
@@ -451,12 +435,13 @@ print(f"LUMBER SUMMARY")
 print(f"{'='*70}")
 print(f"\nTOTAL 2×6 PRESSURE-TREATED: {math.ceil(total_linear_feet)}' ({total_linear_feet:.1f}' calculated)")
 print(f"")
+base_frame_linear = (2 * rim_length + 2 * end_board_length) / 12
 print(f"Breakdown by component:")
 print(f"  - Ledger: {ledger_length/12:.0f}'")
 print(f"  - Front beam: {front_beam_length/12:.0f}'")
-print(f"  - Base frame: {((num_longitudinal * longitudinal_length + num_cross * cross_length) / 12):.1f}'")
+print(f"  - Base frame (perimeter): {base_frame_linear:.1f}'")
 print(f"  - Wall studs: {(total_studs * wall_stud_length / 12):.1f}'")
-print(f"  - Wall plates: {(total_plates * COUNTER_DEPTH / 12):.1f}'")
+print(f"  - Wall plates: {(total_plates * plate_length / 12):.1f}'")
 print(f"  - Joists: {(num_joists * joist_length / 12):.1f}'")
 
 # Add buffer for waste
@@ -473,7 +458,7 @@ print(f"  - 1/2\" × 6\" Through-bolts: 6-8 (for bolting ledger to 6×6 fence po
 print(f"  - 1/2\" Washers and nuts: 6-8 sets")
 print(f"")
 print(f"Deck screws for base frame:")
-print(f"  - 3\" Deck screws: ~{(num_longitudinal + num_cross) * 10} (grid assembly)")
+print(f"  - 3\" Deck screws: ~24 (perimeter frame corners and joints)")
 print(f"")
 print(f"Framing screws for walls:")
 print(f"  - 3\" Framing screws: ~{total_studs * 4 + total_plates * 10} (wall assembly)")
@@ -506,11 +491,13 @@ print(f"   - Clear {COUNTER_LENGTH}\" × {COUNTER_DEPTH}\" area")
 print(f"   - Add and compact 2-3\" base material")
 print(f"   - Level in all directions")
 print(f"")
-print(f"2. BUILD BASE FRAME")
-print(f"   - Lay {num_longitudinal} longitudinal 2×6 boards FLAT @ {BASE_BOARD_SPACING}\" OC")
-print(f"   - Lay {num_cross} cross 2×6 boards FLAT @ {BASE_BOARD_SPACING}\" OC")
-print(f"   - Screw together with 3\" deck screws")
-print(f"   - Verify level")
+print(f"2. BUILD BASE FRAME (creates {BASE_FRAME_HEIGHT:.1f}\" toe kick)")
+print(f"   - Cut 2 × 2×6 @ {rim_length/12:.0f}' ({rim_length}\") for front/back rims")
+print(f"   - Cut 2 × 2×6 @ {end_board_length:.1f}\" for end caps")
+print(f"   - Assemble perimeter frame with all boards ON EDGE")
+print(f"   - Front rim = toe kick face, back rim parallel to fence")
+print(f"   - Screw corners with 3\" deck screws")
+print(f"   - Verify level and square")
 print(f"")
 print(f"3. INSTALL REAR LEDGER")
 print(f"   - Cut 1 × 2×6 @ {ledger_length/12:.0f}' ({ledger_length}\")")
@@ -519,10 +506,11 @@ print(f"   - Bolt to fence posts with 1/2\" × 6\" through-bolts")
 print(f"   - Top of ledger at {ledger_top:.1f}\" height")
 print(f"")
 print(f"4. BUILD SUPPORT WALLS ({NUM_TOTAL_WALLS} total)")
-print(f"   - Cut {total_plates} plates @ {COUNTER_DEPTH}\" (FLAT orientation)")
+print(f"   - Cut {total_plates} plates @ {plate_length:.1f}\" (ON EDGE orientation)")
 print(f"   - Cut {total_studs} studs @ {wall_stud_length:.1f}\" (ON EDGE orientation)")
-print(f"   - Assemble each wall: bottom plate + {studs_per_wall} studs @ {WALL_STUD_SPACING}\" OC + top plate")
-print(f"   - Stand walls at positions: 0\", {BAY_WIDTH:.0f}\", {2*BAY_WIDTH:.0f}\", {3*BAY_WIDTH:.0f}\", {COUNTER_LENGTH:.0f}\"")
+print(f"   - Assemble each wall: bottom plate + 2 studs (front & back) + top plate")
+print(f"   - Stand walls on base frame at positions: 0\", {BAY_WIDTH:.0f}\", {2*BAY_WIDTH:.0f}\", {3*BAY_WIDTH:.0f}\", {COUNTER_LENGTH:.0f}\"")
+print(f"   - Front studs protrude {WALL_PROTRUSION}\" past base frame for door mounting")
 print(f"   - Brace plumb and secure to base frame")
 print(f"")
 print(f"5. INSTALL FRONT BEAM")
@@ -549,6 +537,8 @@ print(f"NOTES")
 print(f"{'='*70}")
 print(f"\n- All lumber: 2×6 pressure-treated")
 print(f"- This is FRAME ONLY - finish work separate")
+print(f"- Base frame creates {BASE_FRAME_HEIGHT:.1f}\" toe kick (2×6s on edge)")
+print(f"- Walls protrude {WALL_PROTRUSION}\" past base for door mounting surface")
 print(f"- Bay divisions at 36\" intervals for future door installation")
 print(f"- Frame designed to support concrete countertop")
 print(f"- Keep design synced with opus_outdoor_counter_cabinet")
