@@ -9,7 +9,7 @@ Design specifications:
 - 36" finished counter height
 - Back ledger bolted to 6×6 fence posts
 - Front beam (double 2×8) supported by five framed walls
-- Deck-style base frame of pressure treated 2×6 boards for level platform
+- Deck-style base frame of on-edge 2×6 boards for level platform
 - 2×6 joists at 12" on center spanning front to back
 - 3/4" plywood deck for concrete form base
 - 5 support walls: 2 outer (at cabinet ends) + 3 internal (at bay divisions)
@@ -52,10 +52,11 @@ WALL_STUD_THICKNESS = 1.5  # 2×4 actual thickness
 WALL_SHEATHING_THICKNESS = 0.5  # 1/2" plywood sheathing
 WALL_STUD_SPACING = 16  # 16" on center for studs
 
-# Deck-style base frame (pressure treated platform)
+# Deck-style base frame (pressure treated platform, on edge)
 BASE_BOARD_WIDTH = 5.5  # 2×6 actual width
 BASE_BOARD_THICKNESS = 1.5  # 2×6 actual thickness
 BASE_BOARD_SPACING = 16  # 16" on center
+BASE_FRAME_INSET = BASE_BOARD_THICKNESS  # inset to let walls protrude slightly
 
 # Joists (2×6 on edge, spanning front to back)
 JOIST_WIDTH = 1.5     # 2×6 actual thickness
@@ -129,11 +130,11 @@ front_beam_bottom = front_beam_top - FRONT_BEAM_WIDTH
 # Midsection walls go from base to bottom of front beam
 wall_height = front_beam_bottom
 
-# Deck base sits on ground
-base_height = BASE_BOARD_THICKNESS
+# Deck base sits on ground (on-edge 2×6s)
+base_height = BASE_BOARD_WIDTH
 
 print(f"\nSTRUCTURE (bottom to top):")
-print(f"  Deck base platform: 0\" - {base_height:.2f}\"")
+print(f"  Deck base platform (on-edge 2×6): 0\" - {base_height:.2f}\"")
 print(f"  Midsection walls: {base_height:.2f}\" - {wall_height:.2f}\"")
 print(f"  Ledger: {ledger_bottom:.2f}\" - {ledger_top:.2f}\"")
 print(f"  Front beam: {front_beam_bottom:.2f}\" - {front_beam_top:.2f}\"")
@@ -166,49 +167,43 @@ front_beam = (
 )
 
 # 3. DECK-STYLE BASE FRAME (pressure treated 2×6 platform)
-# Create a grid of boards running both directions for stability
+# Standard deck base on edge with rim boards + joists
 
-# Longitudinal boards (running along X axis, parallel to counter length)
-base_longitudinal = cq.Workplane("XY")
-num_longitudinal = int(COUNTER_DEPTH / BASE_BOARD_SPACING) + 1
+base_frame_depth = COUNTER_DEPTH - 2 * BASE_FRAME_INSET
 
-for i in range(num_longitudinal):
-    board_y = -COUNTER_DEPTH/2 + i * BASE_BOARD_SPACING
-    if board_y > COUNTER_DEPTH/2:
-        break
+# Rim boards (front/back) running along length
+base_rim = cq.Workplane("XY")
+rim_y_positions = [
+    -base_frame_depth / 2 + BASE_BOARD_THICKNESS / 2,
+    base_frame_depth / 2 - BASE_BOARD_THICKNESS / 2,
+]
 
+for i, board_y in enumerate(rim_y_positions):
     board = (
         cq.Workplane("XY")
-        .box(COUNTER_LENGTH, BASE_BOARD_WIDTH, BASE_BOARD_THICKNESS)
-        .translate((0, board_y, BASE_BOARD_THICKNESS/2))
+        .box(COUNTER_LENGTH, BASE_BOARD_THICKNESS, BASE_BOARD_WIDTH)
+        .translate((0, board_y, BASE_BOARD_WIDTH / 2))
     )
+    base_rim = board if i == 0 else base_rim.union(board)
 
-    if i == 0:
-        base_longitudinal = board
-    else:
-        base_longitudinal = base_longitudinal.union(board)
+# Joists aligned to wall positions (minimal cuts)
+base_joists = cq.Workplane("XY")
+base_joist_length = base_frame_depth - 2 * BASE_BOARD_THICKNESS
+base_joist_positions = [
+    -COUNTER_LENGTH / 2 + WALL_STUD_THICKNESS / 2,
+    *[-COUNTER_LENGTH / 2 + pos for pos in WALL_POSITIONS],
+    COUNTER_LENGTH / 2 - WALL_STUD_THICKNESS / 2,
+]
 
-# Cross boards (running along Y axis, perpendicular to length)
-base_cross = cq.Workplane("XY")
-num_cross = int(COUNTER_LENGTH / BASE_BOARD_SPACING) + 1
-
-for i in range(num_cross):
-    board_x = -COUNTER_LENGTH/2 + i * BASE_BOARD_SPACING
-    if board_x > COUNTER_LENGTH/2:
-        break
-
-    board = (
+for i, joist_x in enumerate(base_joist_positions):
+    joist = (
         cq.Workplane("XY")
-        .box(BASE_BOARD_WIDTH, COUNTER_DEPTH, BASE_BOARD_THICKNESS)
-        .translate((board_x, 0, BASE_BOARD_THICKNESS/2))
+        .box(BASE_BOARD_THICKNESS, base_joist_length, BASE_BOARD_WIDTH)
+        .translate((joist_x, 0, BASE_BOARD_WIDTH / 2))
     )
+    base_joists = joist if i == 0 else base_joists.union(joist)
 
-    if i == 0:
-        base_cross = board
-    else:
-        base_cross = base_cross.union(board)
-
-base_frame = base_longitudinal.union(base_cross)
+base_frame = base_rim.union(base_joists)
 
 # 4. MIDSECTION WALL SUPPORTS (replacing individual posts)
 # Two framed walls at 1/3 and 2/3 positions
@@ -517,14 +512,15 @@ print(f"\nFRONT BEAM (double 2×8):")
 print(f"  2×8 Pressure-treated: 2 @ {COUNTER_LENGTH/12:.0f}' ({COUNTER_LENGTH}\" each)")
 
 # Deck-style base frame
-print(f"\nDECK-STYLE BASE FRAME (level platform):")
+print(f"\nDECK-STYLE BASE FRAME (on-edge deck base):")
 longitudinal_length = COUNTER_LENGTH
-cross_length = COUNTER_DEPTH
-total_linear_feet = (num_longitudinal * longitudinal_length + num_cross * cross_length) / 12
+num_base_rim = 2
+num_base_joists = len(base_joist_positions)
+total_linear_feet = (num_base_rim * longitudinal_length + num_base_joists * base_joist_length) / 12
 print(f"  2×6 Pressure-treated: ~{math.ceil(total_linear_feet)}' total")
-print(f"    - {num_longitudinal} longitudinal @ {longitudinal_length/12:.0f}' each")
-print(f"    - {num_cross} cross boards @ {math.ceil(cross_length/12)}' each")
-print(f"  (Spacing: {BASE_BOARD_SPACING}\" on center)")
+print(f"    - {num_base_rim} rim boards @ {longitudinal_length/12:.0f}' each")
+print(f"    - {num_base_joists} joists @ {math.ceil(base_joist_length/12)}' each")
+print(f"  (Inset: {BASE_FRAME_INSET}\" per side, aligned to wall positions)")
 
 # Support walls (internal + outer)
 NUM_TOTAL_WALLS = NUM_INTERNAL_WALLS + 2  # 3 internal + 2 outer walls
@@ -573,7 +569,7 @@ print(f"  Doors hinge on support walls for solid anchor points")
 # Hardware
 print(f"\nHARDWARE:")
 print(f"  1/2\" × 6\" Through-bolts for ledger: 6-8 (into 6×6 posts)")
-print(f"  3\" Deck screws for base frame: ~{num_longitudinal * 10 + num_cross * 10}")
+print(f"  3\" Deck screws for base frame: ~{(num_base_rim + num_base_joists) * 10}")
 print(f"  2-1/2\" Framing screws for wall assembly: ~{total_studs * 4}")
 print(f"  Joist hangers (2×6): {num_joists * 2} (both ends)")
 print(f"  1-1/4\" Exterior screws for plywood deck: ~100")
@@ -621,9 +617,10 @@ print(f"   - Clear and level {COUNTER_LENGTH}\" × {COUNTER_DEPTH}\" footprint")
 print(f"   - Add 2-3\" crushed rock/sand base, compact and level")
 print(f"   - Optional: Lay landscape fabric")
 print(f"2. Build deck-style base frame on ground:")
-print(f"   - Lay {num_longitudinal} longitudinal 2×6 boards @ {BASE_BOARD_SPACING}\" OC")
-print(f"   - Lay {num_cross} cross 2×6 boards @ {BASE_BOARD_SPACING}\" OC")
-print(f"   - Screw together to create stable grid platform")
+print(f"   - Place 2 rim boards ON EDGE along the length")
+print(f"   - Cut {num_base_joists} base joists @ {base_joist_length:.1f}\" and set ON EDGE")
+print(f"   - Align joists to wall positions for minimal cuts")
+print(f"   - Screw together to create stable frame")
 print(f"   - Verify level in all directions")
 print(f"3. Cut and bolt 2×8 ledger to 6×6 fence posts:")
 print(f"   - Set height so finished counter = {COUNTER_HEIGHT}\"")
