@@ -110,11 +110,45 @@ This ensures that:
 
 ## Creating Your Own Examples
 
-1. Create a new folder in `examples/`
-2. Create `model.py` with your CadQuery code (must define a `result` variable)
-3. Add the example name to the `EXAMPLES` list in `regenerate_examples.py`
+**Before writing any code**, complete the [Design Brief Template](../docs/DESIGN_BRIEF_TEMPLATE.md). Models with clear design briefs are typically correct on the first attempt; models without them average 3+ redesign cycles.
+
+See the [Modeling Workflow Guide](../docs/MODELING_WORKFLOW.md) for detailed best practices.
+
+### Quick Start
+
+1. Complete the design brief (30% of your time should be here)
+2. Create a new folder in `examples/`
+3. Create `model.py` with your CadQuery code (must define a `result` variable)
 4. Run `python regenerate_examples.py your_example_name` to generate PNG and STL
 5. (Optional) Add a `README.md` with detailed documentation
+
+### Code Structure Pattern
+
+```python
+"""
+Brief: [One-line description]
+Assembly: [foundation] → [middle] → [top]
+"""
+import cadquery as cq
+
+# ===== DESIGN PARAMETERS =====
+WIDTH = 96        # X-axis (inches)
+DEPTH = 72        # Y-axis (inches)
+
+# ===== DERIVED DIMENSIONS =====
+half_width = WIDTH / 2
+
+# ===== COMPONENT BUILDERS =====
+def make_base():
+    """Base sits on ground at Z=0"""
+    ...
+
+# ===== ASSEMBLY =====
+result = make_base().union(make_frame())
+
+# ===== OUTPUT =====
+print(f"Model: {WIDTH}\" × {DEPTH}\"")
+```
 
 ## Requirements
 
