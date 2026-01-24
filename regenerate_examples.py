@@ -13,6 +13,7 @@ Usage:
 import sys
 import os
 from pathlib import Path
+from typing import Any
 
 
 def check_dependencies():
@@ -110,7 +111,7 @@ def regenerate_example(example_name: str) -> bool:
 
     try:
         # Read and execute the model file
-        namespace = {}
+        namespace: dict[str, Any] = {}
         with open(model_file, 'r') as f:
             code = f.read()
         exec(code, namespace)
