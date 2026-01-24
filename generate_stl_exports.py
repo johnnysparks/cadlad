@@ -3,6 +3,7 @@
 
 import sys
 from pathlib import Path
+from typing import Any
 from cadquery import exporters
 
 # Add the examples to the path
@@ -28,7 +29,7 @@ for example_name in examples:
 
     try:
         # Read and execute the model file
-        namespace = {}
+        namespace: dict[str, Any] = {}
         with open(model_file, 'r') as f:
             code = f.read()
         exec(code, namespace)

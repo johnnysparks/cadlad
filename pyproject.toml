@@ -28,3 +28,29 @@ rendering = [
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_ignores = true
+exclude = ["examples/"]
+
+[[tool.mypy.overrides]]
+module = [
+    "cadquery",
+    "cadquery.*",
+    "PIL",
+    "PIL.*",
+    "numpy",
+    "numpy.*",
+    "pyvista",
+    "pyvista.*",
+    "cairosvg",
+    "svglib",
+    "svglib.*",
+    "reportlab",
+    "reportlab.*",
+    "mcp",
+    "mcp.*",
+]
+ignore_missing_imports = true

@@ -5,14 +5,14 @@ import io
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import cadquery as cq
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 
 
-def render_to_png(result: Any, width: int = 800, height: int = 600, view_angle: tuple = (45, 45, 0), components: dict = None) -> bytes:
+def render_to_png(result: Any, width: int = 800, height: int = 600, view_angle: tuple = (45, 45, 0), components: dict[Any, Any] | None = None) -> bytes:
     """Render a CadQuery object to PNG bytes using multiple rendering strategies.
 
     Args:
@@ -126,7 +126,7 @@ def _render_components_via_3d(components: dict, width: int, height: int, view_an
 
 
 def _render_mesh_to_png_pyvista(mesh, width: int, height: int, view_angle: tuple = (45, 45, 0),
-                                 color: tuple = None) -> bytes:
+                                 color: tuple[Any, ...] | None = None) -> bytes:
     """Render a single PyVista mesh to PNG with proper lighting and shading.
 
     Args:
@@ -301,7 +301,7 @@ def _render_via_svg(result: Any, width: int, height: int) -> bytes:
         try:
             import cairosvg
             png_bytes = cairosvg.svg2png(url=svg_path, output_width=width, output_height=height)
-            return png_bytes
+            return cast(bytes, png_bytes)
         except ImportError:
             # cairosvg not available, try using svglib + reportlab
             try:
@@ -309,7 +309,7 @@ def _render_via_svg(result: Any, width: int, height: int) -> bytes:
                 from reportlab.graphics import renderPM
                 drawing = svg2rlg(svg_path)
                 png_bytes = renderPM.drawToString(drawing, fmt='PNG')
-                return png_bytes
+                return cast(bytes, png_bytes)
             except ImportError:
                 # Fall back to reading SVG and converting with PIL (basic)
                 # This won't render the SVG properly but at least shows something
@@ -371,14 +371,14 @@ def _render_components_via_svg(components: dict, width: int, height: int) -> byt
         try:
             import cairosvg
             png_bytes = cairosvg.svg2png(url=combined_path, output_width=width, output_height=height)
-            return png_bytes
+            return cast(bytes, png_bytes)
         except ImportError:
             try:
                 from svglib.svglib import svg2rlg
                 from reportlab.graphics import renderPM
                 drawing = svg2rlg(combined_path)
                 png_bytes = renderPM.drawToString(drawing, fmt='PNG')
-                return png_bytes
+                return cast(bytes, png_bytes)
             except ImportError:
                 raise Exception("No SVG renderer available")
 
