@@ -1,19 +1,7 @@
 """Parametric Organic Vine Bracket
 
 A decorative, 3D-printable wall bracket featuring an interwoven vine/lattice structure.
-Combines biophilic design aesthetics with functional utility for shelving or hanging.
-
-Key Features:
-- Parametric vine density and leaf placement
-- Organic sweeping paths using spline interpolation
-- Manifold geometry suitable for 3D printing
-- Structural integrity from continuous vine paths
-
-This example demonstrates:
-- Complex spline-based organic geometry
-- Parametric randomization with seed control
-- Multi-component assembly with boolean unions
-- Creating natural-looking structures in CAD
+Uses a solid frame approach with organic cutouts to create the vine pattern.
 
 Design Reference: Interwoven organic vine patterns with leaves for wall-mounted brackets.
 """
@@ -26,568 +14,385 @@ import random
 # PARAMETERS
 # =============================================================================
 
-# Primary Dimensions (mm)
-HEIGHT = 200        # Z-axis - total bracket height
-DEPTH = 150         # Y-axis - how far bracket extends from wall
-WIDTH = 30          # X-axis - width of mounting plate and vine cluster
+HEIGHT = 200        # Z-axis
+DEPTH = 150         # Y-axis
+WIDTH = 25          # X-axis (thickness of vine structure)
 
-# Mounting Plate
-WALL_THICKNESS = 5      # Thickness of the mounting backplate
-CHAMFER_SIZE = 2        # Edge chamfer for aesthetics
-SCREW_HOLE_DIA = 5      # Clearance for #8 screws (4mm + clearance)
-SCREW_HEAD_DIA = 10     # Countersink diameter for screw heads
+WALL_THICKNESS = 8
+SCREW_HOLE_DIA = 5
+SCREW_HEAD_DIA = 10
 
-# Vine Parameters
-VINE_DENSITY = 6            # Number of primary vine paths (3-12)
-VINE_RADIUS = 3.0           # Base radius of vine tubes
-VINE_RADIUS_VAR = 0.5       # Variation in vine radius for organic look
-LEAF_FREQUENCY = 0.2        # Probability of leaf at each lattice node (0.0-0.5)
-NOISE_SEED = 42             # Random seed for reproducible "organic" layout
+VINE_THICKNESS = 6  # Thickness of individual vine strands
+HOOK_RADIUS = 25
+HOOK_THICKNESS = 12
 
-# Hook Parameters
-HOOK_RADIUS = 20        # Radius of the curl at the tip
-HOOK_THICKNESS = 8      # Thickness of the hook section
+NOISE_SEED = 42
 
-# Quality Settings
-SPLINE_SEGMENTS = 24    # Number of segments for spline interpolation
-SWEEP_SEGMENTS = 16     # Segments around vine circumference
-
-# =============================================================================
-# COLORS
-# =============================================================================
-
-# Forest green for natural vine appearance
+# Colors
 VINE_GREEN = (60, 130, 60)
-LEAF_GREEN = (45, 100, 45)
+LEAF_GREEN = (40, 95, 40)
 PLATE_GREEN = (50, 110, 50)
 
-# =============================================================================
-# RANDOM NUMBER GENERATOR WITH SEED
-# =============================================================================
-
 rng = random.Random(NOISE_SEED)
-
-def seeded_random(min_val=0.0, max_val=1.0):
-    """Get a seeded random value in range."""
-    return rng.uniform(min_val, max_val)
-
-def seeded_randint(min_val, max_val):
-    """Get a seeded random integer in range."""
-    return rng.randint(min_val, max_val)
-
-# =============================================================================
-# GEOMETRY HELPERS
-# =============================================================================
-
-def normalize(v):
-    """Normalize a 3D vector."""
-    mag = math.sqrt(v[0]**2 + v[1]**2 + v[2]**2)
-    if mag == 0:
-        return (0, 0, 1)
-    return (v[0]/mag, v[1]/mag, v[2]/mag)
-
-def cross_product(a, b):
-    """Calculate cross product of two 3D vectors."""
-    return (
-        a[1]*b[2] - a[2]*b[1],
-        a[2]*b[0] - a[0]*b[2],
-        a[0]*b[1] - a[1]*b[0]
-    )
-
-def vec_add(a, b):
-    """Add two 3D vectors."""
-    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
-
-def vec_scale(v, s):
-    """Scale a 3D vector."""
-    return (v[0] * s, v[1] * s, v[2] * s)
-
-def lerp(a, b, t):
-    """Linear interpolation between two values."""
-    return a + (b - a) * t
-
-def lerp_vec(a, b, t):
-    """Linear interpolation between two 3D vectors."""
-    return (lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t))
-
-def bezier_point(p0, p1, p2, p3, t):
-    """Calculate point on cubic bezier curve at parameter t."""
-    u = 1 - t
-    return (
-        u**3 * p0[0] + 3*u**2*t * p1[0] + 3*u*t**2 * p2[0] + t**3 * p3[0],
-        u**3 * p0[1] + 3*u**2*t * p1[1] + 3*u*t**2 * p2[1] + t**3 * p3[1],
-        u**3 * p0[2] + 3*u**2*t * p1[2] + 3*u*t**2 * p2[2] + t**3 * p3[2]
-    )
-
-def bezier_tangent(p0, p1, p2, p3, t):
-    """Calculate tangent vector on cubic bezier curve at parameter t."""
-    u = 1 - t
-    return normalize((
-        3*u**2 * (p1[0]-p0[0]) + 6*u*t * (p2[0]-p1[0]) + 3*t**2 * (p3[0]-p2[0]),
-        3*u**2 * (p1[1]-p0[1]) + 6*u*t * (p2[1]-p1[1]) + 3*t**2 * (p3[1]-p2[1]),
-        3*u**2 * (p1[2]-p0[2]) + 6*u*t * (p2[2]-p1[2]) + 3*t**2 * (p3[2]-p2[2])
-    ))
+def seeded_random(a=0.0, b=1.0):
+    return rng.uniform(a, b)
 
 # =============================================================================
 # MOUNTING PLATE
 # =============================================================================
 
 def create_mounting_plate():
-    """
-    Create the wall mounting plate with screw holes.
-    Positioned at Y=0 (against the wall) in the X-Z plane.
-    """
-    # Main plate body
+    """Create the wall mounting plate."""
     plate = (
         cq.Workplane("XZ")
         .rect(WIDTH, HEIGHT)
         .extrude(WALL_THICKNESS)
         .edges("|Y")
-        .chamfer(CHAMFER_SIZE)
+        .chamfer(2)
     )
 
-    # Calculate screw hole positions (top, middle, bottom)
-    hole_positions = [
-        (0, HEIGHT/2 - 20),   # Top hole
-        (0, 0),               # Middle hole
-        (0, -HEIGHT/2 + 20),  # Bottom hole
-    ]
+    # Screw holes
+    for z_pos in [HEIGHT/2 - 20, 0, -HEIGHT/2 + 20]:
+        plate = plate.faces("<Y").workplane().moveTo(0, z_pos).hole(SCREW_HOLE_DIA)
+        plate = plate.faces("<Y").workplane().moveTo(0, z_pos).cskHole(SCREW_HOLE_DIA, SCREW_HEAD_DIA, 82)
 
-    # Cut screw holes with countersink
-    for x, z in hole_positions:
-        plate = (
-            plate
-            .faces("<Y")
-            .workplane()
-            .moveTo(x, z)
-            .hole(SCREW_HOLE_DIA, depth=WALL_THICKNESS * 2)
-        )
-        # Add countersink on back
-        plate = (
-            plate
-            .faces("<Y")
-            .workplane()
-            .moveTo(x, z)
-            .cskHole(SCREW_HOLE_DIA, SCREW_HEAD_DIA, 82)
-        )
-
-    # Add diamond reinforcement around top hole
-    diamond_size = 15
+    # Diamond detail
     plate = (
-        plate
-        .faces(">Y")
-        .workplane()
+        plate.faces(">Y").workplane()
         .moveTo(0, HEIGHT/2 - 20)
-        .polygon(4, diamond_size, circumscribed=True)
+        .polygon(4, 16, circumscribed=True)
         .extrude(3)
     )
 
     return plate
 
 # =============================================================================
-# VINE PATH GENERATION
+# TRIANGULAR BRACKET FRAME
 # =============================================================================
 
-def generate_vine_path(vine_index, total_vines):
+def create_bracket_frame():
     """
-    Generate a bezier curve path for a single vine.
-
-    Vines originate from the mounting plate and curve toward the hook tip.
-    Each vine has a unique path based on its index for natural variation.
+    Create the main triangular bracket shape as a solid frame.
+    This forms the structural skeleton that will be filled with vine detail.
     """
-    # Distribute vine starting points across the plate
-    angle_offset = (vine_index / total_vines) * 2 * math.pi
+    # The bracket is a triangular profile extruded in X
+    # Points define a right-triangle shape
+    profile_points = [
+        (WALL_THICKNESS, HEIGHT/2 - 25),           # Top at plate
+        (WALL_THICKNESS, -HEIGHT/2 + 25),          # Bottom at plate
+        (DEPTH - HOOK_RADIUS + 10, -HEIGHT/2 + 25), # Bottom front
+    ]
 
-    # Starting point on mounting plate (with variation)
-    start_x = seeded_random(-WIDTH/3, WIDTH/3)
-    start_z = seeded_random(-HEIGHT/3, HEIGHT/3)
-    start_y = WALL_THICKNESS
-    start = (start_x, start_y, start_z)
-
-    # End point at the hook
-    end_x = seeded_random(-5, 5)
-    end_y = DEPTH - HOOK_RADIUS
-    end_z = -HEIGHT/2 + HOOK_RADIUS
-    end = (end_x, end_y, end_z)
-
-    # Control points create the organic curve
-    # First control point - extend outward from plate
-    ctrl1_x = start_x + seeded_random(-10, 10)
-    ctrl1_y = start_y + DEPTH * 0.3
-    ctrl1_z = start_z + seeded_random(-20, 20)
-    ctrl1 = (ctrl1_x, ctrl1_y, ctrl1_z)
-
-    # Second control point - guide toward hook
-    ctrl2_x = end_x + seeded_random(-10, 10)
-    ctrl2_y = end_y - DEPTH * 0.2
-    ctrl2_z = end_z + seeded_random(10, 40)
-    ctrl2 = (ctrl2_x, ctrl2_y, ctrl2_z)
-
-    return (start, ctrl1, ctrl2, end)
-
-def create_vine_segment(center, radius, tangent):
-    """
-    Create a short cylindrical segment of vine at given position.
-    Oriented along the tangent direction.
-    """
-    # Calculate rotation to align cylinder with tangent
-    # Default cylinder is along Z axis
-    default_dir = (0, 0, 1)
-
-    # Find rotation axis (cross product)
-    axis = cross_product(default_dir, tangent)
-    axis_mag = math.sqrt(axis[0]**2 + axis[1]**2 + axis[2]**2)
-
-    if axis_mag < 0.001:
-        # Tangent is parallel to Z, no rotation needed
-        return (
-            cq.Workplane("XY")
-            .cylinder(radius * 2, radius)
-            .translate(center)
-        )
-
-    axis = (axis[0]/axis_mag, axis[1]/axis_mag, axis[2]/axis_mag)
-
-    # Find rotation angle
-    dot = default_dir[0]*tangent[0] + default_dir[1]*tangent[1] + default_dir[2]*tangent[2]
-    angle = math.acos(max(-1, min(1, dot)))
-
-    segment = (
-        cq.Workplane("XY")
-        .cylinder(radius * 2, radius)
-        .rotate((0, 0, 0), axis, math.degrees(angle))
-        .translate(center)
+    # Create the triangular profile
+    frame = (
+        cq.Workplane("YZ")
+        .polyline(profile_points + [profile_points[0]])
+        .close()
+        .extrude(WIDTH)
+        .translate((-WIDTH/2, 0, 0))
     )
 
-    return segment
+    # Round the edges slightly
+    try:
+        frame = frame.edges().fillet(3)
+    except Exception:
+        pass
 
-def create_vine_tube(path, base_radius):
-    """
-    Create a tube along a bezier path using a series of connected spheres.
-    This approach avoids complex sweep operations and ensures manifold geometry.
-    """
-    p0, p1, p2, p3 = path
-    vine = None
-
-    # Sample points along the bezier curve
-    num_samples = SPLINE_SEGMENTS
-
-    for i in range(num_samples + 1):
-        t = i / num_samples
-
-        # Get position on curve
-        pos = bezier_point(p0, p1, p2, p3, t)
-
-        # Vary radius slightly for organic look
-        radius = base_radius + seeded_random(-VINE_RADIUS_VAR, VINE_RADIUS_VAR)
-        radius = max(radius, 1.5)  # Minimum radius for printability
-
-        # Create sphere at this point
-        sphere = cq.Workplane("XY").sphere(radius).translate(pos)
-
-        if vine is None:
-            vine = sphere
-        else:
-            vine = vine.union(sphere)
-
-    return vine
+    return frame
 
 # =============================================================================
-# LEAF GENERATION
+# VINE LATTICE (DIAGONAL BARS)
 # =============================================================================
 
-def create_leaf(position, direction, size=12):
+def create_vine_lattice():
     """
-    Create a single leaf at the given position, oriented along direction.
-    Leaf is an elongated ellipsoid shape.
+    Create a diagonal lattice pattern that looks like interwoven vines.
+    Uses diagonal bars crossing in two directions.
     """
-    # Leaf dimensions
-    length = size
-    width = size * 0.5
-    thickness = size * 0.15
+    lattice = None
 
-    # Create basic leaf shape as a scaled sphere
-    leaf = (
-        cq.Workplane("XY")
-        .ellipse(width/2, length/2)
-        .extrude(thickness)
-        .translate((0, 0, -thickness/2))
-    )
+    # Calculate the bounds of our triangle
+    y_min = WALL_THICKNESS + 5
+    y_max = DEPTH - HOOK_RADIUS
+    z_top = HEIGHT/2 - 30
+    z_bottom = -HEIGHT/2 + 30
 
-    # Add a slight bend/curve by tapering
-    # Simplified: just use the ellipsoid for now
+    # Diagonal bars going one direction (/)
+    num_bars_a = 6
+    for i in range(num_bars_a):
+        t = i / (num_bars_a - 1) if num_bars_a > 1 else 0.5
 
-    # Rotate to align with direction
-    dir_normalized = normalize(direction)
-    default_dir = (0, 1, 0)  # Leaf points in Y by default
+        # Start and end points for this diagonal
+        # Start at plate side, end toward hook
+        y1 = y_min
+        z1 = z_top - t * (z_top - z_bottom) * 0.7
 
-    # Calculate rotation
-    axis = cross_product(default_dir, dir_normalized)
-    axis_mag = math.sqrt(axis[0]**2 + axis[1]**2 + axis[2]**2)
+        y2 = y_min + (y_max - y_min) * (0.5 + t * 0.4)
+        z2 = z_bottom + t * 30
 
-    if axis_mag > 0.001:
-        axis = (axis[0]/axis_mag, axis[1]/axis_mag, axis[2]/axis_mag)
-        dot = default_dir[0]*dir_normalized[0] + default_dir[1]*dir_normalized[1] + default_dir[2]*dir_normalized[2]
-        angle = math.acos(max(-1, min(1, dot)))
-        leaf = leaf.rotate((0, 0, 0), axis, math.degrees(angle))
+        # Create a cylinder representing this vine
+        dx, dy, dz = 0, y2 - y1, z2 - z1
+        length = math.sqrt(dy**2 + dz**2)
 
-    # Add random rotation around the direction axis for variety
-    random_twist = seeded_random(0, 360)
-    leaf = leaf.rotate((0, 0, 0), dir_normalized, random_twist)
+        if length > 10:
+            mid = (0, (y1 + y2)/2, (z1 + z2)/2)
 
-    # Move to position
-    leaf = leaf.translate(position)
+            # Build vine as cylinder
+            vine = cq.Workplane("XY").cylinder(length, VINE_THICKNESS/2)
 
-    return leaf
+            # Rotate to align with the line
+            angle = math.atan2(dz, dy) * 180 / math.pi
+            vine = vine.rotate((0, 0, 0), (1, 0, 0), 90 - angle)
+            vine = vine.translate(mid)
 
-def place_leaves_on_vine(path):
-    """
-    Place leaves along a vine path based on leaf_frequency.
-    """
-    p0, p1, p2, p3 = path
-    leaves = None
+            # Add organic bumps (spheres at ends)
+            sph1 = cq.Workplane("XY").sphere(VINE_THICKNESS/2 * 1.2).translate((seeded_random(-2, 2), y1, z1))
+            sph2 = cq.Workplane("XY").sphere(VINE_THICKNESS/2 * 1.2).translate((seeded_random(-2, 2), y2, z2))
+            vine = vine.union(sph1).union(sph2)
 
-    # Sample points for potential leaf placement
-    num_checks = 12
+            if lattice is None:
+                lattice = vine
+            else:
+                lattice = lattice.union(vine)
 
-    for i in range(1, num_checks):  # Skip start and end
-        t = i / num_checks
+    # Diagonal bars going the other direction (\)
+    num_bars_b = 5
+    for i in range(num_bars_b):
+        t = (i + 0.5) / num_bars_b
 
-        # Random chance to place a leaf
-        if seeded_random() > LEAF_FREQUENCY:
-            continue
+        # Cross-bars
+        y1 = y_min + 10
+        z1 = z_bottom + t * (z_top - z_bottom) * 0.8
 
-        # Get position and tangent on curve
-        pos = bezier_point(p0, p1, p2, p3, t)
-        tangent = bezier_tangent(p0, p1, p2, p3, t)
+        y2 = y_min + (y_max - y_min) * (0.3 + t * 0.35)
+        z2 = z1 + 50 * (1 - t)
 
-        # Calculate perpendicular direction for leaf orientation
-        # Leaf should point outward from vine
-        up = (0, 0, 1)
-        perp = cross_product(tangent, up)
-        perp_mag = math.sqrt(perp[0]**2 + perp[1]**2 + perp[2]**2)
-        if perp_mag < 0.001:
-            perp = (1, 0, 0)
-        else:
-            perp = (perp[0]/perp_mag, perp[1]/perp_mag, perp[2]/perp_mag)
+        dx, dy, dz = 0, y2 - y1, z2 - z1
+        length = math.sqrt(dy**2 + dz**2)
 
-        # Random angle around vine
-        leaf_angle = seeded_random(0, 2 * math.pi)
+        if length > 10:
+            mid = (0, (y1 + y2)/2, (z1 + z2)/2)
 
-        # Calculate leaf direction (blend of tangent and perpendicular)
-        leaf_dir = vec_add(
-            vec_scale(tangent, 0.3),
-            vec_scale(perp, 0.7)
-        )
-        leaf_dir = normalize(leaf_dir)
+            vine = cq.Workplane("XY").cylinder(length, VINE_THICKNESS/2 * 0.9)
 
-        # Offset position slightly from vine center
-        leaf_pos = vec_add(pos, vec_scale(perp, VINE_RADIUS + 1))
+            angle = math.atan2(dz, dy) * 180 / math.pi
+            vine = vine.rotate((0, 0, 0), (1, 0, 0), 90 - angle)
+            vine = vine.translate(mid)
 
-        # Create and add leaf
-        leaf_size = seeded_random(8, 15)
-        leaf = create_leaf(leaf_pos, leaf_dir, leaf_size)
+            sph1 = cq.Workplane("XY").sphere(VINE_THICKNESS/2).translate((seeded_random(-2, 2), y1, z1))
+            sph2 = cq.Workplane("XY").sphere(VINE_THICKNESS/2).translate((seeded_random(-2, 2), y2, z2))
+            vine = vine.union(sph1).union(sph2)
 
-        if leaves is None:
-            leaves = leaf
-        else:
-            leaves = leaves.union(leaf)
+            if lattice:
+                lattice = lattice.union(vine)
+            else:
+                lattice = vine
 
-    return leaves
+    # Add some curved connecting pieces
+    curve_positions = [
+        (y_min + 30, 20),
+        (y_min + 50, -20),
+        (y_min + 40, 50),
+        (y_min + 60, -40),
+    ]
+
+    for y_mid, z_mid in curve_positions:
+        # Create a small curved vine segment
+        pts = []
+        for j in range(5):
+            s = j / 4
+            arc = s * math.pi * 0.5 - math.pi * 0.25
+            y = y_mid + 15 * math.cos(arc)
+            z = z_mid + 20 * math.sin(arc)
+            pts.append((seeded_random(-3, 3), y, z))
+
+        # Connect points with spheres
+        for pt in pts:
+            sph = cq.Workplane("XY").sphere(VINE_THICKNESS/2 * 0.8).translate(pt)
+            if lattice:
+                lattice = lattice.union(sph)
+
+    return lattice
 
 # =============================================================================
-# HOOK GENERATION
+# FRAME SPINES
+# =============================================================================
+
+def create_frame_spines():
+    """Create the main structural vine spines along the bracket edges."""
+    spines = None
+
+    # Top spine - from top of plate curving down to hook area
+    spine_points_top = []
+    for i in range(10):
+        t = i / 9
+        y = WALL_THICKNESS + 5 + t * (DEPTH - HOOK_RADIUS - 15)
+        z = (HEIGHT/2 - 30) - t * t * (HEIGHT - 40)
+        x = seeded_random(-2, 2)
+        spine_points_top.append((x, y, z))
+
+    for pt in spine_points_top:
+        sph = cq.Workplane("XY").sphere(VINE_THICKNESS/2 * 1.3).translate(pt)
+        if spines is None:
+            spines = sph
+        else:
+            spines = spines.union(sph)
+
+    # Bottom spine - along the bottom edge
+    spine_points_bottom = []
+    for i in range(8):
+        t = i / 7
+        y = WALL_THICKNESS + 5 + t * (DEPTH - HOOK_RADIUS - 20)
+        z = -HEIGHT/2 + 30 + 10 * math.sin(t * math.pi * 0.5)
+        x = seeded_random(-2, 2)
+        spine_points_bottom.append((x, y, z))
+
+    for pt in spine_points_bottom:
+        sph = cq.Workplane("XY").sphere(VINE_THICKNESS/2 * 1.2).translate(pt)
+        spines = spines.union(sph)
+
+    # Vertical spine along plate
+    for i in range(8):
+        t = i / 7
+        z = (HEIGHT/2 - 30) - t * (HEIGHT - 60)
+        y = WALL_THICKNESS + 5
+        x = seeded_random(-2, 2)
+        sph = cq.Workplane("XY").sphere(VINE_THICKNESS/2 * 1.1).translate((x, y, z))
+        spines = spines.union(sph)
+
+    return spines
+
+# =============================================================================
+# HOOK
 # =============================================================================
 
 def create_hook():
-    """
-    Create the curved hook at the terminal end of the bracket.
-    The hook curls upward to prevent items from slipping off.
-    Uses a series of spheres along a curved path for reliable geometry.
-    """
-    # Position of hook arc center
-    hook_center_y = DEPTH - HOOK_RADIUS
-    hook_center_z = -HEIGHT/2 + HOOK_RADIUS
+    """Create the curved hook."""
+    hook_y = DEPTH - HOOK_RADIUS
+    hook_z = -HEIGHT/2 + HOOK_RADIUS
 
     hook = None
+    for i in range(15):
+        t = i / 14
+        angle = math.pi/2 - t * math.pi * 1.5  # 270 degree arc
+        y = hook_y + HOOK_RADIUS * math.cos(angle)
+        z = hook_z + HOOK_RADIUS * math.sin(angle)
+        x = seeded_random(-1, 1)
 
-    # Create hook as a series of spheres along an arc (270 degrees)
-    # Arc goes from pointing toward wall (-Y), down (-Z), to pointing up (+Z)
-    num_segments = 20
-    start_angle = math.pi / 2   # Start pointing in -Y direction
-    end_angle = -math.pi        # End pointing in +Z direction (270 degree arc)
-
-    for i in range(num_segments + 1):
-        t = i / num_segments
-        angle = lerp(start_angle, end_angle, t)
-
-        # Calculate position on arc (in YZ plane)
-        y = hook_center_y + HOOK_RADIUS * math.cos(angle)
-        z = hook_center_z + HOOK_RADIUS * math.sin(angle)
-
-        # Slightly vary the thickness for organic look
-        radius = HOOK_THICKNESS / 2 + seeded_random(-0.5, 0.5)
-        radius = max(radius, 2.0)
-
-        sphere = cq.Workplane("XY").sphere(radius).translate((0, y, z))
-
+        sph = cq.Workplane("XY").sphere(HOOK_THICKNESS/2).translate((x, y, z))
         if hook is None:
-            hook = sphere
+            hook = sph
         else:
-            hook = hook.union(sphere)
+            hook = hook.union(sph)
 
     return hook
 
 # =============================================================================
-# CROSS-VINE CONNECTIONS (LATTICE EFFECT)
+# LEAVES
 # =============================================================================
 
-def create_cross_connections(paths):
-    """
-    Create small connecting segments between vines for structural lattice.
-    """
-    connections = None
+def create_leaves():
+    """Create decorative leaves."""
+    leaves = None
 
-    if len(paths) < 2:
-        return connections
+    leaf_data = [
+        (4, 35, 55, 45),
+        (-5, 55, 25, -30),
+        (3, 45, -25, 60),
+        (-4, 70, 40, -45),
+        (5, 60, -15, 30),
+        (-3, 80, 15, -60),
+        (4, 50, 65, 15),
+        (-5, 65, -35, -20),
+        (3, 90, 25, 45),
+        (5, 40, -55, -40),
+        (-4, 75, 50, 30),
+    ]
 
-    # Sample points on each path and connect nearby ones
-    num_samples = 6
+    for x, y, z, rot in leaf_data:
+        x += seeded_random(-2, 2)
+        y += seeded_random(-3, 3)
+        z += seeded_random(-3, 3)
 
-    for i, path1 in enumerate(paths):
-        for j, path2 in enumerate(paths):
-            if j <= i:
-                continue
+        length = seeded_random(10, 16)
+        width = length * 0.4
 
-            # Check a few points along each path
-            for t in [0.3, 0.5, 0.7]:
-                p1 = bezier_point(*path1, t + seeded_random(-0.05, 0.05))
-                p2 = bezier_point(*path2, t + seeded_random(-0.05, 0.05))
+        try:
+            leaf = (
+                cq.Workplane("XY")
+                .ellipse(width/2, length/2)
+                .extrude(1.5)
+            )
+            leaf = leaf.rotate((0, 0, 0), (0, 1, 0), seeded_random(-30, 30))
+            leaf = leaf.rotate((0, 0, 0), (0, 0, 1), rot + seeded_random(-20, 20))
+            leaf = leaf.translate((x, y, z))
 
-                # Calculate distance
-                dist = math.sqrt((p2[0]-p1[0])**2 + (p2[1]-p1[1])**2 + (p2[2]-p1[2])**2)
+            if leaves is None:
+                leaves = leaf
+            else:
+                leaves = leaves.union(leaf)
+        except Exception:
+            pass
 
-                # Connect if close enough
-                if dist < 25 and seeded_random() < 0.4:
-                    # Create thin connecting vine
-                    mid = lerp_vec(p1, p2, 0.5)
-                    conn_radius = VINE_RADIUS * 0.6
-
-                    # Series of spheres for the connection
-                    for k in range(5):
-                        t_conn = k / 4
-                        pos = lerp_vec(p1, p2, t_conn)
-                        sphere = cq.Workplane("XY").sphere(conn_radius).translate(pos)
-
-                        if connections is None:
-                            connections = sphere
-                        else:
-                            connections = connections.union(sphere)
-
-    return connections
+    return leaves
 
 # =============================================================================
-# MAIN ASSEMBLY
+# MAIN BUILD
 # =============================================================================
 
 def build_vine_bracket():
-    """
-    Assemble the complete vine bracket.
-    """
     print("=" * 60)
     print("PARAMETRIC ORGANIC VINE BRACKET")
     print("=" * 60)
-    print(f"\nDimensions:")
-    print(f"  Height (Z): {HEIGHT} mm")
-    print(f"  Depth (Y):  {DEPTH} mm")
-    print(f"  Width (X):  {WIDTH} mm")
-    print(f"\nVine Parameters:")
-    print(f"  Vine Density:    {VINE_DENSITY} paths")
-    print(f"  Vine Radius:     {VINE_RADIUS} mm")
-    print(f"  Leaf Frequency:  {LEAF_FREQUENCY}")
-    print(f"  Random Seed:     {NOISE_SEED}")
-    print(f"\nGenerating geometry...")
+    print(f"\nDimensions: {HEIGHT}mm H x {DEPTH}mm D x {WIDTH}mm W")
 
-    # 1. Create mounting plate
+    print("\nGenerating geometry...")
+
     print("  Creating mounting plate...")
     plate = create_mounting_plate()
 
-    # 2. Generate vine paths
-    print(f"  Generating {VINE_DENSITY} vine paths...")
-    paths = []
-    for i in range(VINE_DENSITY):
-        path = generate_vine_path(i, VINE_DENSITY)
-        paths.append(path)
+    print("  Creating frame spines...")
+    spines = create_frame_spines()
 
-    # 3. Create vine tubes
-    print("  Creating vine geometry...")
-    vines = None
-    for i, path in enumerate(paths):
-        vine_radius = VINE_RADIUS + seeded_random(-0.5, 0.5)
-        vine = create_vine_tube(path, vine_radius)
+    print("  Creating vine lattice...")
+    lattice = create_vine_lattice()
 
-        if vines is None:
-            vines = vine
-        else:
-            vines = vines.union(vine)
-
-    # 4. Add leaves
-    print("  Adding leaves...")
-    all_leaves = None
-    for path in paths:
-        leaves = place_leaves_on_vine(path)
-        if leaves is not None:
-            if all_leaves is None:
-                all_leaves = leaves
-            else:
-                all_leaves = all_leaves.union(leaves)
-
-    # 5. Create cross-connections
-    print("  Creating lattice connections...")
-    connections = create_cross_connections(paths)
-
-    # 6. Create hook
     print("  Creating hook...")
     hook = create_hook()
 
-    # 7. Assemble all components
-    print("  Assembling components...")
+    print("  Creating leaves...")
+    leaves = create_leaves()
+
+    print("  Assembling...")
     result = plate
 
-    if vines is not None:
-        result = result.union(vines)
+    if spines:
+        result = result.union(spines)
+    if lattice:
+        result = result.union(lattice)
+    if hook:
+        result = result.union(hook)
+    if leaves:
+        result = result.union(leaves)
 
-    if all_leaves is not None:
-        result = result.union(all_leaves)
-
-    if connections is not None:
-        result = result.union(connections)
-
-    result = result.union(hook)
-
-    print("\nAssembly complete!")
-    print(f"\n3D Printing Notes:")
-    print(f"  - Print on side (X-Y plane) for vine strength")
-    print(f"  - Use 4+ walls, 25% gyroid infill")
-    print(f"  - Supports required for hook overhang")
-    print(f"  - Recommended materials: PLA+, PETG, ASA")
+    print("\nDone!")
     print("=" * 60)
 
-    return result, plate, vines, all_leaves, hook
+    return result, plate, spines, lattice, hook, leaves
 
 # =============================================================================
-# BUILD MODEL
+# BUILD
 # =============================================================================
 
-result, plate, vines, leaves, hook = build_vine_bracket()
+result, plate, spines, lattice, hook, leaves = build_vine_bracket()
 
-# Create components dict for colored rendering
-components = {
-    'mounting_plate': (plate, PLATE_GREEN),
-    'vines': (vines, VINE_GREEN) if vines is not None else None,
-    'leaves': (leaves, LEAF_GREEN) if leaves is not None else None,
-    'hook': (hook, VINE_GREEN),
-}
-
-# Filter out None components
-components = {k: v for k, v in components.items() if v is not None}
+# Components for rendering
+components = {'plate': (plate, PLATE_GREEN)}
+if spines:
+    components['spines'] = (spines, VINE_GREEN)
+if lattice:
+    components['lattice'] = (lattice, VINE_GREEN)
+if hook:
+    components['hook'] = (hook, VINE_GREEN)
+if leaves:
+    components['leaves'] = (leaves, LEAF_GREEN)
