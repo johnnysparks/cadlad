@@ -20,7 +20,6 @@ dev = [
     "black>=23.0.0",
 ]
 rendering = [
-    "cairosvg>=2.7.0",
     "svglib>=1.5.0",
     "reportlab>=4.0.0",
 ]
