@@ -38,8 +38,7 @@ Add the MCP server to your Claude Code configuration:
   "mcpServers": {
     "cadlad": {
       "command": "python",
-      "args": ["-m", "cadlad_mcp.server"],
-      "cwd": "/home/user/cadlad/src"
+      "args": ["-m", "cadlad_mcp.server"]
     }
   }
 }
@@ -51,11 +50,11 @@ The MCP server will automatically start when you launch Claude Code.
 
 ### 4. Troubleshooting First-Time Renders
 
-Claude Code occasionally stalls the very first time it tries to render if the optional dependencies are missing. If you notice the tool hanging on "creating preview" for more than a minute, prompt Claude Code (or Kodex) to:
+Claude Code occasionally stalls the very first time it tries to render if the optional dependencies are missing. If you notice the tool hanging on "creating preview" for more than a minute:
 
 1. Re-run the installation commands above to ensure dependencies are present.
-2. Execute `python -m cadlad_mcp.server --ping` from the repository root. This forces a warm-up import of CadQuery and confirms the server starts cleanly.
-3. If the ping succeeds but rendering still hangs, ask the assistant to restart the MCP server session (close and reopen the Claude Code/Kodex workspace) so the environment picks up the fresh install.
+2. Run `python -c "import cadquery; print('OK')"` to confirm CadQuery imports cleanly.
+3. Restart the MCP server session (close and reopen the Claude Code workspace) so the environment picks up the fresh install.
 
 These steps typically unblock the first render so subsequent iterations work smoothly.
 
@@ -204,8 +203,8 @@ See the [CadQuery documentation](https://cadquery.readthedocs.io/)
 # Install dev dependencies
 pip install -e ".[dev]"
 
-# Run tests (coming soon)
-pytest
+# Run tests
+pytest tests/
 
 # Format code
 black src/

@@ -88,13 +88,13 @@ If the MCP server is working, Claude will respond with available tools or an emp
 
 ## Testing CadQuery Installation
 
-To verify CadQuery works correctly, run the example:
+To verify CadQuery works correctly, regenerate a simple example:
 
 ```bash
-python examples/simple_box.py
+python regenerate_examples.py simple_box
 ```
 
-This should create `/tmp/simple_box.stl` and `/tmp/simple_box.step`.
+This should generate `examples/simple_box/render.png` and `examples/simple_box/render.stl`.
 
 ## Troubleshooting
 

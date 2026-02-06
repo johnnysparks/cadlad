@@ -2,17 +2,15 @@
 
 import asyncio
 import base64
-import io
 import json
-import os
-import sys
 import traceback
 from pathlib import Path
 from typing import Any
 
 import cadquery as cq
+from cadquery import exporters
 from mcp.server import Server
-from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
+from mcp.types import Tool, TextContent, ImageContent
 
 from .renderer import render_to_png
 
@@ -171,7 +169,6 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
                 json.dump(model_data, f, indent=2)
 
             # Export STL for later use
-            from cadquery import exporters
             stl_path = MODELS_DIR / f"{model_name}.stl"
             exporters.export(result, str(stl_path))
 
@@ -223,9 +220,9 @@ Model visualization rendered below."""
             )]
 
         model_list = []
-        for name, data in models_db.items():
+        for model_name, data in models_db.items():
             desc = data.get("description", "No description")
-            model_list.append(f"• {name}: {desc}")
+            model_list.append(f"• {model_name}: {desc}")
 
         return [TextContent(
             type="text",
@@ -267,7 +264,6 @@ Model visualization rendered below."""
                 export_path = exports_dir / f"{model_name}.{format_type}"
 
             # Export
-            from cadquery import exporters
             exporters.export(result, str(export_path))
 
             return [TextContent(
