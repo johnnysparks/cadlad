@@ -12,6 +12,21 @@ from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 
 
+def _has_display() -> bool:
+    """Check if a display server is available for GPU-based rendering.
+
+    Returns False in headless environments where PyVista would segfault
+    (SIGABRT) instead of raising a catchable Python exception.
+    """
+    # Explicit opt-in to offscreen rendering (e.g. OSMesa/EGL backend)
+    if os.environ.get("PYVISTA_OFF_SCREEN") == "true":
+        return True
+    # Check for X11 or Wayland display
+    if os.environ.get("DISPLAY", "") or os.environ.get("WAYLAND_DISPLAY", ""):
+        return True
+    return False
+
+
 def render_to_png(result: Any, width: int = 800, height: int = 600, view_angle: tuple = (45, 45, 0), components: dict[Any, Any] | None = None) -> bytes:
     """Render a CadQuery object to PNG bytes using multiple rendering strategies.
 
@@ -27,14 +42,18 @@ def render_to_png(result: Any, width: int = 800, height: int = 600, view_angle: 
         PNG image as bytes
     """
     # Strategy 1: Try 3D rendering with proper depth perception (trimesh + pyrender)
-    try:
-        if components:
-            return _render_components_via_3d(components, width, height, view_angle)
-        else:
-            return _render_via_3d(result, width, height, view_angle)
-    except Exception as e:
-        print(f"3D rendering failed: {e}, falling back to SVG", flush=True)
-        pass
+    # Skip PyVista entirely if no display is available — it will SIGABRT (segfault)
+    # rather than raising a catchable Python exception.
+    if _has_display():
+        try:
+            if components:
+                return _render_components_via_3d(components, width, height, view_angle)
+            else:
+                return _render_via_3d(result, width, height, view_angle)
+        except Exception as e:
+            print(f"3D rendering failed: {e}, falling back to SVG", flush=True)
+    else:
+        print("No display available, skipping PyVista 3D rendering", flush=True)
 
     # Strategy 2: Try using CadQuery's exporters to SVG (fallback)
     try:
