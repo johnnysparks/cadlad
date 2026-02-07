@@ -142,42 +142,48 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
         description = arguments.get("description", "")
 
         try:
-            # Execute the CadQuery code
-            namespace = {"cq": cq}
-            exec(code, namespace)
+            # Run all heavy CadQuery work in a thread so the async event
+            # loop stays responsive to MCP protocol messages.  Without this,
+            # complex models (e.g. wall_vent_hood with multiple lofts and
+            # booleans) block the loop long enough to cause MCP timeouts.
+            def _build_and_render():
+                namespace = {"cq": cq}
+                exec(code, namespace)
 
-            if "result" not in namespace:
-                return [TextContent(
-                    type="text",
-                    text=f"Error: Code must assign the model to a variable named 'result'"
-                )]
+                if "result" not in namespace:
+                    return None, None, None, "Error: Code must assign the model to a variable named 'result'"
 
-            result = namespace["result"]
+                result = namespace["result"]
 
-            # Save the model data
-            model_data = {
-                "name": model_name,
-                "code": code,
-                "description": description,
-            }
+                # Save to disk
+                model_file = MODELS_DIR / f"{model_name}.json"
+                model_data = {
+                    "name": model_name,
+                    "code": code,
+                    "description": description,
+                }
+                with open(model_file, 'w') as f:
+                    json.dump(model_data, f, indent=2)
+
+                # Export STL for later use
+                stl_path = MODELS_DIR / f"{model_name}.stl"
+                exporters.export(result, str(stl_path))
+
+                # Also save STEP format (better for parametric data)
+                step_path = MODELS_DIR / f"{model_name}.step"
+                exporters.export(result, str(step_path))
+
+                # Render to image
+                png_bytes = render_to_png(result)
+
+                return model_data, model_file, png_bytes, None
+
+            model_data, model_file, png_bytes, err = await asyncio.to_thread(_build_and_render)
+
+            if err is not None:
+                return [TextContent(type="text", text=err)]
 
             models_db[model_name] = model_data
-
-            # Save to disk
-            model_file = MODELS_DIR / f"{model_name}.json"
-            with open(model_file, 'w') as f:
-                json.dump(model_data, f, indent=2)
-
-            # Export STL for later use
-            stl_path = MODELS_DIR / f"{model_name}.stl"
-            exporters.export(result, str(stl_path))
-
-            # Also save STEP format (better for parametric data)
-            step_path = MODELS_DIR / f"{model_name}.step"
-            exporters.export(result, str(step_path))
-
-            # Render to image
-            png_bytes = render_to_png(result)
             png_base64 = base64.b64encode(png_bytes).decode('utf-8')
 
             return [
@@ -250,21 +256,24 @@ Model visualization rendered below."""
         code = model_data["code"]
 
         try:
-            # Execute code to get the model
-            namespace = {"cq": cq}
-            exec(code, namespace)
-            result = namespace["result"]
+            # Run blocking CadQuery exec + export in a thread to avoid
+            # starving the async event loop (same pattern as create_3d_model).
+            def _exec_and_export():
+                namespace = {"cq": cq}
+                exec(code, namespace)
+                result = namespace["result"]
 
-            # Determine output path
-            if output_path:
-                export_path = Path(output_path)
-            else:
-                exports_dir = Path.home() / ".cadlad" / "exports"
-                exports_dir.mkdir(parents=True, exist_ok=True)
-                export_path = exports_dir / f"{model_name}.{format_type}"
+                if output_path:
+                    ep = Path(output_path)
+                else:
+                    exports_dir = Path.home() / ".cadlad" / "exports"
+                    exports_dir.mkdir(parents=True, exist_ok=True)
+                    ep = exports_dir / f"{model_name}.{format_type}"
 
-            # Export
-            exporters.export(result, str(export_path))
+                exporters.export(result, str(ep))
+                return ep
+
+            export_path = await asyncio.to_thread(_exec_and_export)
 
             return [TextContent(
                 type="text",
