@@ -1,19 +1,21 @@
-name: Deploy PR Preview
+name: Deploy Preview to Cloudflare Pages
 
 on:
+  push:
+    branches-ignore: [main]
   pull_request:
-    types: [opened, synchronize, reopened]
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
+  deployments: write
 
 concurrency:
-  group: preview-${{ github.event.pull_request.number }}
+  group: preview-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
-  deploy-preview:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,32 +27,32 @@ jobs:
 
       - run: npm ci
 
-      - run: npx vite build --base /cadlad/pr/${{ github.event.pull_request.number }}/
+      - run: npx vite build
 
-      - name: Deploy preview to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          destination_dir: pr/${{ github.event.pull_request.number }}
-          keep_files: true
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=cadlad --branch=${{ github.head_ref || github.ref_name }}
 
-      - name: Comment preview URL
+      - name: Comment preview URL on PR
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
             const prNumber = context.payload.pull_request.number;
-            const previewUrl = `https://johnnysparks.github.io/cadlad/pr/${prNumber}/`;
-            const body = `🔗 **Preview deployment ready:** ${previewUrl}`;
+            const deployUrl = '${{ steps.deploy.outputs.deployment-url }}';
+            const body = `**Preview:** ${deployUrl}`;
 
-            // Find existing bot comment
             const comments = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: prNumber,
             });
             const botComment = comments.data.find(c =>
-              c.user.type === 'Bot' && c.body.includes('Preview deployment ready')
+              c.user.type === 'Bot' && c.body.startsWith('**Preview:**')
             );
 
             if (botComment) {
