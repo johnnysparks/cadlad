@@ -1,228 +1,135 @@
-# CadLad - 3D Modeling with Claude Code
+# CadLad
 
-An MCP (Model Context Protocol) server that enables Claude Code to create, iterate, and visualize 3D CAD models inline using CadQuery.
+Code-first parametric CAD for TypeScript — in the browser and CLI.
 
-## Features
+TypeScript is the file format. The browser is the CAD system.
 
-- **Create 3D Models**: Generate parametric CAD models using Python/CadQuery
-- **Inline Visualization**: See rendered previews of your models directly in Claude Code
-- **Iteration Loop**: Claude can iteratively refine designs based on your feedback
-- **Export Support**: Save models as STL, STEP, SVG, or DXF formats
-- **Local & Fast**: No cloud dependencies, runs entirely on your machine
+## What is this?
+
+CadLad is a parametric 3D modeling environment where you write TypeScript/JavaScript
+to define geometry. It runs in the browser with a Monaco editor, live parameter sliders,
+and a Three.js 3D viewport. Models can also run headless via the CLI for validation
+and STL export.
+
+The geometry engine uses [Manifold](https://github.com/elalish/manifold) (WASM) for
+fast, exact boolean operations and mesh generation.
 
 ## Quick Start
 
-### 1. Installation
+```bash
+npm install
+npm run dev
+```
+
+Open http://localhost:5173 — you'll see the studio with a default model loaded.
+
+## Modeling API
+
+Models are plain JavaScript functions that call the CadLad API and `return` a Solid:
+
+```js
+// box-with-hole.forge.js
+const width  = param("Width", 60, { min: 20, max: 200, unit: "mm" });
+const height = param("Height", 20, { min: 5, max: 100, unit: "mm" });
+const holeR  = param("Hole Radius", 8, { min: 2, max: 30, unit: "mm" });
+
+const base = box(width, width, height).color("#5f87c6");
+const hole = cylinder(height + 2, holeR);
+
+return base.subtract(hole);
+```
+
+### Primitives
+
+| Function | Description |
+|---|---|
+| `box(x, y, z)` | Axis-aligned box centred at origin |
+| `cylinder(h, r)` | Cylinder along Z |
+| `sphere(r)` | Sphere at origin |
+| `roundedRect(w, d, r, h)` | Rounded rectangle extrusion |
+
+### Solid Operations
+
+```js
+a.union(b)       // Boolean add
+a.subtract(b)    // Boolean cut
+a.intersect(b)   // Boolean intersect
+a.translate(x, y, z)
+a.rotate(rx, ry, rz)
+a.scale(s)
+a.mirror([nx, ny, nz])
+a.color("#hex")
+a.named("Part Name")
+```
+
+### 2D Sketch
+
+```js
+const profile = Sketch.begin(0, 0)
+  .lineTo(10, 0)
+  .lineTo(10, 5)
+  .lineTo(0, 5)
+  .close();
+
+const solid = profile.extrude(20);
+```
+
+### Parameters
+
+```js
+const w = param("Width", 100, { min: 10, max: 500, step: 5, unit: "mm" });
+```
+
+Parameters automatically generate sliders in the browser UI. When a slider
+changes, the model re-evaluates with the new value.
+
+### Assemblies
+
+```js
+const asm = assembly("My Assembly")
+  .add("base", basePart, [0, 0, 0])
+  .add("arm", armPart, [50, 0, 20]);
+
+return asm.toSolid();
+```
+
+## CLI
 
 ```bash
-# Install the MCP server
-cd /home/user/cadlad
-pip install -e .
+# Validate a model
+cadlad run examples/box-with-hole.forge.js
 
-# Optional: Install better rendering (recommended)
-pip install -e ".[rendering]"
+# Export to STL
+cadlad export examples/box-with-hole.forge.js -o output.stl
 ```
 
-> **Tip for Claude Code & Kodex**  
-> Both assistants respond well when you explicitly ask them to run `pip install -e .` (and optionally `pip install -e ".[rendering]"`) inside the repository before attempting any renders. Mention this in your first request so they queue the install step automatically.
-
-### 2. Configure Claude Code
-
-Add the MCP server to your Claude Code configuration:
-
-**For Linux/macOS**: Edit `~/.config/claude-code/config.json`
-**For Windows**: Edit `%APPDATA%\claude-code\config.json`
-
-```json
-{
-  "mcpServers": {
-    "cadlad": {
-      "command": "python",
-      "args": ["-m", "cadlad_mcp.server"]
-    }
-  }
-}
-```
-
-### 3. Restart Claude Code
-
-The MCP server will automatically start when you launch Claude Code.
-
-### 4. Troubleshooting First-Time Renders
-
-Claude Code occasionally stalls the very first time it tries to render if the optional dependencies are missing. If you notice the tool hanging on "creating preview" for more than a minute:
-
-1. Re-run the installation commands above to ensure dependencies are present.
-2. Run `python -c "import cadquery; print('OK')"` to confirm CadQuery imports cleanly.
-3. Restart the MCP server session (close and reopen the Claude Code workspace) so the environment picks up the fresh install.
-
-These steps typically unblock the first render so subsequent iterations work smoothly.
-
-## Usage Examples
-
-### Basic: Create a Simple Box
+## Architecture
 
 ```
-Create a 3D model of a 10x10x10mm cube
+src/
+  engine/          Manifold WASM backend, Solid class, primitives
+  api/             Public modeling API (param, sketch, assembly, runtime)
+  studio/          Browser IDE (Monaco + Three.js + param panel)
+  cli/             Node.js CLI tool
+examples/          Example .forge.js models
 ```
 
-Claude will generate CadQuery code and show you a rendered preview!
+### Design Principles
 
-### Iteration Loop Example
+- **TypeScript is the file format** — no custom DSL, no XML, no JSON configs
+- **The browser is the CAD system** — Monaco editor + Three.js viewport + live params
+- **Manifold for geometry** — fast WASM booleans, exact mesh output
+- **Backend-aware** — the modeling API is not tied to one geometry kernel
+- **Code over clicks** — parametric models are version-controlled, diffable, composable
 
-```
-Create a parametric gear with 20 teeth and a 5mm bore hole.
-Then iterate to make it larger and add mounting holes.
-```
+## Tech Stack
 
-Claude will:
-1. Generate initial gear model
-2. Show you the visualization
-3. Modify based on feedback
-4. Re-render and show updates
-5. Repeat until you're satisfied
-
-### Advanced: Parametric Design
-
-```
-Design a bearing pillow block with:
-- 60mm x 60mm base, 10mm thick
-- 20mm center hole
-- 4 mounting holes (5mm) in corners
-- Rounded edges
-
-Then export it as STL for 3D printing
-```
-
-## Available MCP Tools
-
-### `create_3d_model`
-Creates or updates a 3D model from CadQuery code.
-
-**Parameters:**
-- `name`: Model identifier (e.g., "gear_v1")
-- `code`: CadQuery Python code (must assign to `result` variable)
-- `description`: Optional model description
-
-**Returns:** Rendered PNG visualization
-
-### `list_models`
-Lists all created models with descriptions.
-
-### `export_model`
-Exports a model to STL, STEP, SVG, or DXF format.
-
-**Parameters:**
-- `name`: Model name
-- `format`: Export format (stl, step, svg, dxf)
-- `output_path`: Optional custom path
-
-### `get_model_code`
-Retrieves the CadQuery code for a specific model.
-
-## CadQuery Primer
-
-CadQuery uses a fluent API for 3D modeling:
-
-```python
-import cadquery as cq
-
-# Simple box
-result = cq.Workplane("XY").box(10, 10, 10)
-
-# Box with hole
-result = (
-    cq.Workplane("XY")
-    .box(10, 10, 10)
-    .faces(">Z")
-    .hole(3)
-)
-
-# Cylinder
-result = cq.Workplane("XY").cylinder(height=10, radius=5)
-
-# Complex parametric design
-result = (
-    cq.Workplane("XY")
-    .box(60, 60, 10)  # Base
-    .faces(">Z").workplane()  # Top face
-    .hole(20)  # Center hole
-    .faces(">Z").workplane()
-    .rect(50, 50, forConstruction=True)  # Construction geometry
-    .vertices()  # Select corner vertices
-    .hole(5)  # Mounting holes
-)
-```
-
-## Model Storage
-
-Models are saved to `~/.cadlad/models/` as:
-- `.json` - Model metadata and code
-- `.stl` - 3D printable format
-- `.step` - Parametric CAD format
-
-Exports go to `~/.cadlad/exports/` by default.
-
-## Example Iteration Session
-
-```
-You: Create a simple gear with 12 teeth
-
-Claude: [Creates gear, shows visualization]
-
-You: Make it bigger and add 16 teeth instead
-
-Claude: [Updates model, shows new visualization]
-
-You: Perfect! Add a 6mm hexagonal bore hole
-
-Claude: [Adds hex hole, shows final visualization]
-
-You: Export this as STL
-
-Claude: [Exports to ~/.cadlad/exports/gear.stl]
-```
-
-## Troubleshooting
-
-### Models not rendering properly?
-Install the optional rendering dependencies:
-```bash
-pip install -e ".[rendering]"
-```
-
-### MCP server not starting?
-Check Claude Code logs and ensure Python is in your PATH.
-
-### Need help with CadQuery syntax?
-See the [CadQuery documentation](https://cadquery.readthedocs.io/)
-
-## Development
-
-```bash
-# Install dev dependencies
-pip install -e ".[dev]"
-
-# Run tests
-pytest tests/
-
-# Format code
-black src/
-```
-
-### Updating Examples
-
-When modifying example models in `examples/*/model.py`, you **must** regenerate the output files:
-
-```bash
-# Regenerate all examples
-python regenerate_examples.py
-
-# Or regenerate a specific example
-python regenerate_examples.py simple_box
-```
-
-This ensures that `render.png` and `render.stl` stay in sync with the model code. The GitHub Actions workflow will also check this on PRs.
+- **TypeScript** — modeling language & implementation
+- **Manifold** (WASM) — geometry kernel for booleans & mesh
+- **Three.js** — 3D viewport rendering
+- **Monaco** — code editor with IntelliSense
+- **Vite** — dev server & bundler
+- **Vitest** — testing
 
 ## License
 
