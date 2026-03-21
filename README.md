@@ -23,6 +23,9 @@ npm run dev
 
 Open http://localhost:5173 — you'll see the studio with a default model loaded.
 
+Press **Ctrl+Enter** to run the model. Drag parameter sliders to update geometry
+in real time. Click **STL** to export.
+
 ## Modeling API
 
 Models are plain JavaScript functions that call the CadLad API and `return` a Solid:
@@ -93,6 +96,19 @@ const asm = assembly("My Assembly")
 return asm.toSolid();
 ```
 
+## Examples
+
+The `examples/` directory contains ready-to-run models:
+
+| File | Description |
+|---|---|
+| `box-with-hole.forge.js` | Hello world — box with a through-hole |
+| `parametric-bracket.forge.js` | L-bracket with mounting holes |
+| `phone-stand.forge.js` | Three-part phone stand |
+| `assembly-demo.forge.js` | Multi-part assembly with positioning |
+
+Paste any example into the studio editor or run via CLI.
+
 ## CLI
 
 ```bash
@@ -130,6 +146,40 @@ examples/          Example .forge.js models
 - **Monaco** — code editor with IntelliSense
 - **Vite** — dev server & bundler
 - **Vitest** — testing
+
+## Development
+
+```bash
+npm install          # install dependencies
+npm run dev          # start dev server (http://localhost:5173)
+npm run build        # production build
+npm run typecheck    # type-check without emitting
+npm test             # run tests with Vitest
+npm run lint         # lint with ESLint
+```
+
+### Writing a Model
+
+Create a `.forge.js` file that calls the CadLad API and returns a `Solid` or `Assembly`:
+
+```js
+// my-part.forge.js
+const r = param("Radius", 10, { min: 5, max: 50, unit: "mm" });
+
+const body = sphere(r).color("#89b4fa");
+const cutout = cylinder(r * 2, r * 0.6);
+const part = body.subtract(cutout);
+
+return part;
+```
+
+The runtime injects all API functions (`param`, `box`, `cylinder`, `sphere`,
+`roundedRect`, `Sketch`, `rect`, `circle`, `assembly`, etc.) — no imports needed.
+
+### File Conventions
+
+- `.forge.js` / `.forge.ts` — 3D model definitions
+- Models must `return` a `Solid`, `Assembly`, or array of `Solid`s
 
 ## License
 
