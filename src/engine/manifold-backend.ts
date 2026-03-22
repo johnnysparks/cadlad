@@ -17,9 +17,10 @@ export async function initManifold(): Promise<ManifoldToplevel> {
 
   _initPromise = (async () => {
     const mod = await import("manifold-3d");
-    // manifold-3d default export is an init function: (config?) => Promise<ManifoldToplevel>
-    const init = mod.default;
-    const wasm: ManifoldToplevel = await init();
+    // manifold-3d exports a default init function in newer versions
+    const init = mod.default ?? mod;
+    const wasm = typeof init === "function" ? await init() : init;
+    wasm.setup();
     _wasm = wasm;
     return _wasm;
   })();
