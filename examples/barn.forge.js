@@ -1,7 +1,9 @@
 // Red barn with gable roof and sliding door
 //
 // WHAT WORKED:
-//   - Sketch profile for gable end → extrude → rotate(90,0,0) for depth.
+//   - Gambrel (classic barn) roof profile via Sketch — 5-point polygon
+//     (steep lower + shallow upper per side). Way more barn-like than a triangle.
+//   - Sketch profile → extrude → rotate(90,0,0) for depth.
 //     This is THE pattern for any prismatic shape that isn't axis-aligned.
 //   - Building from Z=0 up with .translate(0, 0, height/2) for ground contact
 //   - Hollow walls via outerBox.subtract(innerBox) with floor preserved
@@ -33,13 +35,16 @@ const innerCavity = box(barnW - wallT * 2, barnD - wallT * 2, wallH)
   .translate(0, 0, wallH / 2 + wallT); // offset up so floor remains solid
 const walls = outerWalls.subtract(innerCavity);
 
-// Gable roof — sketch the end profile in XZ, extrude along Z, then
-// rotate so the extrusion runs along Y (the barn's depth axis).
-// Winding auto-corrects if needed.
-const hw = barnW / 2 + 3;
+// Gambrel (classic barn) roof — two slopes per side: steep lower, shallow upper.
+// Sketch the end profile, extrude along Z, rotate to run along Y.
+const hw = barnW / 2 + 3; // overhang
+const kneeH = roofH * 0.55; // where the slope changes
+const kneeW = barnW * 0.3;  // how far in the knee is from the edge
 const roofProfile = Sketch.begin(-hw, 0)
-  .lineTo(0, roofH)
-  .lineTo(hw, 0)
+  .lineTo(-kneeW, kneeH)     // steep lower-left
+  .lineTo(0, roofH)           // shallow upper-left to peak
+  .lineTo(kneeW, kneeH)       // shallow upper-right from peak
+  .lineTo(hw, 0)               // steep lower-right
   .close();
 
 // Extrude creates the prism along Z. We need it along Y.
