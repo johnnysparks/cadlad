@@ -87,9 +87,12 @@ export async function evaluateModel(
     code,
     names: codeAnalysis.names || [],
     unionCount: codeAnalysis.unionCount || 0,
+    subtractCount: codeAnalysis.subtractCount || 0,
     colorAfterUnion: codeAnalysis.colorAfterUnion || false,
     sketchExtrudeRotate: codeAnalysis.sketchExtrudeRotate || false,
     horizontalCylinders: codeAnalysis.horizontalCylinders || 0,
+    sphereShellPattern: codeAnalysis.sphereShellPattern || false,
+    hasHelperFunctions: codeAnalysis.hasHelperFunctions || false,
     thinSubtracts: 0,
     emptyBodies: bodies.filter((b) => b.mesh.positions.length === 0).length,
   };

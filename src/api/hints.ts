@@ -29,8 +29,14 @@ export interface HintContext {
   sketchExtrudeRotate: boolean;
   /** Count of cylinder().rotate() patterns */
   horizontalCylinders: number;
+  /** Count of subtract operations */
+  subtractCount: number;
   /** Subtract operations with no size oversize */
   thinSubtracts: number;
+  /** Whether sphere().subtract(sphere()).subtract(box()) pattern detected */
+  sphereShellPattern: boolean;
+  /** Whether code defines helper functions */
+  hasHelperFunctions: boolean;
   /** Detected geometry issues */
   emptyBodies: number;
 }
@@ -99,7 +105,46 @@ const detectors: HintDetector[] = [
     return null;
   },
 
-  // 6. Empty bodies after evaluation
+  // 6. Long subtract chains → suggest loops
+  (ctx) => {
+    if (ctx.subtractCount >= 8) {
+      return {
+        id: "subtract-chain",
+        severity: "tip",
+        message:
+          `${ctx.subtractCount} subtract operations — for repetitive cuts (pips, holes, slots), use a for-loop to keep the code maintainable.`,
+      };
+    }
+    return null;
+  },
+
+  // 7. Sphere shell pattern — fragile coordinate math
+  (ctx) => {
+    if (ctx.sphereShellPattern) {
+      return {
+        id: "sphere-shell",
+        severity: "tip",
+        message:
+          "Sphere shell (sphere subtract sphere subtract box) is fragile — the cut box must fully exceed the sphere radius or geometry vanishes. Add 2mm+ margin to cut dimensions, and verify with .volume().",
+      };
+    }
+    return null;
+  },
+
+  // 8. Helper functions — encourage the pattern
+  (ctx) => {
+    if (ctx.hasHelperFunctions && ctx.names.length === 0) {
+      return {
+        id: "name-helper-results",
+        severity: "tip",
+        message:
+          "You're using helper functions to build parts — nice! Consider .named() on each result so they're identifiable in the viewport and export.",
+      };
+    }
+    return null;
+  },
+
+  // 9. Empty bodies after evaluation
   (ctx) => {
     if (ctx.emptyBodies > 0) {
       return {
@@ -278,12 +323,26 @@ export function analyzeCode(code: string): Partial<HintContext> {
   const nameMatches = code.matchAll(/\.named\s*\(\s*["']([^"']+)["']\s*\)/g);
   const names = [...nameMatches].map((m) => m[1]);
 
+  // Count .subtract( calls
+  const subtractCount = (code.match(/\.subtract\s*\(/g) || []).length;
+
+  // Sphere shell pattern: sphere().subtract(sphere()) near box subtract
+  const sphereShellPattern =
+    /sphere\s*\([^)]*\)\s*[\s\S]*?\.subtract\s*\(\s*sphere/.test(code) &&
+    /\.subtract\s*\(\s*box/.test(code);
+
+  // Helper function definitions
+  const hasHelperFunctions = /function\s+\w+\s*\(/.test(code);
+
   return {
     code,
     names,
     unionCount,
+    subtractCount,
     colorAfterUnion,
     sketchExtrudeRotate,
     horizontalCylinders,
+    sphereShellPattern,
+    hasHelperFunctions,
   };
 }
