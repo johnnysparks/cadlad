@@ -20,6 +20,7 @@ export async function initManifold(): Promise<typeof Module> {
     // manifold-3d exports a default init function in newer versions
     const init = mod.default ?? mod;
     const wasm = typeof init === "function" ? await init() : init;
+    wasm.setup();
     _wasm = wasm;
     return wasm;
   })();
