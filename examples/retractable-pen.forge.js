@@ -1,4 +1,17 @@
 // Retractable pen — barrel, clip, button, and tip
+//
+// WHAT WORKED:
+//   - Stacked cylinders along Z for axisymmetric parts (barrel, grip, tip, button)
+//   - Box for the pocket clip — simple flat bar alongside the barrel
+//   - Laying flat via rotate(0, 90, 0) at the end for natural "on the desk" pose
+//   - Per-part colors survive through union now (_derive fix)
+//
+// WHAT DIDN'T:
+//   - .color() at end of union chain used to override all part colors.
+//     Now fixed in the API — individual colors persist through unions.
+//   - Standing vertical (Z-up default for cylinders) — looks like a
+//     skyscraper, not a pen. Always rotate elongated objects to their
+//     natural resting orientation.
 const barrelR = param("Barrel Radius", 5, { min: 3, max: 8, unit: "mm" });
 const barrelH = param("Barrel Length", 70, { min: 50, max: 100, unit: "mm" });
 const clipL = param("Clip Length", 25, { min: 15, max: 35, unit: "mm" });
@@ -25,22 +38,18 @@ const button = cylinder(buttonH, barrelR - 0.5, barrelR - 0.5, 16)
   .color("#cc3333");
 
 // Pocket clip
-const clip = box(clipW, 1, clipL)
-  .translate(0, -barrelR - 0.5, barrelH / 2 - clipL / 2)
-  .color("#cccccc");
+const clip = box(clipW, 1.5, clipL)
+  .translate(0, -barrelR - 0.75, barrelH / 2 - clipL / 2)
+  .color("#aaaaaa");
 
-// Clip top curl (small cylinder to hook over pocket)
-const clipCurl = cylinder(1.5, clipW / 2 + 0.5, clipW / 2 + 0.5, 8)
-  .rotate(90, 0, 0)
-  .translate(0, -barrelR - 1, barrelH / 2 - clipL + 1)
-  .color("#cccccc");
-
+// Build vertical then lay flat — natural "on the desk" orientation
 const pen = barrel
   .union(grip)
   .union(tip)
   .union(button)
   .union(clip)
-  .union(clipCurl)
-  .named("Retractable Pen").color("#1a3366");
+  .rotate(0, 90, 0)
+  .translate(0, 0, barrelR)
+  .named("Retractable Pen");
 
-return { model: pen, camera: [50, 60, 80] };
+return { model: pen, camera: [60, 40, 50] };
