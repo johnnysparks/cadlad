@@ -41,6 +41,6 @@ const bottle = body
   .union(neck)
   .union(threadRing)
   .union(cap)
-  .named("Water Bottle");
+  .named("Water Bottle").color("#88bbdd");
 
 return bottle;

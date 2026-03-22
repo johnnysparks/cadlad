@@ -36,6 +36,6 @@ const cabinet = outer
   .union(shelf)
   .union(door)
   .union(handle)
-  .named("Cabinet");
+  .named("Cabinet").color("#d4b896");
 
 return cabinet;

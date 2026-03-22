@@ -22,4 +22,4 @@ const lip = box(baseW, backT, lipH)
 
 const stand = base.union(back).union(lip);
 
-return stand.named("Phone Stand");
+return stand.named("Phone Stand").color("#5f87c6");

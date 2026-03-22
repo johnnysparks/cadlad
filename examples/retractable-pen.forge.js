@@ -41,6 +41,6 @@ const pen = barrel
   .union(button)
   .union(clip)
   .union(clipCurl)
-  .named("Retractable Pen");
+  .named("Retractable Pen").color("#1a3366");
 
 return pen;

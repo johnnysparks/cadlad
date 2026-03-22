@@ -37,6 +37,6 @@ const cover = plate
   .union(lip)
   .union(tabFront).union(tabBack)
   .union(grip).union(grip2).union(grip3)
-  .named("Battery Cover");
+  .named("Battery Cover").color("#555555");
 
 return cover;

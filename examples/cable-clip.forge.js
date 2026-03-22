@@ -30,6 +30,6 @@ const screwHole = cylinder(clipW + 2, holeD / 2)
 const part = clip
   .union(tab)
   .subtract(screwHole)
-  .named("Cable Clip");
+  .named("Cable Clip").color("#4488aa");
 
 return part;
