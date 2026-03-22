@@ -21,38 +21,46 @@ export class Solid {
     this._manifold = manifold;
   }
 
+  /** Create a new Solid carrying forward this one's color and name. */
+  private _derive(manifold: ManifoldInstance): Solid {
+    const s = new Solid(manifold);
+    s._color = this._color;
+    s._name = this._name;
+    return s;
+  }
+
   // ── Booleans ───────────────────────────────────────────────
 
   union(other: Solid): Solid {
-    return new Solid(this._manifold.add(other._manifold));
+    return this._derive(this._manifold.add(other._manifold));
   }
 
   subtract(other: Solid): Solid {
-    return new Solid(this._manifold.subtract(other._manifold));
+    return this._derive(this._manifold.subtract(other._manifold));
   }
 
   intersect(other: Solid): Solid {
-    return new Solid(this._manifold.intersect(other._manifold));
+    return this._derive(this._manifold.intersect(other._manifold));
   }
 
   // ── Transforms ─────────────────────────────────────────────
 
   translate(x: number, y: number, z: number): Solid {
-    return new Solid(this._manifold.translate(x, y, z));
+    return this._derive(this._manifold.translate(x, y, z));
   }
 
   rotate(x: number, y: number, z: number): Solid {
-    return new Solid(this._manifold.rotate([x, y, z]));
+    return this._derive(this._manifold.rotate([x, y, z]));
   }
 
   scale(x: number, y?: number, z?: number): Solid {
     const sy = y ?? x;
     const sz = z ?? x;
-    return new Solid(this._manifold.scale([x, sy, sz]));
+    return this._derive(this._manifold.scale([x, sy, sz]));
   }
 
   mirror(normal: Vec3): Solid {
-    return new Solid(this._manifold.mirror(normal));
+    return this._derive(this._manifold.mirror(normal));
   }
 
   // ── Metadata ───────────────────────────────────────────────
