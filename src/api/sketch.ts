@@ -1,13 +1,56 @@
 /**
- * 2D Sketch API.
+ * 2D Sketch API with geometric constraint validation.
  *
- * Provides a path-builder for creating 2D profiles that can be
- * extruded, revolved, or used for boolean operations.
+ * Catches broken geometry at the 2D stage — before it becomes
+ * a silent empty 3D solid. Validates profiles on extrude/revolve.
  */
 
 import type { Vec2 } from "../engine/types.js";
 import { extrudePolygon, revolve as revolveEngine } from "../engine/primitives.js";
 import type { Solid } from "../engine/solid.js";
+
+// ── Geometry helpers ──────────────────────────────────────────
+
+function dist(a: Vec2, b: Vec2): number {
+  return Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2);
+}
+
+function segmentDirection(a: Vec2, b: Vec2): Vec2 {
+  const d = dist(a, b);
+  if (d < 1e-10) return [0, 0];
+  return [(b[0] - a[0]) / d, (b[1] - a[1]) / d];
+}
+
+/** Signed area — positive = CCW, negative = CW */
+function signedArea(pts: Vec2[]): number {
+  let area = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const j = (i + 1) % pts.length;
+    area += pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1];
+  }
+  return area / 2;
+}
+
+/** Check if two segments intersect (excluding shared endpoints). */
+function segmentsIntersect(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2): boolean {
+  const d1x = a2[0] - a1[0], d1y = a2[1] - a1[1];
+  const d2x = b2[0] - b1[0], d2y = b2[1] - b1[1];
+  const cross = d1x * d2y - d1y * d2x;
+  if (Math.abs(cross) < 1e-10) return false; // parallel
+  const t = ((b1[0] - a1[0]) * d2y - (b1[1] - a1[1]) * d2x) / cross;
+  const u = ((b1[0] - a1[0]) * d1y - (b1[1] - a1[1]) * d1x) / cross;
+  // Strict interior intersection (not at endpoints)
+  return t > 0.001 && t < 0.999 && u > 0.001 && u < 0.999;
+}
+
+// ── Constraint types ──────────────────────────────────────────
+
+export interface SketchWarning {
+  type: "error" | "warning";
+  message: string;
+}
+
+// ── Sketch class ──────────────────────────────────────────────
 
 export class Sketch {
   private _points: Vec2[] = [];
@@ -41,12 +84,48 @@ export class Sketch {
     return this.lineTo(this._cursor[0] + dx, this._cursor[1] + dy);
   }
 
-  /** Arc approximation: quarter-circle segments toward target. */
+  /**
+   * Tangent arc — arc that smoothly continues the direction of the
+   * previous segment, ending at (x, y). This guarantees G1 continuity
+   * (no sharp corner at the junction).
+   *
+   * @param x End point X
+   * @param y End point Y
+   * @param segments Number of interpolation segments (default 12)
+   */
+  tangentArcTo(x: number, y: number, segments = 12): this {
+    const pts = this._points;
+    if (pts.length < 2) {
+      // No previous segment — fall back to straight line
+      return this.lineTo(x, y);
+    }
+    const [sx, sy] = this._cursor;
+    const prev = pts[pts.length - 2];
+    const dir = segmentDirection(prev, [sx, sy]);
+
+    // Compute a quadratic bezier where the control point continues
+    // the tangent direction from the current point
+    const chordLen = dist([sx, sy], [x, y]);
+    const cx = sx + dir[0] * chordLen * 0.5;
+    const cy = sy + dir[1] * chordLen * 0.5;
+
+    for (let i = 1; i <= segments; i++) {
+      const t = i / segments;
+      const u = 1 - t;
+      // Quadratic bezier: B(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
+      const bx = u * u * sx + 2 * u * t * cx + t * t * x;
+      const by = u * u * sy + 2 * u * t * cy + t * t * y;
+      this._points.push([bx, by]);
+    }
+    this._cursor = [x, y];
+    return this;
+  }
+
+  /** Arc approximation: bulge-based arc toward target. */
   arcTo(x: number, y: number, radius: number, segments = 8): this {
     const [sx, sy] = this._cursor;
     for (let i = 1; i <= segments; i++) {
       const t = i / segments;
-      // Simple parametric interpolation with bulge
       const mx = sx + (x - sx) * t;
       const my = sy + (y - sy) * t;
       const bulge = radius * Math.sin(Math.PI * t) * 0.2;
@@ -70,20 +149,83 @@ export class Sketch {
     return [...this._points];
   }
 
-  /** Extrude this sketch into a solid along Z. */
+  // ── Validation ──────────────────────────────────────────────
+
+  /** Validate the profile and return any issues. */
+  validate(): SketchWarning[] {
+    const warnings: SketchWarning[] = [];
+    const pts = this._points;
+
+    // Must have at least 3 points for a valid polygon
+    if (pts.length < 3) {
+      warnings.push({ type: "error", message: `Profile has only ${pts.length} point(s) — need at least 3 for a polygon.` });
+      return warnings;
+    }
+
+    // Check for degenerate edges (zero-length segments)
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (dist(pts[i], pts[i + 1]) < 1e-6) {
+        warnings.push({ type: "warning", message: `Degenerate edge at point ${i} — two coincident points. This may cause manifold errors.` });
+      }
+    }
+
+    // Check if profile is closed (first ≈ last, or .close() was called)
+    if (!this._closed && dist(pts[0], pts[pts.length - 1]) > 0.1) {
+      warnings.push({ type: "warning", message: "Profile is not closed — first and last points are not coincident. Manifold will close it implicitly, which may produce unexpected geometry." });
+    }
+
+    // Check for self-intersections
+    for (let i = 0; i < pts.length; i++) {
+      const i2 = (i + 1) % pts.length;
+      for (let j = i + 2; j < pts.length; j++) {
+        if (j === pts.length - 1 && i === 0) continue; // skip adjacent closing edge
+        const j2 = (j + 1) % pts.length;
+        if (segmentsIntersect(pts[i], pts[i2], pts[j], pts[j2])) {
+          warnings.push({ type: "error", message: `Self-intersection between edges ${i}-${i + 1} and ${j}-${j + 1}. This will produce unpredictable 3D geometry.` });
+          break; // one is enough
+        }
+      }
+      if (warnings.some(w => w.type === "error" && w.message.includes("Self-intersection"))) break;
+    }
+
+    // Check area — too small profiles produce invisible geometry
+    const area = Math.abs(signedArea(pts));
+    if (area < 0.01) {
+      warnings.push({ type: "error", message: `Profile area is near zero (${area.toFixed(4)}). The profile may be degenerate or all points are collinear.` });
+    }
+
+    return warnings;
+  }
+
+  // ── 3D operations ───────────────────────────────────────────
+
+  /** Extrude this sketch into a solid along Z. Validates profile first. */
   extrude(height: number): Solid {
+    const issues = this.validate();
+    for (const issue of issues) {
+      const prefix = issue.type === "error" ? "🚫 Sketch" : "⚠️ Sketch";
+      console.warn(`${prefix}: ${issue.message}`);
+    }
+    if (issues.some(i => i.type === "error")) {
+      console.warn("Sketch has errors — extrude may produce empty or broken geometry.");
+    }
     return extrudePolygon(this._points, height);
   }
 
-  /** Revolve this sketch around Y axis. */
+  /** Revolve this sketch around Y axis. Validates profile first. */
   revolve(segments?: number): Solid {
+    const issues = this.validate();
+    for (const issue of issues) {
+      const prefix = issue.type === "error" ? "🚫 Sketch" : "⚠️ Sketch";
+      console.warn(`${prefix}: ${issue.message}`);
+    }
     return revolveEngine(this._points, segments);
   }
 }
 
-/**
- * Create a rectangular sketch centred at origin.
- */
+// ── Convenience constructors ──────────────────────────────────
+
+/** Create a rectangular sketch centred at origin. */
 export function rect(width: number, height: number): Sketch {
   const hw = width / 2;
   const hh = height / 2;
@@ -94,9 +236,7 @@ export function rect(width: number, height: number): Sketch {
     .close();
 }
 
-/**
- * Create a circular sketch centred at origin (polygon approximation).
- */
+/** Create a circular sketch centred at origin (polygon approximation). */
 export function circle(radius: number, segments = 32): Sketch {
   const s = new Sketch();
   for (let i = 0; i < segments; i++) {

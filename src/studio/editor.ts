@@ -101,7 +101,9 @@ declare class Sketch {
   lineTo(x: number, y: number): Sketch;
   lineBy(dx: number, dy: number): Sketch;
   arcTo(x: number, y: number, radius: number, segments?: number): Sketch;
+  tangentArcTo(x: number, y: number, segments?: number): Sketch;
   close(): Sketch;
+  validate(): Array<{ type: "error" | "warning"; message: string }>;
   extrude(height: number): Solid;
   revolve(segments?: number): Solid;
   points(): [number, number][];
