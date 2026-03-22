@@ -84,6 +84,14 @@ async function boot() {
     URL.revokeObjectURL(url);
   });
 
+  // Expose for test automation (Puppeteer snapshot tests)
+  (window as any).__cadlad = {
+    setCode(code: string) { editor.setValue(code); },
+    run: runModel,
+    getErrors() { return errorBar.textContent || ""; },
+    hasError() { return errorBar.classList.contains("visible"); },
+  };
+
   // Run the default model on load
   await runModel();
 }
