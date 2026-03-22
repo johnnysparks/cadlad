@@ -1,43 +1,45 @@
-// Red barn with triangular roof and sliding door
+// Red barn with gable roof and sliding door
 const barnW = param("Width", 80, { min: 50, max: 120, unit: "mm" });
 const barnD = param("Depth", 60, { min: 40, max: 100, unit: "mm" });
 const wallH = param("Wall Height", 40, { min: 25, max: 60, unit: "mm" });
-const roofH = param("Roof Height", 25, { min: 15, max: 40, unit: "mm" });
-const doorW = param("Door Width", 25, { min: 15, max: 40, unit: "mm" });
-const doorH = param("Door Height", 35, { min: 20, max: 55, unit: "mm" });
+const roofH = param("Roof Height", 20, { min: 10, max: 35, unit: "mm" });
+const doorW = param("Door Width", 22, { min: 12, max: 35, unit: "mm" });
+const doorH = param("Door Height", 30, { min: 15, max: 38, unit: "mm" });
 
-// Walls
-const walls = box(barnW, barnD, wallH).color("#c04040");
+// Walls — bottom at Z=0
+const walls = box(barnW, barnD, wallH)
+  .translate(0, 0, wallH / 2);
 
-// Roof — approximate with a tall narrow box rotated (simple gable)
-// Use a box for each side of the gable
-const roofSlope = Math.sqrt(roofH * roofH + (barnW / 2) * (barnW / 2));
-const roofAngle = Math.atan2(roofH, barnW / 2) * (180 / Math.PI);
-const roofT = 2;
+// Gable roof — sketch the end profile in XZ, extrude along Z, then
+// rotate so the extrusion runs along Y (the barn's depth axis).
+// Winding auto-corrects if needed.
+const hw = barnW / 2 + 3;
+const roofProfile = Sketch.begin(-hw, 0)
+  .lineTo(0, roofH)
+  .lineTo(hw, 0)
+  .close();
 
-const leftRoof = box(roofSlope + 4, barnD + 4, roofT)
-  .rotate(0, roofAngle, 0)
-  .translate(-barnW / 4, 0, wallH / 2 + roofH / 2)
+// Extrude creates the prism along Z. We need it along Y.
+// After extrude: profile is in XY, depth along Z.
+// rotate(90, 0, 0) tips it so depth runs along Y.
+const roofDepth = barnD + 6;
+const roof = roofProfile.extrude(roofDepth)
+  .rotate(90, 0, 0)
+  .translate(0, roofDepth / 2, wallH)
   .color("#5a3a2a");
 
-const rightRoof = box(roofSlope + 4, barnD + 4, roofT)
-  .rotate(0, -roofAngle, 0)
-  .translate(barnW / 4, 0, wallH / 2 + roofH / 2)
-  .color("#5a3a2a");
-
-// Door opening
-const doorCut = box(doorW, wallH, doorH + 2)
-  .translate(0, -barnD / 2 + wallH / 2, -wallH / 2 + doorH / 2);
+// Door opening — punch through front wall
+const doorCut = box(doorW, 10, doorH + 1)
+  .translate(0, -barnD / 2, doorH / 2);
 
 // Sliding door panel
-const doorPanel = box(doorW * 0.6, 1, doorH - 2)
-  .translate(doorW * 0.3, -barnD / 2 - 0.5, -wallH / 2 + doorH / 2)
+const doorPanel = box(doorW * 0.55, 1.5, doorH - 1)
+  .translate(doorW * 0.25, -barnD / 2 - 0.5, doorH / 2)
   .color("#5a3a2a");
 
 const barn = walls
+  .union(roof)
   .subtract(doorCut)
-  .union(leftRoof)
-  .union(rightRoof)
   .union(doorPanel)
   .named("Barn").color("#c04040");
 
