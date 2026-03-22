@@ -9,7 +9,7 @@ import { initManifold } from "../engine/manifold-backend.js";
 import { Solid } from "../engine/solid.js";
 import { Assembly } from "./assembly.js";
 import { _setParamValues, _resetParams, _getParamDefs } from "./params.js";
-import { analyzeCode, collectHints } from "./hints.js";
+import { collectHints } from "./hints.js";
 import type { ModelResult, Body, ParamDef, Hint } from "../engine/types.js";
 
 // All API symbols that get injected into model scope
@@ -91,23 +91,10 @@ export async function evaluateModel(
     errors.push(msg);
   }
 
-  // Collect contextual hints based on code patterns and results
-  const codeAnalysis = analyzeCode(code);
-  const hintCtx = {
-    ...codeAnalysis,
-    code,
-    names: codeAnalysis.names || [],
-    unionCount: codeAnalysis.unionCount || 0,
-    subtractCount: codeAnalysis.subtractCount || 0,
-    colorAfterUnion: codeAnalysis.colorAfterUnion || false,
-    sketchExtrudeRotate: codeAnalysis.sketchExtrudeRotate || false,
-    horizontalCylinders: codeAnalysis.horizontalCylinders || 0,
-    sphereShellPattern: codeAnalysis.sphereShellPattern || false,
-    hasHelperFunctions: codeAnalysis.hasHelperFunctions || false,
-    thinSubtracts: 0,
+  // Warn about real geometry problems (not style opinions)
+  hints = collectHints({
     emptyBodies: bodies.filter((b) => b.mesh.positions.length === 0).length,
-  };
-  hints = collectHints(hintCtx);
+  });
 
   return { bodies, params: collectedParams, errors, hints, camera };
 }
