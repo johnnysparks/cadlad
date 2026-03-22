@@ -10,8 +10,8 @@ import type { Vec2 } from "./types.js";
 
 /** Axis-aligned box centred at origin. */
 export function box(x: number, y: number, z: number): Solid {
-  const M = getManifold();
-  return new Solid(M.Manifold.cube([x, y, z], true));
+  const manifold = getManifold();
+  return new Solid(manifold.Manifold.cube([x, y, z], true));
 }
 
 /** Cylinder along Z, centred at origin. */
@@ -21,19 +21,19 @@ export function cylinder(
   radiusTop?: number,
   segments?: number,
 ): Solid {
-  const M = getManifold();
+  const manifold = getManifold();
   const rTop = radiusTop ?? radiusBottom;
   const n = segments ?? 32;
   return new Solid(
-    M.Manifold.cylinder(height, radiusBottom, rTop, n, true),
+    manifold.Manifold.cylinder(height, radiusBottom, rTop, n, true),
   );
 }
 
 /** Sphere centred at origin. */
 export function sphere(radius: number, segments?: number): Solid {
-  const M = getManifold();
+  const manifold = getManifold();
   const n = segments ?? 32;
-  return new Solid(M.Manifold.sphere(radius, n));
+  return new Solid(manifold.Manifold.sphere(radius, n));
 }
 
 /**
@@ -70,9 +70,9 @@ export function extrudePolygon(
     );
     pts = [...pts].reverse();
   }
-  const M = getManifold();
-  const cross = M.CrossSection.ofPolygons([pts]);
-  return new Solid(M.Manifold.extrude(cross, height));
+  const manifold = getManifold();
+  const cross = manifold.CrossSection.ofPolygons([pts]);
+  return new Solid(manifold.Manifold.extrude(cross, height));
 }
 
 /**
@@ -90,9 +90,9 @@ export function revolve(
     );
     pts = [...pts].reverse();
   }
-  const M = getManifold();
-  const cross = M.CrossSection.ofPolygons([pts]);
-  return new Solid(M.Manifold.revolve(cross, segments ?? 32));
+  const manifold = getManifold();
+  const cross = manifold.CrossSection.ofPolygons([pts]);
+  return new Solid(manifold.Manifold.revolve(cross, segments ?? 32));
 }
 
 /**
