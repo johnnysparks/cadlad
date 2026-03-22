@@ -7,8 +7,9 @@
 
 import { getManifold } from "./manifold-backend.js";
 import type { Color, TriMesh, Vec3, Body, BBox } from "./types.js";
+import type { Manifold } from "manifold-3d";
 
-type ManifoldInstance = ReturnType<ReturnType<typeof getManifold>["Manifold"]>;
+type ManifoldInstance = Manifold;
 
 export class Solid {
   /** @internal raw Manifold handle */
@@ -81,13 +82,11 @@ export class Solid {
   }
 
   volume(): number {
-    const props = this._manifold.getProperties();
-    return props.volume;
+    return this._manifold.volume();
   }
 
   surfaceArea(): number {
-    const props = this._manifold.getProperties();
-    return props.surfaceArea;
+    return this._manifold.surfaceArea();
   }
 
   // ── Export ─────────────────────────────────────────────────
