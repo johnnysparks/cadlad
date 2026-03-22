@@ -12,7 +12,7 @@
  */
 
 import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join, basename, resolve } from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -46,6 +46,35 @@ This downloads Chromium on first run (~150MB cached at ~/.cache/puppeteer/).`);
   process.exit(1);
 }
 
+// Find a Chrome/Chromium binary: Playwright cache, Puppeteer cache, system.
+// Returns the path or null (let Puppeteer use its bundled browser).
+function findChromeBinary() {
+  const home = process.env.HOME || "/root";
+  // Playwright Chromium (common in CI / Codex containers)
+  const pwBase = join(home, ".cache", "ms-playwright");
+  if (existsSync(pwBase)) {
+    try {
+      const dirs = readdirSync(pwBase).filter(d => d.startsWith("chromium-")).sort().reverse();
+      for (const d of dirs) {
+        const p = join(pwBase, d, "chrome-linux", "chrome");
+        if (existsSync(p)) return p;
+      }
+    } catch {}
+  }
+  // Puppeteer cache
+  const ppBase = join(home, ".cache", "puppeteer", "chrome");
+  if (existsSync(ppBase)) {
+    try {
+      const dirs = readdirSync(ppBase).sort().reverse();
+      for (const d of dirs) {
+        const p = join(ppBase, d, "chrome-linux64", "chrome");
+        if (existsSync(p)) return p;
+      }
+    } catch {}
+  }
+  return null;
+}
+
 const args = process.argv.slice(2);
 const UPDATE = args.includes("--update");
 const EXAMPLES_DIR = argVal("--examples-dir") || join(ROOT, "examples");
@@ -77,9 +106,20 @@ async function main() {
 
   const puppeteer = await loadPuppeteer();
   const launch = puppeteer.default?.launch ? puppeteer.default : puppeteer;
+  const chromePath = findChromeBinary();
+  if (chromePath) console.log(`Using Chrome: ${chromePath}`);
   const browser = await launch.launch({
     headless: "new",
-    args: ["--no-sandbox"],
+    ...(chromePath ? { executablePath: chromePath } : {}),
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--enable-webgl",
+      "--ignore-gpu-blocklist",
+      "--use-gl=angle",
+      "--use-angle=swiftshader-webgl",
+      "--disable-dev-shm-usage",
+    ],
     protocolTimeout: 120000,
   });
 
