@@ -14,11 +14,37 @@
 import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, basename, resolve } from "node:path";
+import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import puppeteer from "puppeteer";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = resolve(__dirname, "..");
+
+// Find puppeteer from wherever it lives — project, global, tmp, npx cache.
+// Never install it ourselves; just use what the environment has.
+async function loadPuppeteer() {
+  // 1. Project node_modules
+  try { return await import("puppeteer"); } catch {}
+  // 2. Common temp install location
+  try { return await import("/tmp/cadlad_sniff/node_modules/puppeteer/lib/esm/puppeteer/puppeteer.js"); } catch {}
+  // 3. Ask node to resolve it globally
+  try {
+    const globalPath = execSync("node -e \"console.log(require.resolve('puppeteer'))\"", { encoding: "utf-8" }).trim();
+    if (globalPath) return await import(globalPath);
+  } catch {}
+  // 4. npx cache (resolve without installing)
+  try {
+    const npxPath = execSync("npx --no-install puppeteer --version 2>/dev/null && npx --no-install -p puppeteer node -e \"console.log(require.resolve('puppeteer'))\"", { encoding: "utf-8" }).trim();
+    if (npxPath) return await import(npxPath);
+  } catch {}
+
+  console.error(`Puppeteer not found in environment.
+Install it anywhere — the script searches project, global, and temp locations:
+  mkdir /tmp/pp && cd /tmp/pp && npm init -y && npm i puppeteer  # throwaway, works everywhere
+  npm install puppeteer                                          # project-local
+This downloads Chromium on first run (~150MB cached at ~/.cache/puppeteer/).`);
+  process.exit(1);
+}
 
 const args = process.argv.slice(2);
 const UPDATE = args.includes("--update");
@@ -49,7 +75,9 @@ async function main() {
 
   console.log(`Found ${files.length} examples: ${files.join(", ")}`);
 
-  const browser = await puppeteer.launch({
+  const puppeteer = await loadPuppeteer();
+  const launch = puppeteer.default?.launch ? puppeteer.default : puppeteer;
+  const browser = await launch.launch({
     headless: "new",
     args: ["--no-sandbox"],
     protocolTimeout: 120000,
