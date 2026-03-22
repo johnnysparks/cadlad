@@ -150,6 +150,18 @@ function renderToImage(
         side: THREE.DoubleSide,
       });
       group.add(new THREE.Mesh(geom, mat));
+
+      // Edge strokes — adaptive color: darken light surfaces, lighten dark ones
+      const edges = new THREE.EdgesGeometry(geom, edgeThreshold);
+      const luminance = color[0] * 0.299 + color[1] * 0.587 + color[2] * 0.114;
+      const edgeColor = luminance > 0.45
+        ? new THREE.Color(color[0] * 0.5, color[1] * 0.5, color[2] * 0.5)   // 50% darker
+        : new THREE.Color(
+            color[0] + (1 - color[0]) * 0.5,
+            color[1] + (1 - color[1]) * 0.5,
+            color[2] + (1 - color[2]) * 0.5,
+          ); // 50% lighter
+      group.add(new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: edgeColor })));
     }
   }
   scene.add(group);

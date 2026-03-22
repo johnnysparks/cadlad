@@ -145,6 +145,18 @@ export class Viewport {
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       this.meshGroup.add(mesh);
+
+      // Edge strokes — adaptive: darken light surfaces, lighten dark ones
+      const edges = new THREE.EdgesGeometry(geom, 30);
+      const lum = color[0] * 0.299 + color[1] * 0.587 + color[2] * 0.114;
+      const ec = lum > 0.45
+        ? new THREE.Color(color[0] * 0.5, color[1] * 0.5, color[2] * 0.5)
+        : new THREE.Color(
+            color[0] + (1 - color[0]) * 0.5,
+            color[1] + (1 - color[1]) * 0.5,
+            color[2] + (1 - color[2]) * 0.5,
+          );
+      this.meshGroup.add(new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: ec })));
     }
 
     // Auto-fit camera to content
