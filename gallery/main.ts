@@ -1,5 +1,8 @@
 /**
- * Gallery — renders all example models in interactive 3D viewports.
+ * Gallery — renders all example models from the examples/ folder.
+ *
+ * Uses import.meta.glob to read .forge.js files at build time.
+ * Single source of truth: add a .forge.js to examples/ and it appears here.
  */
 
 import { Viewport } from "../src/studio/viewport.js";
@@ -7,109 +10,30 @@ import { evaluateModel } from "../src/api/runtime.js";
 
 interface Example {
   name: string;
-  description: string;
   file: string;
   code: string;
 }
 
-const examples: Example[] = [
-  {
-    name: "Box with Hole",
-    description: "The \"hello world\" of CAD — a parametric box with a through-hole.",
-    file: "box-with-hole.forge.js",
-    code: `// Box with a through-hole — the "hello world" of CAD
-const width  = param("Width",  60, { min: 20, max: 200, unit: "mm" });
-const depth  = param("Depth",  40, { min: 20, max: 200, unit: "mm" });
-const height = param("Height", 20, { min: 5,  max: 100, unit: "mm" });
-const holeR  = param("Hole Radius", 8, { min: 2, max: 30, unit: "mm" });
+// Vite glob import — reads all .forge.js files as raw strings at build time
+const exampleModules = import.meta.glob("../examples/*.forge.js", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
 
-const base = box(width, depth, height).color("#5f87c6");
-const hole = cylinder(height + 2, holeR);
-const part = base.subtract(hole);
-
-return part;`,
-  },
-  {
-    name: "Parametric Bracket",
-    description: "An L-shaped bracket with mounting holes — boolean operations in action.",
-    file: "parametric-bracket.forge.js",
-    code: `// L-bracket with mounting holes
-const thickness = param("Thickness", 4, { min: 2, max: 10, unit: "mm" });
-const armLength = param("Arm Length", 50, { min: 20, max: 120, unit: "mm" });
-const armWidth  = param("Arm Width", 30, { min: 15, max: 80, unit: "mm" });
-const holeD     = param("Hole Diameter", 6, { min: 3, max: 12, unit: "mm" });
-
-// Horizontal arm
-const hArm = box(armLength, armWidth, thickness).color("#7c8fa6");
-
-// Vertical arm
-const vArm = box(thickness, armWidth, armLength)
-  .translate(-(armLength / 2 - thickness / 2), 0, armLength / 2 - thickness / 2)
-  .color("#7c8fa6");
-
-// Mounting holes
-const hHole = cylinder(thickness + 2, holeD / 2)
-  .translate(armLength / 4, 0, 0);
-
-const vHole = cylinder(thickness + 2, holeD / 2)
-  .rotate(90, 0, 0)
-  .translate(-(armLength / 2 - thickness / 2), 0, armLength / 4);
-
-const bracket = hArm.union(vArm).subtract(hHole).subtract(vHole);
-
-return bracket.named("L-Bracket").color("#89b4fa");`,
-  },
-  {
-    name: "Phone Stand",
-    description: "A three-part phone stand — union operations to combine pieces.",
-    file: "phone-stand.forge.js",
-    code: `// Parametric phone stand
-const baseW     = param("Base Width", 80, { min: 50, max: 150, unit: "mm" });
-const baseD     = param("Base Depth", 60, { min: 30, max: 100, unit: "mm" });
-const baseH     = param("Base Height", 8, { min: 4, max: 15, unit: "mm" });
-const backH     = param("Back Height", 70, { min: 40, max: 120, unit: "mm" });
-const backT     = param("Back Thickness", 5, { min: 3, max: 10, unit: "mm" });
-const lipH      = param("Lip Height", 12, { min: 5, max: 25, unit: "mm" });
-
-// Base platform
-const base = box(baseW, baseD, baseH)
-  .color("#5f87c6");
-
-// Back support
-const back = box(baseW, backT, backH)
-  .translate(0, -(baseD / 2 - backT / 2), backH / 2 - baseH / 2)
-  .color("#7c9fc6");
-
-// Front lip to hold the phone
-const lip = box(baseW, backT, lipH)
-  .translate(0, baseD / 2 - backT / 2, lipH / 2 - baseH / 2)
-  .color("#89b4fa");
-
-const stand = base.union(back).union(lip);
-
-return stand.named("Phone Stand");`,
-  },
-  {
-    name: "Lamp Post Assembly",
-    description: "Multi-part assembly with parametric dimensions — base, pole, and top sphere.",
-    file: "assembly-demo.forge.js",
-    code: `// Assembly demo — multi-part model with positioning
-const poleR = param("Pole Radius", 5, { min: 3, max: 15, unit: "mm" });
-const poleH = param("Pole Height", 80, { min: 40, max: 150, unit: "mm" });
-const baseR = param("Base Radius", 25, { min: 15, max: 50, unit: "mm" });
-
-const baseDisc = cylinder(6, baseR).color("#6c7086");
-const pole = cylinder(poleH, poleR).color("#89b4fa");
-const topSphere = sphere(poleR * 1.8).color("#f38ba8");
-
-const asm = assembly("Lamp Post")
-  .add("base", baseDisc, [0, 0, 0])
-  .add("pole", pole, [0, 0, 3 + poleH / 2])
-  .add("top", topSphere, [0, 0, 3 + poleH + poleR * 1.8]);
-
-return asm.toSolid();`,
-  },
-];
+// Build example list from the file system
+const examples: Example[] = Object.entries(exampleModules)
+  .map(([path, code]) => {
+    const file = path.split("/").pop()!;
+    // Derive a display name from the filename: "box-with-hole.forge.js" → "Box With Hole"
+    const name = file
+      .replace(".forge.js", "")
+      .split("-")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+    return { name, file, code: code.trim() };
+  })
+  .sort((a, b) => a.name.localeCompare(b.name));
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -132,12 +56,13 @@ async function renderGallery() {
     vpContainer.appendChild(loading);
     card.appendChild(vpContainer);
 
-    // Info section
+    // Info section — pull description from the first comment line in the code
+    const firstComment = example.code.match(/^\/\/\s*(.+)/)?.[1] ?? "";
     const info = document.createElement("div");
     info.className = "card-info";
     info.innerHTML = `
       <h2>${escapeHtml(example.name)}</h2>
-      <p>${escapeHtml(example.description)}</p>
+      <p>${escapeHtml(firstComment)}</p>
       <details>
         <summary>View source</summary>
         <pre><code>${escapeHtml(example.code)}</code></pre>
