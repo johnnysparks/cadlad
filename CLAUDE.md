@@ -40,12 +40,29 @@ snapshots/   Visual regression test references
 - Camera hint: `return { model: solid, camera: [x, y, z] }`
 - Must `return` a Solid, Assembly, array, or `{ model, camera }` object
 
-## Critical: coordinate system
+## Coordinate system (LOCKED IN)
 
-- **Manifold uses Z-up.** Build models with Z as the vertical axis. Ground plane is Z=0.
-- **Three.js uses Y-up.** The gallery renderer rotates geometry -90° on X to compensate.
-- **Build from Z=0 upward.** `.translate(0, 0, height/2)` to sit a box on the ground.
-- The studio viewport does NOT rotate — it uses Manifold's Z-up directly with the camera angled to compensate.
+**All modeling code uses Z-up.** This matches Manifold, CAD conventions, and LLM training data.
+
+| Axis | Meaning in model code | Meaning after render transform |
+|---|---|---|
+| +Z | Up (gravity opposes) | +Y (Three.js up) |
+| -Z | Down (toward ground) | -Y |
+| +X | Right | +X (unchanged) |
+| -X | Left | -X (unchanged) |
+| -Y | Front (faces the viewer) | +Z (toward camera) |
+| +Y | Back | -Z |
+
+**The coordinate transform happens at the rendering boundary:**
+- `buildBodyGroup(bodies, { zUpToYUp: true })` applies `-90° X rotation`
+- Applied in: studio viewport, gallery static render, gallery interactive viewer
+- Applied via `src/rendering/scene-builder.ts` — one place, consistent everywhere
+
+**When writing .forge.js code:**
+- Ground plane is Z=0. Build upward with `.translate(0, 0, height/2)`
+- `cylinder()` builds along Z (vertical by default)
+- `Sketch.begin()` draws in XY, `.extrude()` pushes along Z (up)
+- "Front" of an object faces -Y
 
 ## Hard-won lessons (baked into the API)
 

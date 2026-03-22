@@ -74,11 +74,10 @@ export class Viewport {
       }
     }
 
-    // Build body group from shared module (no Z-up rotation in studio)
-    const group = buildBodyGroup(bodies);
-    while (group.children.length) {
-      this.meshGroup.add(group.children[0]);
-    }
+    // Build body group with Z-up → Y-up conversion (Manifold → Three.js)
+    // The returned group has rotation.x = -PI/2 applied, so add it as a whole
+    const group = buildBodyGroup(bodies, { zUpToYUp: true });
+    this.meshGroup.add(group);
 
     this.fitCamera();
   }
@@ -90,12 +89,13 @@ export class Viewport {
     const center = bbox.getCenter(new THREE.Vector3());
     const size = bbox.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
-    const dist = maxDim * 2;
+    const dist = maxDim * 2.5;
 
+    // Y-up "product shot": front-right, above
     this.camera.position.set(
-      center.x + dist * 0.7,
-      center.y + dist * 0.5,
-      center.z + dist * 0.7,
+      center.x + dist * 0.6,
+      center.y + dist * 0.45,
+      center.z + dist * 0.6,
     );
     this.controls.target.copy(center);
     this.controls.update();
@@ -110,6 +110,7 @@ export class Viewport {
     const size = bbox.getSize(new THREE.Vector3());
     const dist = Math.max(size.x, size.y, size.z) * 2.2;
 
+    // Y-up (post coordinate transform). Front = +Z, Up = +Y.
     const views: Record<string, [number, number, number]> = {
       front:  [0, 0, dist],
       back:   [0, 0, -dist],
@@ -117,7 +118,7 @@ export class Viewport {
       bottom: [0, -dist, 0.001],
       left:   [-dist, 0, 0],
       right:  [dist, 0, 0],
-      iso:    [dist * 0.7, dist * 0.5, dist * 0.7],
+      iso:    [dist * 0.6, dist * 0.45, dist * 0.6],
     };
 
     const [dx, dy, dz] = views[view] ?? views.iso;
