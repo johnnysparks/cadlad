@@ -196,7 +196,7 @@ async function renderGallery() {
     card.appendChild(vpContainer);
 
     const firstComment = example.code.match(/^\/\/\s*(.+)/)?.[1] ?? "";
-    const studioUrl = `../?code=${btoa(unescape(encodeURIComponent(example.code)))}`;
+    const studioUrl = `../?code=${encodeURIComponent(btoa(unescape(encodeURIComponent(example.code))))}`;
 
     const info = document.createElement("div");
     info.className = "card-info";
