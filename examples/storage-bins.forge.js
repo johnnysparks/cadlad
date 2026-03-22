@@ -52,11 +52,19 @@ const small = makeBin(1, 1, 1, "#6699bb");
 const medium = makeBin(2, 1, 1, "#669966");
 const large = makeBin(2, 1, 1.5, "#996666");
 
-// Arrange side by side
-const gap = 5;
+// Arrange side by side — position from left edges, not centers
+const gap = 8;
+const smallW = unitW;
+const medW = unitW * 2;
+const largeW = unitW * 2;
+
+// Small centered at x=0, medium starts after small + gap, large after that
+const medX = smallW / 2 + gap + medW / 2;
+const largeX = medX + medW / 2 + gap + largeW / 2;
+
 const asm = assembly("Storage Bin Family")
   .add("small", small, [0, 0, 0])
-  .add("medium", medium, [unitW * 1.5 + gap, 0, 0])
-  .add("large", large, [unitW * 1.5 + gap + unitW + gap, 0, 0]);
+  .add("medium", medium, [medX, 0, 0])
+  .add("large", large, [largeX, 0, 0]);
 
 return asm;
