@@ -196,11 +196,13 @@ async function renderGallery() {
     card.appendChild(vpContainer);
 
     const firstComment = example.code.match(/^\/\/\s*(.+)/)?.[1] ?? "";
+    const studioUrl = `../?code=${btoa(example.code)}`;
     const info = document.createElement("div");
     info.className = "card-info";
     info.innerHTML = `
       <h2>${escapeHtml(example.name)}</h2>
       <p>${escapeHtml(firstComment)}</p>
+      <a href="${studioUrl}" class="open-studio">Open in Studio</a>
       <details>
         <summary>View source</summary>
         <pre><code>${escapeHtml(example.code)}</code></pre>
