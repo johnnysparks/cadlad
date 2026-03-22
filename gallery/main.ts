@@ -43,36 +43,56 @@ function escapeHtml(s: string): string {
 }
 
 /** Render bodies to a data URL using an offscreen renderer. */
+type RenderStyle = "default" | "high-contrast";
+
 function renderToImage(
   bodies: Body[],
   width: number,
   height: number,
   cameraHint?: [number, number, number],
+  style: RenderStyle = "default",
 ): string {
+  const hiContrast = style === "high-contrast";
+
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
   renderer.setSize(width, height);
   renderer.setPixelRatio(2);
-  renderer.setClearColor(0x181825);
+  renderer.setClearColor(hiContrast ? 0xf5f5f0 : 0x181825);
 
   const scene = new THREE.Scene();
 
-  // 3-point lighting for 3D readability
-  scene.add(new THREE.AmbientLight(0xffffff, 0.35));
-  const key = new THREE.DirectionalLight(0xffffff, 0.8);
-  key.position.set(200, 300, 200);
-  scene.add(key);
-  const fill = new THREE.DirectionalLight(0xffffff, 0.3);
-  fill.position.set(-200, 100, -100);
-  scene.add(fill);
-  const rim = new THREE.DirectionalLight(0xaaccff, 0.4);
-  rim.position.set(0, -100, -300);
-  scene.add(rim);
-  const topFill = new THREE.DirectionalLight(0xffffff, 0.15);
-  topFill.position.set(0, 400, 0);
-  scene.add(topFill);
+  if (hiContrast) {
+    // Bright even lighting — no drama, max readability
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const key = new THREE.DirectionalLight(0xffffff, 0.5);
+    key.position.set(200, 300, 200);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.3);
+    fill.position.set(-200, 100, -100);
+    scene.add(fill);
+  } else {
+    // 3-point lighting for 3D readability
+    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+    const key = new THREE.DirectionalLight(0xffffff, 0.8);
+    key.position.set(200, 300, 200);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.3);
+    fill.position.set(-200, 100, -100);
+    scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xaaccff, 0.4);
+    rim.position.set(0, -100, -300);
+    scene.add(rim);
+    const topFill = new THREE.DirectionalLight(0xffffff, 0.15);
+    topFill.position.set(0, 400, 0);
+    scene.add(topFill);
+  }
 
   // Grid
-  scene.add(new THREE.GridHelper(500, 50, 0x313244, 0x252536));
+  if (!hiContrast) {
+    scene.add(new THREE.GridHelper(500, 50, 0x313244, 0x252536));
+  } else {
+    scene.add(new THREE.GridHelper(500, 50, 0xdddddd, 0xeeeeee));
+  }
 
   // Auto-color palette for bodies without explicit color
   const autoColors: [number, number, number][] = [
@@ -80,12 +100,17 @@ function renderToImage(
     [0.75, 0.52, 0.52], [0.60, 0.55, 0.72], [0.70, 0.68, 0.50],
     [0.50, 0.68, 0.70], [0.72, 0.55, 0.65],
   ];
-  const isDefault = (c?: [number, number, number, number]) =>
+  const isDefaultColor = (c?: [number, number, number, number]) =>
     !c || (Math.abs(c[0] - 0.6) < 0.01 && Math.abs(c[1] - 0.6) < 0.01 && Math.abs(c[2] - 0.65) < 0.01);
 
   // Add bodies — rotate Z-up (Manifold) to Y-up (Three.js)
   const group = new THREE.Group();
   group.rotation.x = -Math.PI / 2;
+
+  // Edge angle threshold for EdgesGeometry (radians) — only show edges
+  // where face normals differ by more than this angle
+  const edgeThreshold = 30; // degrees
+
   for (let i = 0; i < bodies.length; i++) {
     const body = bodies[i];
     const geom = new THREE.BufferGeometry();
@@ -93,19 +118,39 @@ function renderToImage(
     geom.setAttribute("normal", new THREE.BufferAttribute(body.mesh.normals, 3));
     geom.setIndex(new THREE.BufferAttribute(body.mesh.indices, 1));
 
-    let color = body.color ?? [0.6, 0.6, 0.65, 1.0];
-    if (isDefault(body.color)) {
-      const ac = autoColors[i % autoColors.length];
-      color = [ac[0], ac[1], ac[2], 1.0];
-    }
-    const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(color[0], color[1], color[2]),
-      metalness: 0.1,
-      roughness: 0.6,
-      side: THREE.DoubleSide,
-    });
+    if (hiContrast) {
+      // Light gray surface
+      const mat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(0.88, 0.88, 0.86),
+        metalness: 0.0,
+        roughness: 0.9,
+        side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(geom, mat);
+      group.add(mesh);
 
-    group.add(new THREE.Mesh(geom, mat));
+      // Shape edges — medium stroke, darker gray
+      const edges = new THREE.EdgesGeometry(geom, edgeThreshold);
+      const isAssemblyPart = bodies.length > 1;
+      const edgeMat = new THREE.LineBasicMaterial({
+        color: isAssemblyPart ? 0x222222 : 0x555555,
+        linewidth: 1, // WebGL only supports 1, but the color contrast does the work
+      });
+      group.add(new THREE.LineSegments(edges, edgeMat));
+    } else {
+      let color = body.color ?? [0.6, 0.6, 0.65, 1.0];
+      if (isDefaultColor(body.color)) {
+        const ac = autoColors[i % autoColors.length];
+        color = [ac[0], ac[1], ac[2], 1.0];
+      }
+      const mat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(color[0], color[1], color[2]),
+        metalness: 0.1,
+        roughness: 0.6,
+        side: THREE.DoubleSide,
+      });
+      group.add(new THREE.Mesh(geom, mat));
+    }
   }
   scene.add(group);
 
@@ -211,9 +256,35 @@ function makeInteractive(container: HTMLElement, bodies: Body[]) {
   };
 }
 
+let currentStyle: RenderStyle = "default";
+const cardData: Array<{ vpContainer: HTMLElement; bodies: Body[]; camera?: [number, number, number] }> = [];
+
+function rerenderAll() {
+  for (const { vpContainer, bodies, camera } of cardData) {
+    const img = vpContainer.querySelector("img");
+    if (img && bodies.length > 0) {
+      img.src = renderToImage(bodies, 480, 360, camera, currentStyle);
+    }
+  }
+}
+
 async function renderGallery() {
   const gallery = document.getElementById("gallery")!;
   let activeCleanup: (() => void) | null = null;
+
+  // Style toggle button in the header
+  const header = document.querySelector("header");
+  if (header) {
+    const toggleBtn = document.createElement("button");
+    toggleBtn.textContent = "High Contrast";
+    toggleBtn.style.cssText = "margin-top:10px;padding:6px 16px;background:#313244;color:#cdd6f4;border:1px solid #6c7086;border-radius:4px;cursor:pointer;font-family:inherit;font-size:13px";
+    toggleBtn.addEventListener("click", () => {
+      currentStyle = currentStyle === "default" ? "high-contrast" : "default";
+      toggleBtn.textContent = currentStyle === "default" ? "High Contrast" : "Default Style";
+      rerenderAll();
+    });
+    header.appendChild(toggleBtn);
+  }
 
   for (const example of examples) {
     const card = document.createElement("div");
@@ -257,12 +328,15 @@ async function renderGallery() {
       if (result.bodies.length > 0) {
         const w = 480;
         const h = 360;
-        const dataUrl = renderToImage(result.bodies, w, h, result.camera);
+        const dataUrl = renderToImage(result.bodies, w, h, result.camera, currentStyle);
         const img = document.createElement("img");
         img.src = dataUrl;
         img.style.cssText = "width:100%;height:100%;object-fit:cover;cursor:pointer";
         img.title = "Click for interactive 3D view";
         vpContainer.appendChild(img);
+
+        // Store for re-rendering on style toggle
+        cardData.push({ vpContainer, bodies: result.bodies, camera: result.camera });
 
         // Click to activate interactive orbit controls (uses 1 WebGL context)
         img.addEventListener("click", () => {
