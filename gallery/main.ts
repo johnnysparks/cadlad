@@ -212,25 +212,61 @@ function makeInteractive(container: HTMLElement, bodies: Body[]) {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-  const dir = new THREE.DirectionalLight(0xffffff, 0.8);
-  dir.position.set(200, 300, 200);
-  scene.add(dir);
+  // Match the static renderer's 3-point lighting
+  scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+  const key = new THREE.DirectionalLight(0xffffff, 0.8);
+  key.position.set(200, 300, 200);
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xffffff, 0.3);
+  fill.position.set(-200, 100, -100);
+  scene.add(fill);
+  const rim = new THREE.DirectionalLight(0xaaccff, 0.4);
+  rim.position.set(0, -100, -300);
+  scene.add(rim);
+  const topFill = new THREE.DirectionalLight(0xffffff, 0.15);
+  topFill.position.set(0, 400, 0);
+  scene.add(topFill);
   scene.add(new THREE.GridHelper(500, 50, 0x313244, 0x252536));
+
+  const autoColors: [number, number, number][] = [
+    [0.55, 0.65, 0.78], [0.72, 0.58, 0.44], [0.50, 0.70, 0.55],
+    [0.75, 0.52, 0.52], [0.60, 0.55, 0.72], [0.70, 0.68, 0.50],
+    [0.50, 0.68, 0.70], [0.72, 0.55, 0.65],
+  ];
+  const isDefaultColor = (c?: [number, number, number, number]) =>
+    !c || (Math.abs(c[0] - 0.6) < 0.01 && Math.abs(c[1] - 0.6) < 0.01 && Math.abs(c[2] - 0.65) < 0.01);
 
   const group = new THREE.Group();
   group.rotation.x = -Math.PI / 2; // Z-up → Y-up
-  for (const body of bodies) {
+  for (let i = 0; i < bodies.length; i++) {
+    const body = bodies[i];
     const geom = new THREE.BufferGeometry();
     geom.setAttribute("position", new THREE.BufferAttribute(body.mesh.positions, 3));
     geom.setAttribute("normal", new THREE.BufferAttribute(body.mesh.normals, 3));
     geom.setIndex(new THREE.BufferAttribute(body.mesh.indices, 1));
-    const color = body.color ?? [0.6, 0.6, 0.65, 1.0];
+
+    let color = body.color ?? [0.6, 0.6, 0.65, 1.0];
+    if (isDefaultColor(body.color)) {
+      const ac = autoColors[i % autoColors.length];
+      color = [ac[0], ac[1], ac[2], 1.0];
+    }
     const mat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(color[0], color[1], color[2]),
       metalness: 0.1, roughness: 0.6, side: THREE.DoubleSide,
     });
     group.add(new THREE.Mesh(geom, mat));
+
+    // Edge strokes — same as static render
+    const edges = new THREE.EdgesGeometry(geom, 30);
+    const lum = color[0] * 0.299 + color[1] * 0.587 + color[2] * 0.114;
+    const ec = lum > 0.45
+      ? new THREE.Color(color[0] * 0.5, color[1] * 0.5, color[2] * 0.5)
+      : new THREE.Color(
+          color[0] + (1 - color[0]) * 0.5,
+          color[1] + (1 - color[1]) * 0.5,
+          color[2] + (1 - color[2]) * 0.5,
+        );
+    group.add(new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: ec })));
   }
   scene.add(group);
 
