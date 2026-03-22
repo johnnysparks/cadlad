@@ -98,6 +98,7 @@ async function boot() {
     run: runModel,
     getErrors() { return errorBar.textContent || ""; },
     hasError() { return errorBar.classList.contains("visible"); },
+    setView(view: string) { viewport.setView(view as any); },
   };
 
   // Run the default model on load

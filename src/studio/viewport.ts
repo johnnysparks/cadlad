@@ -137,6 +137,34 @@ export class Viewport {
     this.controls.update();
   }
 
+  /** Set camera to a named view (for screenshots and automation). */
+  setView(view: "front" | "back" | "top" | "bottom" | "left" | "right" | "iso"): void {
+    const bbox = new THREE.Box3().setFromObject(this.meshGroup);
+    if (bbox.isEmpty()) return;
+
+    const center = bbox.getCenter(new THREE.Vector3());
+    const size = bbox.getSize(new THREE.Vector3());
+    const dist = Math.max(size.x, size.y, size.z) * 2.2;
+
+    // Three.js: Y is up, grid is on XZ plane.
+    // CadLad/Manifold: Z is up in the model, but viewport maps Z-up to Y-up.
+    // Camera views are relative to the rendered scene (Y-up).
+    const views: Record<string, [number, number, number]> = {
+      front:  [0, 0, dist],       // looking along -Z
+      back:   [0, 0, -dist],      // looking along +Z
+      top:    [0, dist, 0.001],   // looking down Y axis
+      bottom: [0, -dist, 0.001],  // looking up Y axis
+      left:   [-dist, 0, 0],      // looking along +X
+      right:  [dist, 0, 0],       // looking along -X
+      iso:    [dist * 0.7, dist * 0.5, dist * 0.7],
+    };
+
+    const [dx, dy, dz] = views[view] ?? views.iso;
+    this.camera.position.set(center.x + dx, center.y + dy, center.z + dz);
+    this.controls.target.copy(center);
+    this.controls.update();
+  }
+
   dispose(): void {
     cancelAnimationFrame(this.animId);
     this.renderer.dispose();
