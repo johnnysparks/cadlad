@@ -4,6 +4,8 @@
 //   - Sketch profile for gable end → extrude → rotate(90,0,0) for depth.
 //     This is THE pattern for any prismatic shape that isn't axis-aligned.
 //   - Building from Z=0 up with .translate(0, 0, height/2) for ground contact
+//   - Hollow walls via outerBox.subtract(innerBox) with floor preserved
+//     (offset inner cavity up by wallT so the floor stays solid)
 //   - Oversize door cut (10mm deep) to punch cleanly through the wall
 //   - Door panel as a separate thin box slightly proud of the wall face
 //
@@ -19,13 +21,17 @@
 const barnW = param("Width", 80, { min: 50, max: 120, unit: "mm" });
 const barnD = param("Depth", 60, { min: 40, max: 100, unit: "mm" });
 const wallH = param("Wall Height", 40, { min: 25, max: 60, unit: "mm" });
+const wallT = param("Wall Thickness", 3, { min: 2, max: 6, unit: "mm" });
 const roofH = param("Roof Height", 20, { min: 10, max: 35, unit: "mm" });
 const doorW = param("Door Width", 22, { min: 12, max: 35, unit: "mm" });
 const doorH = param("Door Height", 30, { min: 15, max: 38, unit: "mm" });
 
-// Walls — bottom at Z=0
-const walls = box(barnW, barnD, wallH)
+// Walls — hollow shell, bottom at Z=0
+const outerWalls = box(barnW, barnD, wallH)
   .translate(0, 0, wallH / 2);
+const innerCavity = box(barnW - wallT * 2, barnD - wallT * 2, wallH)
+  .translate(0, 0, wallH / 2 + wallT); // offset up so floor remains solid
+const walls = outerWalls.subtract(innerCavity);
 
 // Gable roof — sketch the end profile in XZ, extrude along Z, then
 // rotate so the extrusion runs along Y (the barn's depth axis).
