@@ -20,63 +20,46 @@ self.MonacoEnvironment = {
   },
 };
 
-const DEFAULT_CODE = `// CadLad — Parametric Desk Organizer
-// Tweak the sliders on the right, then press Ctrl+Enter to rebuild!
+const DEFAULT_CODE = `// CadLad — Parametric Trophy Cup
+// Drag the sliders to reshape it!
 
-const baseW = param("Base Width", 120, { min: 80, max: 180, unit: "mm" });
-const baseD = param("Base Depth", 60, { min: 40, max: 90, unit: "mm" });
-const baseH = param("Base Height", 5, { min: 3, max: 10, unit: "mm" });
-const cupR = param("Pen Cup Radius", 15, { min: 10, max: 25, unit: "mm" });
-const cupH = param("Pen Cup Height", 50, { min: 30, max: 80, unit: "mm" });
-const cupWall = param("Cup Wall", 2, { min: 1.5, max: 4, unit: "mm" });
-const slotW = param("Card Slot Width", 40, { min: 25, max: 60, unit: "mm" });
-const slotH = param("Card Slot Height", 25, { min: 15, max: 40, unit: "mm" });
-const dockW = param("Phone Dock Width", 35, { min: 25, max: 50, unit: "mm" });
-const dockAngle = param("Dock Angle", 15, { min: 5, max: 30 });
+const baseR = param("Base Radius", 20, { min: 12, max: 35, unit: "mm" });
+const stemR = param("Stem Radius", 5, { min: 3, max: 12, unit: "mm" });
+const stemH = param("Stem Height", 25, { min: 10, max: 50, unit: "mm" });
+const bowlR = param("Bowl Radius", 22, { min: 14, max: 40, unit: "mm" });
+const bowlH = param("Bowl Height", 30, { min: 15, max: 50, unit: "mm" });
+const wall  = param("Wall Thickness", 3, { min: 1.5, max: 6, unit: "mm" });
 
-// Base platform with rounded corners
-const base = roundedRect(baseW, baseD, 4, baseH)
-  .translate(0, 0, baseH / 2)
-  .color("#445566");
+// Base — wide disc sitting on the ground
+const base = cylinder(6, baseR)
+  .translate(0, 0, 3)
+  .color("#c9a84c");
 
-// Pen cup — hollow cylinder, left side
-const cupOuter = cylinder(cupH, cupR).color("#6699bb");
-const cupInner = cylinder(cupH + 1, cupR - cupWall);
-const cup = cupOuter.subtract(cupInner)
-  .translate(-baseW / 2 + cupR + 8, 0, baseH + cupH / 2);
+// Stem — narrow column rising from the base
+const stem = cylinder(stemH, stemR)
+  .translate(0, 0, 6 + stemH / 2)
+  .color("#c9a84c");
 
-// Card slot — angled holder, center
-const slotBack = box(slotW, 3, slotH).color("#bb7744");
-const slotLip = box(slotW, 12, 3)
-  .translate(0, -6 + 1.5, -slotH / 2 + 1.5)
-  .color("#bb7744");
-const cardSlot = slotBack.union(slotLip)
-  .rotate(8, 0, 0)
-  .translate(0, 0, baseH + slotH / 2 + 2);
+// Bowl — tapered hollow cup (wider at top)
+const outer = cylinder(bowlH, stemR + 4, bowlR);
+const inner = cylinder(bowlH, stemR + 4 - wall, bowlR - wall)
+  .translate(0, 0, wall);
+const bowl = outer.subtract(inner)
+  .translate(0, 0, 6 + stemH + bowlH / 2)
+  .color("#dbb84c");
 
-// Phone dock — angled cradle, right side
-const dockBack = box(dockW, 4, 40).color("#66aa77");
-const dockLip = box(dockW, 10, 6)
-  .translate(0, -3, -17)
-  .color("#66aa77");
-const phoneDock = dockBack.union(dockLip)
-  .rotate(dockAngle, 0, 0)
-  .translate(baseW / 2 - dockW / 2 - 8, 0, baseH + 22);
+// Handles on each side
+const handle = box(6, 4, bowlH * 0.5).color("#b89830");
+const lHandle = handle.translate(-bowlR - 1, 0, 6 + stemH + bowlH * 0.5);
+const rHandle = handle.translate( bowlR + 1, 0, 6 + stemH + bowlH * 0.5);
 
-// Decorative accent on pen cup
-const accent = sphere(4)
-  .translate(-baseW / 2 + cupR + 8, 0, baseH + cupH + 4)
-  .color("#dd6655");
-
-// Assemble — each part keeps its own color
-const organizer = assembly("Desk Organizer")
-  .add("base", base)
-  .add("pen-cup", cup)
-  .add("card-slot", cardSlot)
-  .add("phone-dock", phoneDock)
-  .add("accent", accent);
-
-return organizer;
+return base
+  .union(stem)
+  .union(bowl)
+  .union(lHandle)
+  .union(rHandle)
+  .named("Trophy Cup")
+  .color("#c9a84c");
 `;
 
 /** CadLad API type declarations for IntelliSense */
