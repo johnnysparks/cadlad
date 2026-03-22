@@ -1,4 +1,14 @@
 // Hinged box — base and lid connected by a pin hinge
+//
+// WHAT WORKED:
+//   - assembly() for base + lid + pin — keeps parts separate with distinct
+//     auto-colors so you can see the hinge mechanism.
+//   - Shell via box.subtract(box) with wallT offset — simple, reliable.
+//   - Hinge knuckles as short cylinders at the rear edge, interleaved
+//     between base (3 knuckles) and lid (2 knuckles).
+//
+// KEY PATTERN: mechanical assemblies with moving parts → use assembly() to
+// keep parts visually and logically separate.
 const boxW = param("Width", 50, { min: 30, max: 80, unit: "mm" });
 const boxD = param("Depth", 35, { min: 25, max: 60, unit: "mm" });
 const boxH = param("Height", 20, { min: 12, max: 35, unit: "mm" });

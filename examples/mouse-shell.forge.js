@@ -1,4 +1,13 @@
 // Computer mouse shell — ergonomic top half with button splits
+//
+// WHAT WORKED:
+//   - sphere().scale(1, ratio, ratio) for non-uniform organic shapes.
+//     A sphere scaled by different factors in each axis makes an egg/mouse shape.
+//   - Flat bottom via box subtract below Z=0.
+//   - Button split and scroll slot via box subtracts from the top.
+//   - Shell via subtracting a slightly smaller scaled sphere.
+//
+// KEY PATTERN: organic shapes via non-uniform scale on sphere/cylinder.
 const mouseW = param("Width", 32, { min: 25, max: 40, unit: "mm" });
 const mouseD = param("Depth", 55, { min: 40, max: 70, unit: "mm" });
 const mouseH = param("Height", 18, { min: 12, max: 25, unit: "mm" });

@@ -1,4 +1,12 @@
-// Water bottle — revolved profile with cap
+// Water bottle — cylindrical body with neck, thread, and cap
+//
+// WHAT WORKED:
+//   - Layered cylinder construction: body → neck → thread ring → cap,
+//     each translated to stack on top of the previous.
+//   - Shell via cylinder().subtract(cylinder()) with inner offset by wallT.
+//   - Thread ring as a thin wider cylinder minus a thinner cylinder.
+//
+// KEY PATTERN: tall axisymmetric objects built by stacking cylinders along Z.
 const bodyR = param("Body Radius", 15, { min: 10, max: 25, unit: "mm" });
 const bodyH = param("Body Height", 80, { min: 50, max: 120, unit: "mm" });
 const neckR = param("Neck Radius", 8, { min: 5, max: 15, unit: "mm" });

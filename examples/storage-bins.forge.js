@@ -1,4 +1,13 @@
 // Modular storage bin family — small, medium, large that stack and nest
+//
+// WHAT WORKED:
+//   - Helper function makeBin(scaleW, scaleD, scaleH, color) — parametric
+//     family from a single definition. Best pattern for "same shape, many sizes".
+//   - assembly() for side-by-side presentation — each bin keeps its own color.
+//   - Stacking lip as a separate ring (outer box minus inner box) at the top.
+//   - Label slot via subtract on the front face.
+//
+// KEY PATTERN: parametric families via helper functions + assembly layout.
 const unitW = param("Unit Width", 30, { min: 20, max: 50, unit: "mm" });
 const unitD = param("Unit Depth", 25, { min: 15, max: 40, unit: "mm" });
 const unitH = param("Unit Height", 20, { min: 12, max: 35, unit: "mm" });
