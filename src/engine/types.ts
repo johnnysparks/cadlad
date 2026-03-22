@@ -33,11 +33,19 @@ export interface Body {
   mesh: TriMesh;
 }
 
+/** An advisory hint from the hint engine */
+export interface Hint {
+  id: string;
+  message: string;
+  severity: "tip" | "warning";
+}
+
 /** Result of evaluating a model script */
 export interface ModelResult {
   bodies: Body[];
   params: ParamDef[];
   errors: string[];
+  hints: Hint[];
 }
 
 /** Bounding box */
