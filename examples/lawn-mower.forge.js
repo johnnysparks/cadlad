@@ -156,44 +156,34 @@ const bagHandle = box(8, 3, 1.5)
   .color(DARK_GRAY);
 
 // ── HANDLE BARS ──────────────────────────────────────
-// Two parallel bars angling back from rear deck up to grip height
+// Continuous bars angling back from rear deck to grip height (~38° from vertical)
 const handleBarR = 1.8;
 const handleSpread = 14;
-const handleAngle = 15; // degrees back from vertical
-const barLen = handleH;
+const handleAngle = 38; // degrees back from vertical — realistic push angle
+const angleRad = handleAngle * Math.PI / 180;
 
 const rearEdgeY = deckD / 2;
 const barBaseZ = deckZ + deckH / 2;
 
-// Lower handle posts (vertical section from deck)
-const lowerPostH = 8;
-const lowerPostL = cylinder(lowerPostH, handleBarR)
-  .translate(-handleSpread, rearEdgeY, barBaseZ + lowerPostH / 2)
+// Full-length angled bar from deck to grip
+const barOffset_Y = Math.sin(angleRad) * handleH / 2;
+const barOffset_Z = Math.cos(angleRad) * handleH / 2;
+
+// Negative rotation around X tilts the bar top toward +Y (backward)
+const handleBar = cylinder(handleH, handleBarR).rotate(-handleAngle, 0, 0);
+
+const handleBarL = handleBar
+  .translate(-handleSpread, rearEdgeY + barOffset_Y, barBaseZ + barOffset_Z)
   .color(SILVER);
-const lowerPostR = cylinder(lowerPostH, handleBarR)
-  .translate(handleSpread, rearEdgeY, barBaseZ + lowerPostH / 2)
+const handleBarR_part = handleBar
+  .translate(handleSpread, rearEdgeY + barOffset_Y, barBaseZ + barOffset_Z)
   .color(SILVER);
 
-// Upper handle bars (angled section)
-const upperBarLen = handleH - lowerPostH;
-const upperBar = cylinder(upperBarLen, handleBarR);
-// Tilt backward by handleAngle degrees
-const tiltedBar = upperBar.rotate(handleAngle, 0, 0);
-// Position: starts where lower posts end, tilts back
-const tiltOffsetY = Math.sin(handleAngle * Math.PI / 180) * upperBarLen / 2;
-const tiltOffsetZ = Math.cos(handleAngle * Math.PI / 180) * upperBarLen / 2;
-const upperBaseZ = barBaseZ + lowerPostH;
+// Grip position — at the top end of the angled bars
+const gripTopY = rearEdgeY + barOffset_Y * 2;
+const gripTopZ = barBaseZ + barOffset_Z * 2;
 
-const upperBarL = tiltedBar
-  .translate(-handleSpread, rearEdgeY + tiltOffsetY, upperBaseZ + tiltOffsetZ)
-  .color(SILVER);
-const upperBarR = tiltedBar
-  .translate(handleSpread, rearEdgeY + tiltOffsetY, upperBaseZ + tiltOffsetZ)
-  .color(SILVER);
-
-// Crossbar grip at the top
-const gripTopY = rearEdgeY + tiltOffsetY * 2;
-const gripTopZ = upperBaseZ + tiltOffsetZ * 2;
+// Crossbar grip connecting the two bars (horizontal at bar tops)
 const gripBar = box(handleSpread * 2 + handleBarR * 2, 3.5, 3.5)
   .translate(0, gripTopY, gripTopZ)
   .color(GRIP_BLACK);
@@ -206,18 +196,18 @@ const gripCoverR = box(8, 4, 4)
   .translate(handleSpread - 2, gripTopY, gripTopZ)
   .color(GRIP_BLACK);
 
-// Handle height adjuster knobs
+// Handle height adjuster knobs (at the base where bars meet the deck)
 const knobL = cylinder(2, 2.2)
-  .translate(-handleSpread, rearEdgeY, barBaseZ + lowerPostH)
+  .translate(-handleSpread, rearEdgeY, barBaseZ)
   .color(YELLOW);
 const knobR = cylinder(2, 2.2)
-  .translate(handleSpread, rearEdgeY, barBaseZ + lowerPostH)
+  .translate(handleSpread, rearEdgeY, barBaseZ)
   .color(YELLOW);
 
 // ── SAFETY BAIL BAR ─────────────────────────────────
-// The bar you squeeze to keep the mower running
+// The bar you squeeze to keep the mower running — horizontal at grip height
 const bailBar = box(handleSpread * 1.6, 2, 1.5)
-  .translate(0, gripTopY - 2, gripTopZ + 3)
+  .translate(0, gripTopY, gripTopZ + 3.5)
   .color(YELLOW);
 
 // ── DECK TOP DETAILS ─────────────────────────────────
@@ -266,10 +256,8 @@ const asm = assembly("Push Lawn Mower")
   .add("Bag Frame", bagFrame)
   .add("Bag Handle", bagHandle)
   // Handle
-  .add("Lower Post Left", lowerPostL)
-  .add("Lower Post Right", lowerPostR)
-  .add("Upper Bar Left", upperBarL)
-  .add("Upper Bar Right", upperBarR)
+  .add("Handle Bar Left", handleBarL)
+  .add("Handle Bar Right", handleBarR_part)
   .add("Grip Bar", gripBar)
   .add("Grip Cover Left", gripCoverL)
   .add("Grip Cover Right", gripCoverR)
