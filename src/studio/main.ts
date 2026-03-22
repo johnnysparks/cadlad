@@ -29,7 +29,7 @@ async function boot() {
   const codeParam = urlParams.get("code");
   if (codeParam) {
     try {
-      editor.setValue(atob(codeParam));
+      editor.setValue(decodeURIComponent(escape(atob(codeParam))));
       // Clean the URL so refreshing doesn't re-load
       window.history.replaceState({}, "", window.location.pathname);
     } catch { /* ignore bad base64 */ }
