@@ -20,19 +20,63 @@ self.MonacoEnvironment = {
   },
 };
 
-const DEFAULT_CODE = `// CadLad — parametric CAD in TypeScript
-// Press Ctrl+Enter to run
+const DEFAULT_CODE = `// CadLad — Parametric Desk Organizer
+// Tweak the sliders on the right, then press Ctrl+Enter to rebuild!
 
-const width = param("Width", 60, { min: 20, max: 200, unit: "mm" });
-const depth = param("Depth", 40, { min: 20, max: 200, unit: "mm" });
-const height = param("Height", 20, { min: 5, max: 100, unit: "mm" });
-const holeR = param("Hole Radius", 8, { min: 2, max: 30, unit: "mm" });
+const baseW = param("Base Width", 120, { min: 80, max: 180, unit: "mm" });
+const baseD = param("Base Depth", 60, { min: 40, max: 90, unit: "mm" });
+const baseH = param("Base Height", 5, { min: 3, max: 10, unit: "mm" });
+const cupR = param("Pen Cup Radius", 15, { min: 10, max: 25, unit: "mm" });
+const cupH = param("Pen Cup Height", 50, { min: 30, max: 80, unit: "mm" });
+const cupWall = param("Cup Wall", 2, { min: 1.5, max: 4, unit: "mm" });
+const slotW = param("Card Slot Width", 40, { min: 25, max: 60, unit: "mm" });
+const slotH = param("Card Slot Height", 25, { min: 15, max: 40, unit: "mm" });
+const dockW = param("Phone Dock Width", 35, { min: 25, max: 50, unit: "mm" });
+const dockAngle = param("Dock Angle", 15, { min: 5, max: 30 });
 
-const base = box(width, depth, height).color("#5f87c6");
-const hole = cylinder(height + 2, holeR);
-const part = base.subtract(hole);
+// Base platform with rounded corners
+const base = roundedRect(baseW, baseD, 4, baseH)
+  .translate(0, 0, baseH / 2)
+  .color("#445566");
 
-return part;
+// Pen cup — hollow cylinder, left side
+const cupOuter = cylinder(cupH, cupR).color("#6699bb");
+const cupInner = cylinder(cupH + 1, cupR - cupWall);
+const cup = cupOuter.subtract(cupInner)
+  .translate(-baseW / 2 + cupR + 8, 0, baseH + cupH / 2);
+
+// Card slot — angled holder, center
+const slotBack = box(slotW, 3, slotH).color("#bb7744");
+const slotLip = box(slotW, 12, 3)
+  .translate(0, -6 + 1.5, -slotH / 2 + 1.5)
+  .color("#bb7744");
+const cardSlot = slotBack.union(slotLip)
+  .rotate(8, 0, 0)
+  .translate(0, 0, baseH + slotH / 2 + 2);
+
+// Phone dock — angled cradle, right side
+const dockBack = box(dockW, 4, 40).color("#66aa77");
+const dockLip = box(dockW, 10, 6)
+  .translate(0, -3, -17)
+  .color("#66aa77");
+const phoneDock = dockBack.union(dockLip)
+  .rotate(dockAngle, 0, 0)
+  .translate(baseW / 2 - dockW / 2 - 8, 0, baseH + 22);
+
+// Decorative accent on pen cup
+const accent = sphere(4)
+  .translate(-baseW / 2 + cupR + 8, 0, baseH + cupH + 4)
+  .color("#dd6655");
+
+// Assemble — each part keeps its own color
+const organizer = assembly("Desk Organizer")
+  .add("base", base)
+  .add("pen-cup", cup)
+  .add("card-slot", cardSlot)
+  .add("phone-dock", phoneDock)
+  .add("accent", accent);
+
+return organizer;
 `;
 
 /** CadLad API type declarations for IntelliSense */
