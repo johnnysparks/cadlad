@@ -1,72 +1,70 @@
-// Push lawn mower — deck, wheels, handle
-//
-// WHAT WORKED:
-//   - Wheels: cylinder().rotate(0,90,0) to get axle along X (out the sides)
-//   - Simple box posts for handle — straight up from the rear deck edge,
-//     no trig, no tilt. Reads clearly as a handle from every angle.
-//   - translate() with computed positions from deckZ/deckH/wheelR
-//   - Engine bump on top adds visual interest and reads as "motorized"
-//
-// WHAT DIDN'T:
-//   - Tilted cylinder handles with sin/cos position math — the bars
-//     detached from the deck and floated in space. Trig compounds errors.
-//   - rotate(90,0,0) for wheels — that aligns axle along Y (front-to-back),
-//     not X (side-to-side). rotate(0,90,0) is correct for side-mounted wheels.
-//   - assembly().add() with all [0,0,0] positions — parts pre-translated
-//     in model space made assembly positioning meaningless. Either use
-//     assembly positions OR pre-translate, not both.
-const deckW = param("Deck Width", 50, { min: 35, max: 70, unit: "mm" });
-const deckD = param("Deck Depth", 40, { min: 30, max: 55, unit: "mm" });
-const deckH = param("Deck Height", 8, { min: 5, max: 12, unit: "mm" });
-const wheelR = param("Wheel Radius", 7, { min: 4, max: 12, unit: "mm" });
-const handleH = param("Handle Height", 35, { min: 20, max: 50, unit: "mm" });
+// Push lawn mower — clearer silhouette with deck nose, staggered wheels, engine,
+// rear grass bag, and a slanted handle.
+const deckW = param("Deck Width", 52, { min: 38, max: 72, unit: "mm" });
+const deckD = param("Deck Depth", 42, { min: 32, max: 58, unit: "mm" });
+const deckH = param("Deck Height", 7, { min: 5, max: 12, unit: "mm" });
+const frontWheelR = param("Front Wheel Radius", 6, { min: 4, max: 10, unit: "mm" });
+const rearWheelR = param("Rear Wheel Radius", 8.5, { min: 6, max: 14, unit: "mm" });
+const handleH = param("Handle Height", 44, { min: 26, max: 60, unit: "mm" });
 
-const deckZ = wheelR + deckH / 2;
+const deckZ = rearWheelR + deckH / 2;
 
-// Deck
-const deck = box(deckW, deckD, deckH)
-  .translate(0, 0, deckZ);
+// Main deck body with a rounded front nose so it reads like a stamped mower deck.
+const deckBody = box(deckW, deckD * 0.78, deckH)
+  .translate(0, deckD * 0.1, deckZ);
+const deckNose = cylinder(deckW, deckH / 2)
+  .rotate(0, 90, 0)
+  .translate(0, -deckD * 0.29, deckZ);
+const deck = deckBody.union(deckNose);
 
-// Blade housing underneath
-const housing = cylinder(3, deckW / 2 - 5)
-  .translate(0, 0, wheelR - 1);
+// Blade housing under the deck.
+const housing = cylinder(4, deckW * 0.34)
+  .translate(0, -deckD * 0.02, rearWheelR - 1.5);
 
-// Wheels — rotate(0,90,0) so axle runs along X (out the sides)
-const wheel = cylinder(3, wheelR).rotate(0, 90, 0);
-const wx = deckW / 2 + 1.5;
-const wy = deckD / 2 - wheelR;
+// Wheels: smaller front pair, larger rear pair.
+const frontWheel = cylinder(3.2, frontWheelR).rotate(0, 90, 0);
+const rearWheel = cylinder(3.2, rearWheelR).rotate(0, 90, 0);
+const wx = deckW / 2 + 1.6;
+const frontY = -deckD / 2 + frontWheelR * 0.4;
+const rearY = deckD / 2 - rearWheelR * 0.25;
 
-const w1 = wheel.translate(-wx, -wy, wheelR);
-const w2 = wheel.translate( wx, -wy, wheelR);
-const w3 = wheel.translate(-wx,  wy, wheelR);
-const w4 = wheel.translate( wx,  wy, wheelR);
+const w1 = frontWheel.translate(-wx, frontY, frontWheelR);
+const w2 = frontWheel.translate(wx, frontY, frontWheelR);
+const w3 = rearWheel.translate(-wx, rearY, rearWheelR);
+const w4 = rearWheel.translate(wx, rearY, rearWheelR);
 
-// Handle — simple approach: two vertical posts + one crossbar.
-// Posts rise from the rear edge of the deck, straight up.
-// No tilt — keep it simple and correct.
-const postW = 2.5;
-const postSpread = 12;
-const postBase = deckZ + deckH / 2;
-const rearY = deckD / 2;
+// Engine and rear bag to make the top profile read as a lawn mower.
+const engineBase = box(deckW * 0.36, deckD * 0.33, 5.5)
+  .translate(0, -deckD * 0.06, deckZ + deckH / 2 + 2.75);
+const engineCap = cylinder(3.5, deckW * 0.14)
+  .translate(0, -deckD * 0.06, deckZ + deckH / 2 + 7.25);
+const bag = box(deckW * 0.42, deckD * 0.3, deckH * 1.2)
+  .translate(0, deckD * 0.25, deckZ + deckH / 2 + deckH * 0.6);
 
-const leftPost = box(postW, postW, handleH)
-  .translate(-postSpread, rearY - postW / 2, postBase + handleH / 2);
-const rightPost = box(postW, postW, handleH)
-  .translate( postSpread, rearY - postW / 2, postBase + handleH / 2);
+// Handle: two slanted rails and a top grip.
+const railW = 2.4;
+const railLen = handleH;
+const railSpread = deckW * 0.23;
+const railY = rearY - 1;
+const railBaseZ = deckZ + deckH / 2 + 1;
 
-// Crossbar grip at the top
-const grip = box(postSpread * 2 + postW, postW, postW)
-  .translate(0, rearY - postW / 2, postBase + handleH);
-
-// Engine cover bump on top
-const engine = box(deckW * 0.5, deckD * 0.4, 5)
-  .translate(0, -deckD * 0.15, deckZ + deckH / 2 + 2.5);
+const leftRail = box(railW, railW, railLen)
+  .rotate(-23, 0, 0)
+  .translate(-railSpread, railY, railBaseZ + railLen / 2);
+const rightRail = box(railW, railW, railLen)
+  .rotate(-23, 0, 0)
+  .translate(railSpread, railY, railBaseZ + railLen / 2);
+const grip = box(railSpread * 2 + railW, railW, railW)
+  .rotate(-23, 0, 0)
+  .translate(0, railY + 1, railBaseZ + railLen);
 
 const mower = deck
   .union(housing)
   .union(w1).union(w2).union(w3).union(w4)
-  .union(leftPost).union(rightPost).union(grip)
-  .union(engine)
-  .named("Lawn Mower").color("#2a8c2a");
+  .union(engineBase).union(engineCap)
+  .union(bag)
+  .union(leftRail).union(rightRail).union(grip)
+  .named("Lawn Mower")
+  .color("#3f9f42");
 
-return { model: mower, camera: [90, 50, -60] };
+return { model: mower, camera: [95, 42, -64] };

@@ -71,12 +71,31 @@ Browsers limit to ~8-16 simultaneous WebGL contexts. The gallery uses disposable
 
 ## Screenshot workflow
 
-Puppeteer is NOT a project dependency — it's found from the environment (project node_modules, /tmp installs, global, npx cache).
+Goal: help the next agent get multi-angle visual feedback fast, with minimal installs.
+
+### Wake-up strategy (fastest path first)
+
+1. Start studio once:
+   ```bash
+   npm run dev -- --host 127.0.0.1 --port 5173
+   ```
+2. Try snapshot runner with the current environment first (zero install):
+   ```bash
+   node scripts/snapshot-test.mjs --examples-dir /tmp/cadlad-one-example --wait 5000
+   ```
+3. If Puppeteer module is missing, do a throwaway install in `/tmp` (do not touch project deps):
+   ```bash
+   mkdir -p /tmp/pp && cd /tmp/pp && npm init -y && npm i puppeteer
+   mkdir -p /tmp/cadlad_sniff
+   ln -sfn /tmp/pp/node_modules /tmp/cadlad_sniff/node_modules
+   ```
+4. Retry snapshot runner.
+5. If browser launch fails on missing shared libs (e.g. `libatk-1.0.so.0`), stop and report exact missing libs. Don't spend cycles on broad installs.
+6. Always capture/check multiple camera angles before finalizing geometry changes.
+
+Puppeteer is NOT a project dependency — `scripts/snapshot-test.mjs` searches project deps, `/tmp/cadlad_sniff`, global resolve, and npx cache.
 
 ```bash
-# Render a model from all 7 angles
-node /tmp/cadlad_sniff/render.mjs examples/mymodel.forge.js /tmp
-
 # Snapshot test all examples
 node scripts/snapshot-test.mjs --url http://localhost:5173
 node scripts/snapshot-test.mjs --update  # capture new references

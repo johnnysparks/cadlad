@@ -2,6 +2,20 @@
 
 > **Tested and confirmed working** on macOS (Darwin 24.6.0, arm64) — 2026-03-21
 
+## Fast wake-up workflow (for any next agent)
+
+Use this exact order to get multi-angle visuals quickly with minimal dependency churn:
+
+1. **Run studio first**: `npm run dev -- --host 127.0.0.1 --port 5173`
+2. **Try zero-install snapshot path**:
+   `node scripts/snapshot-test.mjs --examples-dir /tmp/cadlad-one-example --wait 5000`
+3. **Only if module missing**: install Puppeteer in a throwaway temp dir (`/tmp/pp`) and symlink to `/tmp/cadlad_sniff/node_modules`.
+4. **Retry snapshot script**.
+5. **If browser fails to launch due system libs** (e.g. `libatk-1.0.so.0`), report the precise missing libs and stop broad install attempts.
+6. **Do not trust one angle** — inspect front/back/left/right/top/bottom/iso before calling geometry “done”.
+
+This order keeps installs minimal, works in most containers, and quickly exposes whether the blocker is Node deps vs OS browser libs.
+
 ## Environment Summary
 
 | Capability | Status | Path / Notes |
