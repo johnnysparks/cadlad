@@ -12,7 +12,7 @@ export { param } from "./params.js";
 export { Sketch, rect, circle } from "./sketch.js";
 
 // 3D Primitives
-export { box, cylinder, sphere, roundedRect } from "../engine/primitives.js";
+export { box, cylinder, sphere, roundedRect, sweep, loft } from "../engine/primitives.js";
 
 // Solid class (for type annotations in user scripts)
 export { Solid } from "../engine/solid.js";
