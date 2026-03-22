@@ -81,13 +81,11 @@ export class Solid {
   }
 
   volume(): number {
-    const props = this._manifold.getProperties();
-    return props.volume;
+    return this._manifold.volume();
   }
 
   surfaceArea(): number {
-    const props = this._manifold.getProperties();
-    return props.surfaceArea;
+    return this._manifold.surfaceArea();
   }
 
   // ── Export ─────────────────────────────────────────────────
