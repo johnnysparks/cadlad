@@ -23,6 +23,18 @@ async function boot() {
 
   // Init components
   const editor = createEditor(editorPane);
+
+  // Load code from URL if provided (?code=base64)
+  const urlParams = new URLSearchParams(window.location.search);
+  const codeParam = urlParams.get("code");
+  if (codeParam) {
+    try {
+      editor.setValue(atob(codeParam));
+      // Clean the URL so refreshing doesn't re-load
+      window.history.replaceState({}, "", window.location.pathname);
+    } catch { /* ignore bad base64 */ }
+  }
+
   const viewport = new Viewport(viewportEl);
   let lastResult: Awaited<ReturnType<typeof evaluateModel>> | null = null;
 
