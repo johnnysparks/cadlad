@@ -53,11 +53,13 @@ const handle = box(6, 4, bowlH * 0.5).color("#b89830");
 const lHandle = handle.translate(-bowlR - 1, 0, 6 + stemH + bowlH * 0.5);
 const rHandle = handle.translate( bowlR + 1, 0, 6 + stemH + bowlH * 0.5);
 
+// Smooth hard edges (>60°) for a polished look
 return base
   .union(stem)
   .union(bowl)
   .union(lHandle)
   .union(rHandle)
+  .smooth(3, 60)
   .named("Trophy Cup")
   .color("#c9a84c");
 `;
@@ -87,6 +89,8 @@ declare class Solid {
   mirror(normal: [number, number, number]): Solid;
   color(c: string | [number, number, number, number]): Solid;
   named(name: string): Solid;
+  smooth(subdivisions?: number, minSharpAngle?: number): Solid;
+  fillet(subdivisions?: number): Solid;
   volume(): number;
   surfaceArea(): number;
 }
