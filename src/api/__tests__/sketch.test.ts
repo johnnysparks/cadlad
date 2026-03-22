@@ -40,6 +40,52 @@ describe("rect", () => {
   });
 });
 
+describe("validate", () => {
+  it("passes for a valid closed polygon", () => {
+    const issues = rect(10, 20).validate();
+    expect(issues.filter(i => i.type === "error")).toHaveLength(0);
+  });
+
+  it("errors on fewer than 3 points", () => {
+    const s = Sketch.begin(0, 0).lineTo(10, 0);
+    const issues = s.validate();
+    expect(issues.some(i => i.type === "error" && i.message.includes("2 point"))).toBe(true);
+  });
+
+  it("warns on unclosed profile", () => {
+    const s = Sketch.begin(0, 0).lineTo(10, 0).lineTo(10, 10);
+    const issues = s.validate();
+    expect(issues.some(i => i.message.includes("not closed"))).toBe(true);
+  });
+
+  it("warns on degenerate edge", () => {
+    const s = Sketch.begin(0, 0).lineTo(0, 0).lineTo(10, 0).lineTo(10, 10).close();
+    const issues = s.validate();
+    expect(issues.some(i => i.message.includes("Degenerate"))).toBe(true);
+  });
+
+  it("errors on self-intersection", () => {
+    // Bowtie shape: crosses itself
+    const s = Sketch.begin(0, 0).lineTo(10, 10).lineTo(10, 0).lineTo(0, 10).close();
+    const issues = s.validate();
+    expect(issues.some(i => i.type === "error" && i.message.includes("Self-intersection"))).toBe(true);
+  });
+});
+
+describe("tangentArcTo", () => {
+  it("produces more points than a straight line", () => {
+    const s = Sketch.begin(0, 0).lineTo(10, 0).tangentArcTo(20, 10);
+    expect(s.points().length).toBeGreaterThan(3);
+  });
+
+  it("starts from the current cursor", () => {
+    const pts = Sketch.begin(0, 0).lineTo(10, 0).tangentArcTo(20, 10).points();
+    const last = pts[pts.length - 1];
+    expect(last[0]).toBeCloseTo(20, 0);
+    expect(last[1]).toBeCloseTo(10, 0);
+  });
+});
+
 describe("circle", () => {
   it("creates polygon with correct radius", () => {
     const pts = circle(10, 8).points();
