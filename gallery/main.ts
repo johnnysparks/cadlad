@@ -1,12 +1,15 @@
 /**
  * Gallery — renders all example models from the examples/ folder.
  *
- * Uses import.meta.glob to read .forge.js files at build time.
- * Single source of truth: add a .forge.js to examples/ and it appears here.
+ * Uses a SINGLE shared WebGL renderer to avoid the browser's context limit
+ * (~8-16 contexts). Each model is rendered, captured to a static <img>,
+ * then the geometry is disposed.
  */
 
-import { Viewport } from "../src/studio/viewport.js";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { evaluateModel } from "../src/api/runtime.js";
+import type { Body } from "../src/engine/types.js";
 
 interface Example {
   name: string;
@@ -21,17 +24,17 @@ const exampleModules = import.meta.glob("../examples/*.forge.js", {
   eager: true,
 }) as Record<string, string>;
 
-// Build example list from the file system
 const examples: Example[] = Object.entries(exampleModules)
   .map(([path, code]) => {
     const file = path.split("/").pop()!;
-    // Derive a display name from the filename: "box-with-hole.forge.js" → "Box With Hole"
     const name = file
       .replace(".forge.js", "")
       .split("-")
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(" ");
-    return { name, file, code: code.trim() };
+    // code might be a string or might need coercion
+    const codeStr = typeof code === "string" ? code : String(code);
+    return { name, file, code: codeStr.trim() };
   })
   .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -39,15 +42,146 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/** Render bodies to a data URL using an offscreen renderer. */
+function renderToImage(
+  bodies: Body[],
+  width: number,
+  height: number,
+): string {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(2);
+  renderer.setClearColor(0x181825);
+
+  const scene = new THREE.Scene();
+
+  // Lights
+  scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+  dir.position.set(200, 300, 200);
+  scene.add(dir);
+  const fill = new THREE.DirectionalLight(0xffffff, 0.3);
+  fill.position.set(-100, 50, -100);
+  scene.add(fill);
+
+  // Grid
+  scene.add(new THREE.GridHelper(500, 50, 0x313244, 0x252536));
+
+  // Add bodies
+  const group = new THREE.Group();
+  for (const body of bodies) {
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.BufferAttribute(body.mesh.positions, 3));
+    geom.setAttribute("normal", new THREE.BufferAttribute(body.mesh.normals, 3));
+    geom.setIndex(new THREE.BufferAttribute(body.mesh.indices, 1));
+
+    const color = body.color ?? [0.6, 0.6, 0.65, 1.0];
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(color[0], color[1], color[2]),
+      metalness: 0.1,
+      roughness: 0.6,
+      side: THREE.DoubleSide,
+    });
+
+    const mesh = new THREE.Mesh(geom, mat);
+    group.add(mesh);
+  }
+  scene.add(group);
+
+  // Fit camera
+  const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 10000);
+  const bbox = new THREE.Box3().setFromObject(group);
+  if (!bbox.isEmpty()) {
+    const center = bbox.getCenter(new THREE.Vector3());
+    const size = bbox.getSize(new THREE.Vector3());
+    const dist = Math.max(size.x, size.y, size.z) * 2;
+    camera.position.set(center.x + dist * 0.7, center.y + dist * 0.5, center.z + dist * 0.7);
+    camera.lookAt(center);
+  }
+
+  renderer.render(scene, camera);
+  const dataUrl = renderer.domElement.toDataURL("image/png");
+
+  // Cleanup
+  group.traverse((child) => {
+    if (child instanceof THREE.Mesh) {
+      child.geometry.dispose();
+      if (child.material instanceof THREE.Material) child.material.dispose();
+    }
+  });
+  renderer.dispose();
+
+  return dataUrl;
+}
+
+/** Render a card with an interactive viewport (lazy, on click). */
+function makeInteractive(container: HTMLElement, bodies: Body[]) {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setClearColor(0x181825);
+  container.innerHTML = "";
+  container.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+  dir.position.set(200, 300, 200);
+  scene.add(dir);
+  scene.add(new THREE.GridHelper(500, 50, 0x313244, 0x252536));
+
+  const group = new THREE.Group();
+  for (const body of bodies) {
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.BufferAttribute(body.mesh.positions, 3));
+    geom.setAttribute("normal", new THREE.BufferAttribute(body.mesh.normals, 3));
+    geom.setIndex(new THREE.BufferAttribute(body.mesh.indices, 1));
+    const color = body.color ?? [0.6, 0.6, 0.65, 1.0];
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(color[0], color[1], color[2]),
+      metalness: 0.1, roughness: 0.6, side: THREE.DoubleSide,
+    });
+    group.add(new THREE.Mesh(geom, mat));
+  }
+  scene.add(group);
+
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+  renderer.setSize(w, h);
+
+  const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 10000);
+  const bbox = new THREE.Box3().setFromObject(group);
+  const center = bbox.getCenter(new THREE.Vector3());
+  const size = bbox.getSize(new THREE.Vector3());
+  const dist = Math.max(size.x, size.y, size.z) * 2;
+  camera.position.set(center.x + dist * 0.7, center.y + dist * 0.5, center.z + dist * 0.7);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.copy(center);
+  controls.enableDamping = true;
+
+  let animId = 0;
+  const animate = () => {
+    animId = requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  };
+  animate();
+
+  // Cleanup when card is no longer interactive
+  return () => {
+    cancelAnimationFrame(animId);
+    renderer.dispose();
+  };
+}
+
 async function renderGallery() {
   const gallery = document.getElementById("gallery")!;
+  let activeCleanup: (() => void) | null = null;
 
   for (const example of examples) {
-    // Card container
     const card = document.createElement("div");
     card.className = "card";
 
-    // Viewport container
     const vpContainer = document.createElement("div");
     vpContainer.className = "card-viewport";
     const loading = document.createElement("div");
@@ -56,7 +190,6 @@ async function renderGallery() {
     vpContainer.appendChild(loading);
     card.appendChild(vpContainer);
 
-    // Info section — pull description from the first comment line in the code
     const firstComment = example.code.match(/^\/\/\s*(.+)/)?.[1] ?? "";
     const info = document.createElement("div");
     info.className = "card-info";
@@ -69,41 +202,44 @@ async function renderGallery() {
       </details>
     `;
     card.appendChild(info);
-
     gallery.appendChild(card);
 
-    // Render asynchronously so cards appear immediately
-    renderCard(vpContainer, loading, example);
-  }
-}
+    // Render to static image (sequentially to avoid context exhaustion)
+    try {
+      const result = await evaluateModel(example.code);
+      loading.remove();
 
-async function renderCard(
-  container: HTMLElement,
-  loading: HTMLElement,
-  example: Example,
-) {
-  try {
-    const result = await evaluateModel(example.code);
-    loading.remove();
+      if (result.errors.length > 0) {
+        const errDiv = document.createElement("div");
+        errDiv.className = "error-msg";
+        errDiv.textContent = result.errors.join("\n");
+        vpContainer.appendChild(errDiv);
+        continue;
+      }
 
-    if (result.errors.length > 0) {
+      if (result.bodies.length > 0) {
+        const w = 480;
+        const h = 360;
+        const dataUrl = renderToImage(result.bodies, w, h);
+        const img = document.createElement("img");
+        img.src = dataUrl;
+        img.style.cssText = "width:100%;height:100%;object-fit:cover;cursor:pointer";
+        img.title = "Click for interactive 3D view";
+        vpContainer.appendChild(img);
+
+        // Click to activate interactive orbit controls (uses 1 WebGL context)
+        img.addEventListener("click", () => {
+          if (activeCleanup) activeCleanup();
+          activeCleanup = makeInteractive(vpContainer, result.bodies);
+        });
+      }
+    } catch (err: unknown) {
+      loading.remove();
       const errDiv = document.createElement("div");
       errDiv.className = "error-msg";
-      errDiv.textContent = result.errors.join("\n");
-      container.appendChild(errDiv);
-      return;
+      errDiv.textContent = err instanceof Error ? err.message : String(err);
+      vpContainer.appendChild(errDiv);
     }
-
-    if (result.bodies.length > 0) {
-      const viewport = new Viewport(container);
-      viewport.setBodies(result.bodies);
-    }
-  } catch (err: unknown) {
-    loading.remove();
-    const errDiv = document.createElement("div");
-    errDiv.className = "error-msg";
-    errDiv.textContent = err instanceof Error ? err.message : String(err);
-    container.appendChild(errDiv);
   }
 }
 
