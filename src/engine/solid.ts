@@ -7,8 +7,9 @@
 
 import { getManifold } from "./manifold-backend.js";
 import type { Color, TriMesh, Vec3, Body, BBox } from "./types.js";
+import type { Manifold } from "manifold-3d";
 
-type ManifoldInstance = ReturnType<ReturnType<typeof getManifold>["Manifold"]>;
+type ManifoldInstance = Manifold;
 
 export class Solid {
   /** @internal raw Manifold handle */
