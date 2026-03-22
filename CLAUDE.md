@@ -179,3 +179,14 @@ The studio exposes `window.__cadlad` for automation:
 
 - [.claude/skills/SKILLS.md](.claude/skills/SKILLS.md) — Master architect reference for CAD fabrication and building design
 - [.claude/skills/sniff_screenshot.md](.claude/skills/sniff_screenshot.md) — Headless screenshot environment guide
+
+## Workflows (session warmup prompts)
+
+Read the relevant workflow file at the start of a session to get oriented fast:
+
+- [.claude/skills/workflow-build-model.md](.claude/skills/workflow-build-model.md) — Build a new .forge.js example model
+- [.claude/skills/workflow-evaluate-model.md](.claude/skills/workflow-evaluate-model.md) — Evaluate model quality from multiple angles
+- [.claude/skills/workflow-add-api.md](.claude/skills/workflow-add-api.md) — Add or extend a Solid/Sketch/primitive API method
+- [.claude/skills/workflow-fix-rendering.md](.claude/skills/workflow-fix-rendering.md) — Diagnose and fix a rendering or visual bug
+- [.claude/skills/workflow-studio-ux.md](.claude/skills/workflow-studio-ux.md) — Studio or gallery UX improvement
+- [.claude/skills/workflow-ci-hygiene.md](.claude/skills/workflow-ci-hygiene.md) — CI checks, lint, types, snapshot tests
