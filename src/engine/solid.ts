@@ -63,6 +63,34 @@ export class Solid {
     return this._withManifold(this._manifold.mirror(normal));
   }
 
+  // ── Smoothing ─────────────────────────────────────────────
+
+  /**
+   * Smooth all edges, then subdivide to produce rounded geometry.
+   *
+   * @param subdivisions How many times to subdivide (2-4 typical). Higher = smoother + more polys.
+   * @param minSharpAngle Edges sharper than this (degrees) get smoothed. Default 0 = smooth all.
+   *   Use 60 to only smooth hard edges while keeping flat faces flat.
+   */
+  smooth(subdivisions = 3, minSharpAngle = 0): Solid {
+    const smoothed = this._manifold.smoothOut(minSharpAngle).refine(subdivisions);
+    return this._withManifold(smoothed);
+  }
+
+  /**
+   * Full fillet — rounds all edges by converting to a smooth manifold
+   * with tangent data, then subdividing. Produces visibly curved geometry.
+   *
+   * @param subdivisions How many times to subdivide (2-4 typical).
+   */
+  fillet(subdivisions = 3): Solid {
+    const M = getManifold();
+    const mesh = this._manifold.getMesh();
+    const smoothManifold = M.Manifold.smooth(mesh);
+    const refined = smoothManifold.refine(subdivisions);
+    return this._withManifold(refined);
+  }
+
   // ── Metadata ───────────────────────────────────────────────
 
   color(c: string | Color): Solid {
