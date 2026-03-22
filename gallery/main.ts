@@ -95,7 +95,8 @@ function renderToImage(
     const center = bbox.getCenter(new THREE.Vector3());
     const size = bbox.getSize(new THREE.Vector3());
     const dist = Math.max(size.x, size.y, size.z) * 2;
-    camera.position.set(center.x + dist * 0.7, center.y + dist * 0.5, center.z + dist * 0.7);
+    // Camera from front-left, above — shows the "front" face (-Y) and top
+    camera.position.set(center.x - dist * 0.5, center.y + dist * 0.6, center.z + dist * 0.6);
     camera.lookAt(center);
   }
 
@@ -153,7 +154,7 @@ function makeInteractive(container: HTMLElement, bodies: Body[]) {
   const center = bbox.getCenter(new THREE.Vector3());
   const size = bbox.getSize(new THREE.Vector3());
   const dist = Math.max(size.x, size.y, size.z) * 2;
-  camera.position.set(center.x + dist * 0.7, center.y + dist * 0.5, center.z + dist * 0.7);
+  camera.position.set(center.x - dist * 0.5, center.y + dist * 0.6, center.z + dist * 0.6);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.copy(center);
