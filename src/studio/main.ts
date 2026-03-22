@@ -48,6 +48,14 @@ async function boot() {
         viewport.setBodies(result.bodies);
       }
 
+      // Show hints in console (non-intrusive)
+      if (result.hints && result.hints.length > 0) {
+        for (const hint of result.hints) {
+          const prefix = hint.severity === "warning" ? "⚠️" : "💡";
+          console.log(`${prefix} ${hint.message}`);
+        }
+      }
+
       paramPanel.setParams(result.params);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
