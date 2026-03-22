@@ -43,4 +43,4 @@ const bottle = body
   .union(cap)
   .named("Water Bottle").color("#88bbdd");
 
-return bottle;
+return { model: bottle, camera: [60, 80, 80] };

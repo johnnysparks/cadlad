@@ -29,4 +29,4 @@ const phone = body
   .named("Smartphone")
   .color("#2d2d3a");
 
-return phone;
+return { model: phone, camera: [50, 40, 60] };

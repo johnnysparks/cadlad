@@ -50,4 +50,4 @@ const console = body
   .union(lShoulder).union(rShoulder)
   .named("Game Console").color("#2a2a3a");
 
-return console;
+return { model: console, camera: [0, 150, -120] };

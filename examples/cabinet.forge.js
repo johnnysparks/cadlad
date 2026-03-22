@@ -38,4 +38,4 @@ const cabinet = outer
   .union(handle)
   .named("Cabinet").color("#d4b896");
 
-return cabinet;
+return { model: cabinet, camera: [80, 60, -80] };

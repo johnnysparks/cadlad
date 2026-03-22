@@ -34,4 +34,4 @@ const chair = seat
   .named("Chair")
   .color("#c4a882");
 
-return chair;
+return { model: chair, camera: [80, 60, 80] };
