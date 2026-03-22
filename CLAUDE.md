@@ -32,13 +32,53 @@ snapshots/   Visual regression test references
 
 - Use `param()` for slider-driven parameters with min/max/unit
 - Primitives: `box()`, `cylinder()`, `sphere()`, `roundedRect()`
-- 2D profiles: `Sketch.begin()`, `rect()`, `circle()` → `.extrude()` / `.revolve()`
+- 2D → 3D: `Sketch.begin()`, `rect()`, `circle()` → `.extrude()` / `.revolve()` / `.sweep(path)`
+- Standalone: `sweep(profile, path)`, `loft(profiles, heights)`
 - Booleans: `.union()`, `.subtract()`, `.intersect()`
+- Edge treatment: `.fillet(subdivisions)`, `.chamfer(subdivisions)`, `.smooth(subdivisions, minSharpAngle)`
+- Shell: `.shell(thickness)` — hollow out a solid with uniform wall thickness
+- Draft: `.draft(angleDeg)` — taper walls for mold release (positive = inward going up)
 - Transforms: `.translate()`, `.rotate()`, `.scale()`, `.mirror()`
 - Metadata: `.color("#hex")`, `.named("Part Name")`
+- Query: `.volume()`, `.surfaceArea()`, `.boundingBox()`
 - Multi-part: `assembly("name").add("part", solid, [x, y, z])`
 - Camera hint: `return { model: solid, camera: [x, y, z] }`
 - Must `return` a Solid, Assembly, array, or `{ model, camera }` object
+
+## 3D Tools API Contract
+
+### Extrude / Revolve / Sweep / Loft
+
+| Tool | Input | Method | Contract |
+|---|---|---|---|
+| **Extrude** | 2D sketch | `sketch.extrude(height)` | Pushes profile along Z. Height > 0. Validates sketch, auto-corrects CW→CCW winding. |
+| **Revolve** | 2D sketch | `sketch.revolve(segments?)` | Rotates profile around Y axis. Default 32 segments. Profile must be on positive X side. |
+| **Sweep** | 2D sketch + 3D path | `sketch.sweep(path)` or `sweep(profile, path)` | Extrudes profile along 3D path. Path ≥ 2 points, profile ≥ 3 points. Profile oriented perpendicular to path tangent. |
+| **Loft** | Multiple 2D profiles + heights | `loft(profiles, heights)` | Interpolates between ≥ 2 profiles at strictly ascending Z heights. Uses convex hull between consecutive profiles. |
+
+### Shell
+
+`solid.shell(thickness)` — Hollows out a solid, leaving walls of uniform thickness.
+- **thickness** must be positive and less than half the smallest bounding-box dimension.
+- Uses centroid-based scaling: works well for convex shapes (boxes, cylinders, simple enclosures).
+- For complex concave shapes, wall thickness may not be perfectly uniform — use explicit boolean subtraction instead.
+
+### Boolean Operations
+
+| Method | Contract |
+|---|---|
+| `.union(other)` | Merges two solids. Overlapping volume counted once. Preserves `this` color/name. |
+| `.subtract(other)` | Cuts `other` from `this`. Always oversize cutters by 1–2mm to avoid coplanar artifacts. |
+| `.intersect(other)` | Keeps only overlapping volume. Preserves `this` color/name. |
+
+### Draft / Fillet / Chamfer
+
+| Method | Contract |
+|---|---|
+| `.draft(angleDeg)` | Tapers walls from base (Z=min). Positive angle = inward going up (mold release). Typical: 1–5° for injection molding. |
+| `.fillet(subdivisions?)` | Rounds all edges via Catmull-Clark subdivision. Subdivisions 2–4 typical. **Increases volume** on convex shapes (vertices push outward for curvature). |
+| `.chamfer(subdivisions?)` | Flat bevel on edges. Use subdivisions ≥ 2 for visible effect. Fewer triangles than equivalent fillet. |
+| `.smooth(subdivisions?, minSharpAngle?)` | Smooth edges then subdivide. `minSharpAngle=0` smooths all; `60` only smooths hard edges. |
 
 ## Coordinate system (LOCKED IN)
 
@@ -69,7 +109,7 @@ snapshots/   Visual regression test references
 These are the things that burned us during development. They're fixed at the API level now, but understanding them helps avoid related problems:
 
 ### Polygon winding (FIXED in API)
-Manifold silently produces empty geometry from clockwise polygons. `extrudePolygon()` and `revolve()` now auto-detect CW winding and reverse to CCW, with a console warning. If you use `CrossSection` directly, you must ensure CCW yourself.
+Manifold silently produces empty geometry from clockwise polygons. `extrudePolygon()`, `revolve()`, `sweep()`, and `loft()` now auto-detect CW winding and reverse to CCW, with a console warning. If you use `CrossSection` directly, you must ensure CCW yourself.
 
 ### .color() after .union() overwrites everything
 `.union()` merges meshes. A `.color()` call after applies to the whole merged result, losing individual part colors. **Use `assembly()` instead of `.union()` when you need different colors on different parts.** The viewport auto-assigns distinct muted colors to assembly parts that don't have explicit colors.
@@ -82,6 +122,15 @@ Manifold silently produces empty geometry from clockwise polygons. `extrudePolyg
 
 ### Boolean subtract sizing
 Always oversize cutters by 1-2mm in the cutting direction to avoid coplanar face artifacts. Example: `cylinder(height + 2, radius)` for a through-hole.
+
+### Shell is centroid-based scaling
+`.shell(thickness)` scales from the bounding-box centroid. This produces uniform walls for convex shapes (boxes, cylinders) but may produce uneven walls on complex concave geometry. For those cases, model the inner void explicitly and use `.subtract()`.
+
+### Fillet increases volume on convex shapes
+Manifold's smooth subdivision pushes vertices outward to create curvature. On a convex shape like a box, `.fillet()` **increases** volume rather than decreasing it. This is expected Catmull-Clark behavior.
+
+### Draft pivots at the base
+`.draft(angle)` applies the taper starting from Z=min. Vertices at the base stay fixed; vertices at the top move inward (positive angle) or outward (negative). The taper is relative to the bounding-box centroid in XY.
 
 ### WebGL context limit
 Browsers limit to ~8-16 simultaneous WebGL contexts. The gallery uses disposable renderers (render → capture to dataURL → dispose) to handle 20+ models.

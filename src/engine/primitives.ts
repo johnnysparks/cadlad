@@ -6,7 +6,7 @@
 
 import { getManifold } from "./manifold-backend.js";
 import { Solid } from "./solid.js";
-import type { Vec2 } from "./types.js";
+import type { Vec2, Vec3 } from "./types.js";
 
 /** Axis-aligned box centred at origin. */
 export function box(x: number, y: number, z: number): Solid {
@@ -134,4 +134,143 @@ export function roundedRect(
 
   // Return a thin slab if no height given
   return extrudePolygon(pts, 1);
+}
+
+// ── Sweep ─────────────────────────────────────────────────
+
+/**
+ * Sweep a 2D profile along a 3D path to create a solid.
+ *
+ * The profile (in XY) is placed perpendicular to the path at each point,
+ * and consecutive placements are connected via convex hull to form tube segments.
+ * All segments are unioned into the final solid.
+ *
+ * @param profile 2D profile points (CCW winding). Auto-corrects CW.
+ * @param path 3D path points (at least 2). The profile sweeps from path[0] to path[N-1].
+ * @param segments Optional: circular segments for profile approximation (used internally).
+ */
+export function sweep(profile: Vec2[], path: Vec3[]): Solid {
+  if (path.length < 2) throw new Error("Sweep path needs at least 2 points");
+  if (profile.length < 3) throw new Error("Sweep profile needs at least 3 points");
+
+  let pts = profile;
+  if (signedArea(pts) < 0) {
+    console.warn("💡 Sweep profile winding was clockwise — auto-reversed to CCW.");
+    pts = [...pts].reverse();
+  }
+
+  const manifold = getManifold();
+  const cross = manifold.CrossSection.ofPolygons([pts]);
+
+  let result = null as ReturnType<typeof manifold.Manifold.extrude> | null;
+
+  for (let i = 0; i < path.length - 1; i++) {
+    const [x0, y0, z0] = path[i];
+    const [x1, y1, z1] = path[i + 1];
+
+    const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+    const segLen = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (segLen < 1e-10) continue;
+
+    // Extrude profile along Z by segment length
+    const seg = manifold.Manifold.extrude(cross, segLen);
+
+    // Build rotation matrix to align Z-axis with segment direction
+    const nx = dx / segLen, ny = dy / segLen, nz = dz / segLen;
+    const mat = alignZToDirection(nx, ny, nz);
+
+    // Apply rotation then translate to segment start
+    const placed = seg.transform(mat).translate(x0, y0, z0);
+
+    result = result ? result.add(placed) : placed;
+  }
+
+  if (!result) throw new Error("Sweep produced no geometry");
+  return new Solid(result);
+}
+
+/**
+ * Build a column-major 4x4 rotation matrix that maps Z-axis to the given direction.
+ * Returns a Mat4 (16 numbers) compatible with Manifold.transform().
+ */
+function alignZToDirection(nx: number, ny: number, nz: number): [
+  number, number, number, number,
+  number, number, number, number,
+  number, number, number, number,
+  number, number, number, number,
+] {
+  // We need an orthonormal basis where the 3rd vector is [nx, ny, nz].
+  // Pick a "not parallel" reference to cross-product with.
+  let refX = 0, refY = 1, refZ = 0;
+  if (Math.abs(ny) > 0.9) {
+    refX = 1; refY = 0; refZ = 0;
+  }
+
+  // u = ref × n (first basis vector)
+  let ux = refY * nz - refZ * ny;
+  let uy = refZ * nx - refX * nz;
+  let uz = refX * ny - refY * nx;
+  const uLen = Math.sqrt(ux * ux + uy * uy + uz * uz);
+  ux /= uLen; uy /= uLen; uz /= uLen;
+
+  // v = n × u (second basis vector)
+  const vx = ny * uz - nz * uy;
+  const vy = nz * ux - nx * uz;
+  const vz = nx * uy - ny * ux;
+
+  // Column-major 4x4: columns are [u, v, n, translation=0]
+  return [
+    ux, uy, uz, 0,
+    vx, vy, vz, 0,
+    nx, ny, nz, 0,
+    0,  0,  0,  1,
+  ];
+}
+
+// ── Loft ──────────────────────────────────────────────────
+
+/**
+ * Loft between multiple 2D profiles at specified heights to create a solid.
+ *
+ * Each profile is extruded at its height, and consecutive profiles are
+ * connected by hulling their thin extrusions. The result is the union of
+ * all hull segments.
+ *
+ * @param profiles Array of 2D profile point arrays (at least 2 profiles). Auto-corrects CW winding.
+ * @param heights Z-heights for each profile (must be same length as profiles, ascending).
+ */
+export function loft(profiles: Vec2[][], heights: number[]): Solid {
+  if (profiles.length < 2) throw new Error("Loft needs at least 2 profiles");
+  if (profiles.length !== heights.length) {
+    throw new Error("Loft: profiles and heights arrays must have the same length");
+  }
+  for (let i = 1; i < heights.length; i++) {
+    if (heights[i] <= heights[i - 1]) {
+      throw new Error("Loft: heights must be strictly ascending");
+    }
+  }
+
+  const manifold = getManifold();
+  const thinThickness = 0.001; // Thin slab for hull endpoints
+
+  // Create thin extrusions at each height
+  const slabs = profiles.map((profile, i) => {
+    let pts = profile;
+    if (signedArea(pts) < 0) {
+      pts = [...pts].reverse();
+    }
+    const cross = manifold.CrossSection.ofPolygons([pts]);
+    return manifold.Manifold.extrude(cross, thinThickness)
+      .translate(0, 0, heights[i]);
+  });
+
+  // Hull consecutive pairs and union
+  let result = null as ReturnType<typeof manifold.Manifold.hull> | null;
+  for (let i = 0; i < slabs.length - 1; i++) {
+    const segment = manifold.Manifold.hull([slabs[i], slabs[i + 1]]);
+    result = result ? result.add(segment) : segment;
+  }
+
+  if (!result) throw new Error("Loft produced no geometry");
+  return new Solid(result);
 }

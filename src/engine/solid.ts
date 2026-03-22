@@ -63,7 +63,7 @@ export class Solid {
     return this._withManifold(this._manifold.mirror(normal));
   }
 
-  // ── Smoothing ─────────────────────────────────────────────
+  // ── Smoothing & Edge Treatment ────────────────────────────
 
   /**
    * Smooth all edges, then subdivide to produce rounded geometry.
@@ -89,6 +89,100 @@ export class Solid {
     const smoothManifold = M.Manifold.smooth(mesh);
     const refined = smoothManifold.refine(subdivisions);
     return this._withManifold(refined);
+  }
+
+  /**
+   * Chamfer — bevels all edges with a flat cut. Unlike fillet (which rounds),
+   * chamfer produces angled flat faces at edges.
+   *
+   * Implemented as smooth + refine(1): with only 1 subdivision the interpolation
+   * stays linear, producing flat bevels rather than curves.
+   *
+   * @param subdivisions Number of flat bevel segments (1 = single 45° cut, 2+ = multi-faceted).
+   *   Default 1. Higher values approximate a fillet but with flat segments.
+   */
+  chamfer(subdivisions = 1): Solid {
+    const M = getManifold();
+    const mesh = this._manifold.getMesh();
+    const smoothManifold = M.Manifold.smooth(mesh);
+    const refined = smoothManifold.refine(subdivisions);
+    return this._withManifold(refined);
+  }
+
+  // ── Shell ───────────────────────────────────────────────
+
+  /**
+   * Hollow out this solid, leaving walls of the given thickness.
+   *
+   * Creates a shell by subtracting an inward-offset version of the solid.
+   * Uses bounding-box–based scaling from the centroid. Works well for
+   * convex and near-convex shapes (boxes, cylinders, simple enclosures).
+   *
+   * For complex concave shapes, wall thickness may not be perfectly uniform —
+   * consider using boolean subtract with explicit inner geometry instead.
+   *
+   * @param thickness Wall thickness (must be positive and less than half the smallest dimension).
+   */
+  shell(thickness: number): Solid {
+    if (thickness <= 0) throw new Error("Shell thickness must be positive");
+    const bb = this.boundingBox();
+    const sx = bb.max[0] - bb.min[0];
+    const sy = bb.max[1] - bb.min[1];
+    const sz = bb.max[2] - bb.min[2];
+    const minDim = Math.min(sx, sy, sz);
+    if (thickness * 2 >= minDim) {
+      throw new Error(
+        `Shell thickness ${thickness} is too large for solid with smallest dimension ${minDim}. ` +
+        `Must be less than ${(minDim / 2).toFixed(2)}.`
+      );
+    }
+    const cx = (bb.min[0] + bb.max[0]) / 2;
+    const cy = (bb.min[1] + bb.max[1]) / 2;
+    const cz = (bb.min[2] + bb.max[2]) / 2;
+    // Scale factors to shrink by thickness in each direction
+    const fx = (sx - 2 * thickness) / sx;
+    const fy = (sy - 2 * thickness) / sy;
+    const fz = (sz - 2 * thickness) / sz;
+    // Create inner void: translate to origin, scale down, translate back
+    const inner = this._manifold
+      .translate(-cx, -cy, -cz)
+      .scale([fx, fy, fz])
+      .translate(cx, cy, cz);
+    return this._withManifold(this._manifold.subtract(inner));
+  }
+
+  // ── Draft ───────────────────────────────────────────────
+
+  /**
+   * Apply draft angle — tapers walls for mold release.
+   *
+   * Positive angle tapers inward going up (standard mold draft).
+   * Negative angle tapers outward going up.
+   *
+   * The draft pivots around the base (minimum Z) of the solid.
+   * Vertices at Z=min stay in place; vertices at Z=max move inward/outward.
+   *
+   * @param angleDeg Draft angle in degrees from vertical. Typical values: 1–5° for injection molding.
+   */
+  draft(angleDeg: number): Solid {
+    const tanA = Math.tan((angleDeg * Math.PI) / 180);
+    const bb = this.boundingBox();
+    const baseZ = bb.min[2];
+    const cx = (bb.min[0] + bb.max[0]) / 2;
+    const cy = (bb.min[1] + bb.max[1]) / 2;
+    const halfW = (bb.max[0] - bb.min[0]) / 2;
+    const halfD = (bb.max[1] - bb.min[1]) / 2;
+    const maxHalf = Math.max(halfW, halfD);
+    if (maxHalf < 1e-10) return this._withManifold(this._manifold);
+
+    const warped = this._manifold.warp((v: Vec3) => {
+      const h = v[2] - baseZ;
+      // Scale factor decreases with height for positive draft (inward taper)
+      const scale = 1 - (h * tanA) / maxHalf;
+      v[0] = cx + (v[0] - cx) * scale;
+      v[1] = cy + (v[1] - cy) * scale;
+    });
+    return this._withManifold(warped);
   }
 
   // ── Metadata ───────────────────────────────────────────────

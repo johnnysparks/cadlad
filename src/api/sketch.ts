@@ -5,8 +5,8 @@
  * a silent empty 3D solid. Validates profiles on extrude/revolve.
  */
 
-import type { Vec2 } from "../engine/types.js";
-import { extrudePolygon, revolve as revolveEngine } from "../engine/primitives.js";
+import type { Vec2, Vec3 } from "../engine/types.js";
+import { extrudePolygon, revolve as revolveEngine, sweep as sweepEngine } from "../engine/primitives.js";
 import type { Solid } from "../engine/solid.js";
 
 // ── Geometry helpers ──────────────────────────────────────────
@@ -220,6 +220,23 @@ export class Sketch {
       console.warn(`${prefix}: ${issue.message}`);
     }
     return revolveEngine(this._points, segments);
+  }
+
+  /**
+   * Sweep this sketch profile along a 3D path. Validates profile first.
+   *
+   * The profile is placed perpendicular to the path direction at each point,
+   * creating a tube-like solid.
+   *
+   * @param path Array of 3D points defining the sweep path (at least 2 points).
+   */
+  sweep(path: Vec3[]): Solid {
+    const issues = this.validate();
+    for (const issue of issues) {
+      const prefix = issue.type === "error" ? "🚫 Sketch" : "⚠️ Sketch";
+      console.warn(`${prefix}: ${issue.message}`);
+    }
+    return sweepEngine(this._points, path);
   }
 }
 
