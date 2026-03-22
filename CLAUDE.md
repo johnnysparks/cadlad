@@ -93,9 +93,14 @@ The studio exposes `window.__cadlad` for automation:
 
 ## Rendering
 
-- 3-point lighting: key + fill + rim + top fill for 3D readability
-- Auto-color: bodies without `.color()` get unique muted hues (steel blue, tan, sage, red, lavender, olive, teal, mauve) instead of uniform gray
+- **Edge strokes on all models** — EdgesGeometry at 30° threshold. Edge color adapts: 50% darker for light surfaces, 50% lighter for dark surfaces. Applied in both studio viewport and gallery.
+- **3-point lighting**: key + fill + rim + top fill for 3D readability
+- **Auto-color**: bodies without `.color()` get unique muted hues instead of uniform gray
+- **High-contrast mode**: gallery toggle — light gray surfaces, dark edge strokes, white background. Best for evaluating geometry.
+- **Color survives transforms**: `_derive()` carries `_color` and `_name` through all Solid operations (translate, rotate, scale, union, subtract, etc.)
+- **Z-up → Y-up**: gallery rotates mesh group -90° on X. Studio viewport uses Manifold's Z-up directly.
 - Gallery auto-reads all .forge.js files from examples/ — add a file and it appears
+- Models can return `{ model, camera: [x,y,z] }` to control their gallery viewing angle
 
 ## Git workflow
 
