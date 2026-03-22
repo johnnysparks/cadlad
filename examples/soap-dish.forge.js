@@ -24,4 +24,4 @@ for (let i = 1; i <= slotCount; i++) {
   dish = dish.subtract(slot);
 }
 
-return dish.named("Soap Dish");
+return dish.named("Soap Dish").color("#e8e0d0");

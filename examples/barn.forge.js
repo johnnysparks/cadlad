@@ -39,6 +39,6 @@ const barn = walls
   .union(leftRoof)
   .union(rightRoof)
   .union(doorPanel)
-  .named("Barn");
+  .named("Barn").color("#c04040");
 
 return barn;

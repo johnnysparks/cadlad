@@ -52,6 +52,6 @@ const mower = deck
   .union(w1).union(w2).union(w3).union(w4)
   .union(leftBar).union(rightBar)
   .union(grip)
-  .named("Lawn Mower");
+  .named("Lawn Mower").color("#2a8c2a");
 
 return mower;

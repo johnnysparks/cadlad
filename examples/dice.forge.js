@@ -49,4 +49,4 @@ die = die.subtract(pip.translate(-s, g, g));
 die = die.subtract(pip.translate(-s, -g, -g));
 die = die.subtract(pip.translate(-s, g, -g));
 
-return die.named("Die");
+return die.named("Die").color("#f5f0e8");

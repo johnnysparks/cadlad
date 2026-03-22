@@ -48,6 +48,6 @@ const console = body
   .union(btnA).union(btnB).union(btnX).union(btnY)
   .union(leftGrip).union(rightGrip)
   .union(lShoulder).union(rShoulder)
-  .named("Game Console");
+  .named("Game Console").color("#2a2a3a");
 
 return console;

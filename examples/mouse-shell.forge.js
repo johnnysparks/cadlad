@@ -31,6 +31,6 @@ const shell = outerBody
   .subtract(innerBody)
   .subtract(split)
   .subtract(scrollSlot)
-  .named("Mouse Shell");
+  .named("Mouse Shell").color("#333333");
 
 return shell;

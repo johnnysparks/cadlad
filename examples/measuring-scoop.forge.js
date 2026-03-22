@@ -32,6 +32,6 @@ const handle = box(handleL, handleW, handleT)
   .translate(outerR + handleL / 2 - 2, 0, -bowlDepth / 2 + handleT / 2)
   .color("#ccc5b8");
 
-const scoop = bowl.union(handle).named("Measuring Scoop");
+const scoop = bowl.union(handle).named("Measuring Scoop").color("#ddd8cc");
 
 return scoop;
