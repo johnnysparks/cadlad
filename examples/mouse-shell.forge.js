@@ -33,4 +33,4 @@ const shell = outerBody
   .subtract(scrollSlot)
   .named("Mouse Shell").color("#333333");
 
-return shell;
+return { model: shell, camera: [40, 50, -50] };

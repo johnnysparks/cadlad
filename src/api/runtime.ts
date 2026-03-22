@@ -38,6 +38,7 @@ export async function evaluateModel(
   const bodies: Body[] = [];
   const collectedParams: ParamDef[] = [];
   let hints: Hint[] = [];
+  let camera: [number, number, number] | undefined;
 
   try {
     // Build a function that receives the API as arguments
@@ -62,12 +63,22 @@ export async function evaluateModel(
     collectedParams.push(..._getParamDefs());
 
     // Process return value
-    if (result instanceof Solid) {
-      bodies.push(result.toBody());
-    } else if (result instanceof Assembly) {
-      bodies.push(...result.toBodies());
-    } else if (Array.isArray(result)) {
-      for (const item of result) {
+    // Supports: Solid, Assembly, Array, or { model, camera } metadata object
+    let model = result;
+    if (result && typeof result === "object" && !(result instanceof Solid) && !(result instanceof Assembly) && !Array.isArray(result)) {
+      // Metadata object: { model: Solid|Assembly, camera: [x,y,z] }
+      if (result.model) model = result.model;
+      if (Array.isArray(result.camera) && result.camera.length === 3) {
+        camera = result.camera as [number, number, number];
+      }
+    }
+
+    if (model instanceof Solid) {
+      bodies.push(model.toBody());
+    } else if (model instanceof Assembly) {
+      bodies.push(...model.toBodies());
+    } else if (Array.isArray(model)) {
+      for (const item of model) {
         if (item instanceof Solid) {
           bodies.push(item.toBody());
         } else if (item instanceof Assembly) {
@@ -98,5 +109,5 @@ export async function evaluateModel(
   };
   hints = collectHints(hintCtx);
 
-  return { bodies, params: collectedParams, errors, hints };
+  return { bodies, params: collectedParams, errors, hints, camera };
 }

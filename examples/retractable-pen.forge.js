@@ -43,4 +43,4 @@ const pen = barrel
   .union(clipCurl)
   .named("Retractable Pen").color("#1a3366");
 
-return pen;
+return { model: pen, camera: [50, 60, 80] };

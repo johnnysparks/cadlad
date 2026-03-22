@@ -43,4 +43,4 @@ const barn = walls
   .union(doorPanel)
   .named("Barn").color("#c04040");
 
-return barn;
+return { model: barn, camera: [120, 80, -100] };

@@ -47,6 +47,7 @@ function renderToImage(
   bodies: Body[],
   width: number,
   height: number,
+  cameraHint?: [number, number, number],
 ): string {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
   renderer.setSize(width, height);
@@ -89,14 +90,25 @@ function renderToImage(
   scene.add(group);
 
   // Fit camera
-  const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 10000);
+  const camera = new THREE.PerspectiveCamera(35, width / height, 0.1, 10000);
   const bbox = new THREE.Box3().setFromObject(group);
   if (!bbox.isEmpty()) {
     const center = bbox.getCenter(new THREE.Vector3());
     const size = bbox.getSize(new THREE.Vector3());
-    const dist = Math.max(size.x, size.y, size.z) * 2;
-    // Camera from front-left, above — shows the "front" face (-Y) and top
-    camera.position.set(center.x - dist * 0.5, center.y + dist * 0.6, center.z + dist * 0.6);
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const dist = maxDim * 2.8;
+
+    if (cameraHint) {
+      // Model specifies its own camera position
+      camera.position.set(cameraHint[0], cameraHint[1], cameraHint[2]);
+    } else {
+      // Default "product shot" — front-right, slightly above
+      camera.position.set(
+        center.x + dist * 0.55,
+        center.y + dist * 0.4,
+        center.z - dist * 0.5,
+      );
+    }
     camera.lookAt(center);
   }
 
@@ -149,12 +161,16 @@ function makeInteractive(container: HTMLElement, bodies: Body[]) {
   const h = container.clientHeight;
   renderer.setSize(w, h);
 
-  const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 10000);
+  const camera = new THREE.PerspectiveCamera(35, w / h, 0.1, 10000);
   const bbox = new THREE.Box3().setFromObject(group);
   const center = bbox.getCenter(new THREE.Vector3());
   const size = bbox.getSize(new THREE.Vector3());
-  const dist = Math.max(size.x, size.y, size.z) * 2;
-  camera.position.set(center.x - dist * 0.5, center.y + dist * 0.6, center.z + dist * 0.6);
+  const dist = Math.max(size.x, size.y, size.z) * 2.8;
+  camera.position.set(
+    center.x + dist * 0.55,
+    center.y + dist * 0.4,
+    center.z - dist * 0.5,
+  );
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.copy(center);
@@ -221,7 +237,7 @@ async function renderGallery() {
       if (result.bodies.length > 0) {
         const w = 480;
         const h = 360;
-        const dataUrl = renderToImage(result.bodies, w, h);
+        const dataUrl = renderToImage(result.bodies, w, h, result.camera);
         const img = document.createElement("img");
         img.src = dataUrl;
         img.style.cssText = "width:100%;height:100%;object-fit:cover;cursor:pointer";

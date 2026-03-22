@@ -46,6 +46,8 @@ export interface ModelResult {
   params: ParamDef[];
   errors: string[];
   hints: Hint[];
+  /** Optional camera position hint from the model [x, y, z] */
+  camera?: Vec3;
 }
 
 /** Bounding box */
