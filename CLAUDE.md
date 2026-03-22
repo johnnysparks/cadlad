@@ -72,6 +72,7 @@ Browsers limit to ~8-16 simultaneous WebGL contexts. The gallery uses disposable
 ## Screenshot workflow
 
 Puppeteer is NOT a project dependency — it's found from the environment (project node_modules, /tmp installs, global, npx cache).
+Before taking screenshots, **sniff the runtime first** (which browser binary exists, whether shared libs are present, and whether Puppeteer is resolvable). Do this before installing anything or skipping validation.
 
 ```bash
 # Render a model from all 7 angles

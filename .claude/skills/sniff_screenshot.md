@@ -1,6 +1,18 @@
 # Screenshot Skill — Environment Sniff Results & Instructions
 
 > **Tested and confirmed working** on macOS (Darwin 24.6.0, arm64) — 2026-03-21
+>
+> **Updated with Linux container sniff notes** (this Codex runtime: Ubuntu 24.04.3, x86_64) — 2026-03-22
+
+## First Rule (Do This Every Time)
+
+For screenshot validation in this repo, do **not** immediately install browser libraries and do **not** skip screenshots by default.
+
+1. **Sniff first**: detect what browser tooling is already available in the current runtime.
+2. **Use existing tools/cache** where possible.
+3. Only then decide whether additional setup is needed.
+
+This mirrors `scripts/snapshot-test.mjs`, which searches environment locations for Puppeteer before requiring installs.
 
 ## Environment Summary
 
@@ -13,6 +25,73 @@
 | Puppeteer | YES | Install to temp dir or project devDep. Chromium cached at `~/.cache/puppeteer/` |
 | Playwright Chromium | cached | `~/Library/Caches/ms-playwright/chromium-1208/` |
 | macOS screencapture | YES | `/usr/sbin/screencapture` (needs display — not useful for headless) |
+
+## Linux Codex Runtime Notes (Detected 2026-03-22)
+
+Environment observed in this container:
+
+| Capability | Status | Path / Notes |
+|---|---|---|
+| OS | Ubuntu 24.04.3 LTS | `x86_64`, kernel `6.12.47` |
+| Node.js | v20.19.6 | `node` |
+| npm | 11.4.2 | `npm` |
+| System Chrome in PATH | NO | `which google-chrome/chromium/chromium-browser` returned nothing |
+| Puppeteer CLI via npx | YES | `npx --yes puppeteer --version` returned `24.40.0` |
+| Puppeteer browser cache | YES | `~/.cache/puppeteer/chrome/linux-146.0.7680.153/...` |
+| Cached Chrome launches | NOT YET | fails with missing `libatk-1.0.so.0` shared library |
+| Display server (`DISPLAY`) | unset | headless workflow required |
+
+### Practical implication for this runtime
+
+- You can often resolve Puppeteer from npx/cache, but browser launch may still fail until missing Linux shared libs are present.
+- If screenshots fail here, check shared library errors first (for example `libatk-1.0.so.0`) before assuming Puppeteer itself is missing.
+
+## Quick sniff commands (copy/paste)
+
+Run these before trying to capture screenshots:
+
+```bash
+uname -a
+cat /etc/os-release
+node -v && npm -v
+which google-chrome || which chromium || which chromium-browser || true
+node -e "try{console.log(require.resolve('puppeteer'))}catch{console.log('puppeteer not in project deps')}"
+npx --yes puppeteer --version
+find ~/.cache/puppeteer -maxdepth 4 -type f -name chrome 2>/dev/null
+```
+
+Optional launch check using cached Chrome:
+
+```bash
+CHROME_BIN="$HOME/.cache/puppeteer/chrome/linux-146.0.7680.153/chrome-linux64/chrome"
+"$CHROME_BIN" --headless=new --no-sandbox --disable-gpu \
+  --screenshot=/tmp/chrome-test.png --window-size=800,600 about:blank
+```
+
+If this reports missing shared libs, install the required packages.
+
+### Minimum direct installs (validated in this Ubuntu 24.04 container)
+
+These were the missing shared libraries from `ldd chrome` mapped to apt packages:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  libatk1.0-0 libatk-bridge2.0-0 libcups2t64 libxkbcommon0 \
+  libatspi2.0-0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+  libgbm1 libasound2t64
+```
+
+Then verify:
+
+```bash
+CHROME_BIN="$HOME/.cache/puppeteer/chrome/linux-146.0.7680.153/chrome-linux64/chrome"
+ldd "$CHROME_BIN" | rg "not found" || echo "no missing libs"
+"$CHROME_BIN" --headless=new --no-sandbox --disable-gpu \
+  --screenshot=/tmp/chrome-headless-test.png --window-size=800,600 about:blank
+```
+
+Expected: `no missing libs` and `... bytes written to file /tmp/chrome-headless-test.png`.
 
 ## Key Findings
 
