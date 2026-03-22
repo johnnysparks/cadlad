@@ -68,8 +68,9 @@ function renderToImage(
   // Grid
   scene.add(new THREE.GridHelper(500, 50, 0x313244, 0x252536));
 
-  // Add bodies
+  // Add bodies — rotate Z-up (Manifold) to Y-up (Three.js)
   const group = new THREE.Group();
+  group.rotation.x = -Math.PI / 2;
   for (const body of bodies) {
     const geom = new THREE.BufferGeometry();
     geom.setAttribute("position", new THREE.BufferAttribute(body.mesh.positions, 3));
@@ -99,14 +100,13 @@ function renderToImage(
     const dist = maxDim * 2.8;
 
     if (cameraHint) {
-      // Model specifies its own camera position
       camera.position.set(cameraHint[0], cameraHint[1], cameraHint[2]);
     } else {
-      // Default "product shot" — front-right, slightly above
+      // 3/4 view: front-right, above (Y is now up after rotation)
       camera.position.set(
-        center.x + dist * 0.55,
-        center.y + dist * 0.4,
-        center.z - dist * 0.5,
+        center.x + dist * 0.6,
+        center.y + dist * 0.45,
+        center.z + dist * 0.6,
       );
     }
     camera.lookAt(center);
@@ -143,6 +143,7 @@ function makeInteractive(container: HTMLElement, bodies: Body[]) {
   scene.add(new THREE.GridHelper(500, 50, 0x313244, 0x252536));
 
   const group = new THREE.Group();
+  group.rotation.x = -Math.PI / 2; // Z-up → Y-up
   for (const body of bodies) {
     const geom = new THREE.BufferGeometry();
     geom.setAttribute("position", new THREE.BufferAttribute(body.mesh.positions, 3));
@@ -167,9 +168,9 @@ function makeInteractive(container: HTMLElement, bodies: Body[]) {
   const size = bbox.getSize(new THREE.Vector3());
   const dist = Math.max(size.x, size.y, size.z) * 2.8;
   camera.position.set(
-    center.x + dist * 0.55,
-    center.y + dist * 0.4,
-    center.z - dist * 0.5,
+    center.x + dist * 0.6,
+    center.y + dist * 0.45,
+    center.z + dist * 0.6,
   );
 
   const controls = new OrbitControls(camera, renderer.domElement);
