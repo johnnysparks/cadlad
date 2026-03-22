@@ -1,4 +1,20 @@
 // Push lawn mower — deck, wheels, handle
+//
+// WHAT WORKED:
+//   - Wheels: cylinder().rotate(0,90,0) to get axle along X (out the sides)
+//   - Simple box posts for handle — straight up from the rear deck edge,
+//     no trig, no tilt. Reads clearly as a handle from every angle.
+//   - translate() with computed positions from deckZ/deckH/wheelR
+//   - Engine bump on top adds visual interest and reads as "motorized"
+//
+// WHAT DIDN'T:
+//   - Tilted cylinder handles with sin/cos position math — the bars
+//     detached from the deck and floated in space. Trig compounds errors.
+//   - rotate(90,0,0) for wheels — that aligns axle along Y (front-to-back),
+//     not X (side-to-side). rotate(0,90,0) is correct for side-mounted wheels.
+//   - assembly().add() with all [0,0,0] positions — parts pre-translated
+//     in model space made assembly positioning meaningless. Either use
+//     assembly positions OR pre-translate, not both.
 const deckW = param("Deck Width", 50, { min: 35, max: 70, unit: "mm" });
 const deckD = param("Deck Depth", 40, { min: 30, max: 55, unit: "mm" });
 const deckH = param("Deck Height", 8, { min: 5, max: 12, unit: "mm" });

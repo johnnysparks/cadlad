@@ -1,4 +1,21 @@
 // Red barn with gable roof and sliding door
+//
+// WHAT WORKED:
+//   - Sketch profile for gable end → extrude → rotate(90,0,0) for depth.
+//     This is THE pattern for any prismatic shape that isn't axis-aligned.
+//   - Building from Z=0 up with .translate(0, 0, height/2) for ground contact
+//   - Oversize door cut (10mm deep) to punch cleanly through the wall
+//   - Door panel as a separate thin box slightly proud of the wall face
+//
+// WHAT DIDN'T:
+//   - Rotating boxes to make angled roof panels — the pivot is at the box
+//     center, not the roof ridge, so the geometry flies off to wrong positions.
+//     Stacked narrowing boxes (stepped gable) also looked bad.
+//   - Sketch with clockwise winding — Manifold silently produces empty geometry.
+//     Now auto-corrected in the API, but beware if using CrossSection directly.
+//   - Sketch extrude without accounting for the extrusion origin. After extrude,
+//     the shape sits from Z=0 to Z=depth. The rotate(90,0,0) and translate
+//     must compensate for this.
 const barnW = param("Width", 80, { min: 50, max: 120, unit: "mm" });
 const barnD = param("Depth", 60, { min: 40, max: 100, unit: "mm" });
 const wallH = param("Wall Height", 40, { min: 25, max: 60, unit: "mm" });

@@ -1,4 +1,12 @@
 // Cable management clip — C-shape with mounting tab
+//
+// WHAT WORKED:
+//   - C-shape via: outer cylinder - inner cylinder - gap box. Classic pattern
+//     for clips, clamps, rings, and any partial-circle shape.
+//   - Mounting tab as a box unioned at the bottom, screw hole subtracted through.
+//   - Parameters driven from the cable diameter — everything scales from that.
+//
+// KEY PATTERN: partial circles via cylinder subtract + gap box subtract.
 const cableD = param("Cable Diameter", 6, { min: 3, max: 12, unit: "mm" });
 const clipT = param("Clip Thickness", 2, { min: 1.5, max: 4, unit: "mm" });
 const clipW = param("Clip Width", 10, { min: 6, max: 20, unit: "mm" });

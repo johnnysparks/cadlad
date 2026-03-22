@@ -1,4 +1,14 @@
 // Simple wooden chair — legs, seat, and backrest
+//
+// WHAT WORKED:
+//   - Building from Z=0 up: legs at legH/2, seat at legH, back above seat
+//   - Four legs via offset pattern: ±(seatW/2 - legW/2) for corner placement
+//
+// WHAT DIDN'T:
+//   - .color() at end of .union() chain overrides all part colors to one.
+//     For multi-color furniture, use assembly() instead.
+//   - Real chairs have back legs that extend up to support the backrest.
+//     This simplified version has a floating backrest unioned to the seat.
 const seatW = param("Seat Width", 40, { min: 30, max: 60, unit: "mm" });
 const seatD = param("Seat Depth", 40, { min: 30, max: 60, unit: "mm" });
 const seatT = param("Seat Thickness", 3, { min: 2, max: 6, unit: "mm" });

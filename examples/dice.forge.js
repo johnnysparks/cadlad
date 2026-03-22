@@ -1,4 +1,18 @@
 // Six-sided die with pip indentations
+//
+// WHAT WORKED:
+//   - sphere() subtract for pips — gives smooth rounded indentations
+//   - box() for the body — simple, clean, no winding issues
+//   - let die = body; die = die.subtract(...) pattern for many cuts
+//
+// WHAT DIDN'T:
+//   - roundedRect(size, size, r, size) for body — NOT a rounded cube,
+//     it's a 2D rounded square extruded. Corners only round in XY.
+//     Combined with pip subtracts at edges, it produced mangled geometry.
+//   - cylinder() for pips — sharp-edged holes look wrong on a die,
+//     sphere() reads much better
+//   - Putting all 21 subtracts on one line chain — unreadable.
+//     Imperative let/reassign pattern is clearer for repetitive ops.
 const size = param("Size", 16, { min: 10, max: 30, unit: "mm" });
 const pipR = param("Pip Radius", 1.2, { min: 0.5, max: 2.5, unit: "mm" });
 const pipDepth = param("Pip Depth", 0.8, { min: 0.3, max: 1.5, unit: "mm" });
