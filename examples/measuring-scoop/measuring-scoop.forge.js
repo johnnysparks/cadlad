@@ -63,33 +63,27 @@ const handleSideProfile = Sketch.begin(handleStartX, handleBotZ)
   .lineTo(handleStartX, handleBotZ)      // back to start
   .close();
 
-// Extrude in Y direction for the width, then center
-const handleRaw = handleSideProfile.extrude(handleW)
-  .translate(0, 0, -handleW / 2)   // center on Y after extrude (extrude goes +Z)
-  .rotate(90, 0, 0);               // rotate so Z-extrusion becomes Y-width
+// Extrude along Y direction directly — no manual rotate needed
+const handleRaw = handleSideProfile.extrudeAlong([0, 1, 0], handleW)
+  .translate(0, -handleW / 2, 0);        // center on Y
 
 // Cut away the part inside the bowl cavity so no artifact shows inside
 const bowlCarve = cylinder(bowlDepth * 3, innerR - 0.5)
   .translate(0, 0, bowlDepth / 2);
 const handle = handleRaw.subtract(bowlCarve);
 
-// Taper the width: narrower at the tip, wider at the bowl
+// Taper the width: use taperedBox for a clean narrowing from bowl to tip
 const tipW = handleW * 0.65;
-const taperAmount = (handleW - tipW) / 2;
-const taperAngle = Math.atan2(taperAmount, handleL) * 180 / Math.PI;
-
-// Cut wedges from +Y and -Y sides
-const wedge = box(handleL * 1.5, handleW, handleT * 3);
-const topWedge = wedge
-  .rotate(0, 0, taperAngle)
-  .translate(handleEndX - handleL * 0.2, handleW * 0.75, bowlDepth - handleT / 2);
-const botWedge = wedge
-  .rotate(0, 0, -taperAngle)
-  .translate(handleEndX - handleL * 0.2, -handleW * 0.75, bowlDepth - handleT / 2);
+const taperCutLen = handleL * 1.2;
+const taperCutW = handleW - tipW;
+const topTaper = taperedBox(taperCutLen, 0.01, handleT * 3, taperCutW, handleT * 3)
+  .translate(handleStartX + taperCutLen / 2, handleW / 2, bowlDepth - handleT / 2);
+const botTaper = taperedBox(taperCutLen, 0.01, handleT * 3, taperCutW, handleT * 3)
+  .translate(handleStartX + taperCutLen / 2, -handleW / 2, bowlDepth - handleT / 2);
 
 const handleTapered = handle
-  .subtract(topWedge)
-  .subtract(botWedge);
+  .subtract(topTaper)
+  .subtract(botTaper);
 
 // ── Assembly ─────────────────────────────────────────────────────────
 return {

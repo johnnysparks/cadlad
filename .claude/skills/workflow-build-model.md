@@ -29,7 +29,7 @@ Must `return` one of: a Solid, an Assembly, an array of Solids, or `{ model, cam
 
 - `cylinder()` is vertical (along Z) by default
 - `Sketch.begin()` draws in XY, `.extrude()` pushes along +Z
-- To make a profile along Y: extrude along Z, then `.rotate(90, 0, 0)`
+- To make a profile along Y: use `.extrudeAlong([0,1,0], h)` — no manual rotation needed
 
 ## API cheat sheet
 
@@ -43,9 +43,12 @@ cylinder(height, radius)              // along Z, centered
 cylinder(height, rBottom, rTop, segs) // cone/taper
 sphere(radius)
 roundedRect(w, d, cornerR, height)    // 2D rounded rect extruded — edges along Z are SHARP
+roundedBox(w, d, h, radius)           // box with ALL edges/corners rounded
+taperedBox(h, w1, d1, w2, d2)        // box tapering from (w1×d1) to (w2×d2) along Z
 
 // 2D → 3D
 Sketch.begin(x, y).lineTo(x2, y2).arcTo(x3, y3, r).close().extrude(h)
+Sketch.begin(x, y)...close().extrudeAlong([x,y,z], h)  // extrude along any direction
 Sketch.begin(x, y)...close().revolve(segments)  // spins around Y axis
 circle(r).extrude(h)                  // shorthand
 rect(w, h).extrude(depth)            // shorthand
@@ -80,8 +83,10 @@ solid.surfaceArea()
 
 1. **`.color()` after `.union()` overwrites ALL colors.** Use `assembly()` for multi-color models.
 2. **Oversize boolean cutters** by +2mm in the cutting direction. `cylinder(h + 2, r)` for through-holes.
-3. **`roundedRect` is NOT a rounded cube.** Only corners in XY are rounded — Z edges are sharp.
+3. **`roundedRect` is NOT a rounded cube.** Use `roundedBox(w, d, h, r)` for fully-rounded 3D boxes.
 4. **Polygon winding is auto-fixed** in `extrude()` and `revolve()`, but if you use `CrossSection` directly, ensure CCW.
+5. **Boolean junction artifacts.** When a handle overlaps a hollow body, subtract the inner cavity from the handle to clean interior faces.
+6. **Tapered handles.** Use `taperedBox(h, w1, d1, w2, d2)` or `sketch.extrudeAlong([1,0,0], length)` instead of hacking box subtractions.
 
 ## Design approach
 

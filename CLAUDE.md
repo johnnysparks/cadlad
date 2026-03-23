@@ -31,8 +31,8 @@ snapshots/   Visual regression test references
 ## Model files (.forge.js)
 
 - Use `param()` for slider-driven parameters with min/max/unit
-- Primitives: `box()`, `cylinder()`, `sphere()`, `roundedRect()`
-- 2D → 3D: `Sketch.begin()`, `rect()`, `circle()` → `.extrude()` / `.revolve()` / `.sweep(path)`
+- Primitives: `box()`, `cylinder()`, `sphere()`, `roundedRect()`, `roundedBox()`, `taperedBox()`
+- 2D → 3D: `Sketch.begin()`, `rect()`, `circle()` → `.extrude()` / `.extrudeAlong(dir, h)` / `.revolve()` / `.sweep(path)`
 - Standalone: `sweep(profile, path)`, `loft(profiles, heights)`
 - Booleans: `.union()`, `.subtract()`, `.intersect()`
 - Edge treatment: `.fillet(subdivisions)`, `.chamfer(subdivisions)`, `.smooth(subdivisions, minSharpAngle)`
@@ -52,9 +52,12 @@ snapshots/   Visual regression test references
 | Tool | Input | Method | Contract |
 |---|---|---|---|
 | **Extrude** | 2D sketch | `sketch.extrude(height)` | Pushes profile along Z. Height > 0. Validates sketch, auto-corrects CW→CCW winding. |
+| **ExtrudeAlong** | 2D sketch + direction | `sketch.extrudeAlong([x,y,z], height)` | Pushes profile along arbitrary direction. Eliminates manual rotate after extrude. |
 | **Revolve** | 2D sketch | `sketch.revolve(segments?)` | Rotates profile around Y axis. Default 32 segments. Profile must be on positive X side. |
 | **Sweep** | 2D sketch + 3D path | `sketch.sweep(path)` or `sweep(profile, path)` | Extrudes profile along 3D path. Path ≥ 2 points, profile ≥ 3 points. Profile oriented perpendicular to path tangent. |
 | **Loft** | Multiple 2D profiles + heights | `loft(profiles, heights)` | Interpolates between ≥ 2 profiles at strictly ascending Z heights. Uses convex hull between consecutive profiles. |
+| **TaperedBox** | dimensions | `taperedBox(h, w1, d1, w2, d2)` | Box that tapers from (w1×d1) at z=0 to (w2×d2) at z=h. Uses loft internally. |
+| **RoundedBox** | dimensions + radius | `roundedBox(w, d, h, r, segs?)` | Box with ALL edges/corners uniformly rounded. Hull of 8 corner spheres. Unlike `roundedRect` which only rounds XY corners. |
 
 ### Shell
 
@@ -114,14 +117,30 @@ Manifold silently produces empty geometry from clockwise polygons. `extrudePolyg
 ### .color() after .union() overwrites everything
 `.union()` merges meshes. A `.color()` call after applies to the whole merged result, losing individual part colors. **Use `assembly()` instead of `.union()` when you need different colors on different parts.** The viewport auto-assigns distinct muted colors to assembly parts that don't have explicit colors.
 
-### Sketch extrude orientation
-`Sketch.begin()` draws in XY. `.extrude(h)` pushes along Z. To get a profile running along Y (e.g., a roof along the building's depth), extrude along Z then `.rotate(90, 0, 0)` and `.translate()` into position.
+### Sketch extrude orientation (IMPROVED — use extrudeAlong)
+`Sketch.begin()` draws in XY. `.extrude(h)` pushes along Z. To avoid manual rotate chains, use `.extrudeAlong([1,0,0], h)` to extrude along any direction. The old pattern (extrude along Z then `.rotate()`) still works, but `extrudeAlong` is cleaner for non-Z extrusions.
 
-### roundedRect is NOT a rounded cube
-`roundedRect(w, d, r, h)` creates a 2D rounded rectangle extruded to height h. The corners are only rounded in XY — edges along Z are sharp. Don't use it expecting a fully-rounded 3D box.
+### roundedRect is NOT a rounded cube — use roundedBox
+`roundedRect(w, d, r, h)` creates a 2D rounded rectangle extruded to height h. The corners are only rounded in XY — edges along Z are sharp. **Use `roundedBox(w, d, h, r)` for a fully-rounded 3D box** with all 12 edges and 8 corners uniformly rounded.
 
 ### Boolean subtract sizing
 Always oversize cutters by 1-2mm in the cutting direction to avoid coplanar face artifacts. Example: `cylinder(height + 2, radius)` for a through-hole.
+
+### Boolean junction artifacts — clean the inside
+When a handle or attachment overlaps a hollow body (bowl, shell, enclosure), the handle's interior face shows through as a visible rectangle inside the cavity. **Fix: subtract a cylinder/box matching the inner cavity from the handle** before assembling. This carves away the part of the handle that would poke through the interior wall.
+
+```js
+// Handle overlaps bowl wall → visible artifact inside bowl
+const handle = box(length, width, thickness)
+  .translate(outerR + length/2, 0, rimZ);
+
+// Clean the junction: remove the part inside the inner cavity
+const innerCarve = cylinder(height * 3, innerR - 0.5);
+const cleanHandle = handle.subtract(innerCarve);
+```
+
+### Tapered handles — use taperedBox or extrudeAlong
+For handles that taper in width/thickness, use `taperedBox(h, w1, d1, w2, d2)` instead of hacking box subtractions. For handles with a distinctive side profile (e.g., thick at one end, thin at the other), use `Sketch.begin()...close().extrudeAlong([1,0,0], length)` to draw the profile and extrude directly along the handle axis without manual rotations.
 
 ### Shell is centroid-based scaling
 `.shell(thickness)` scales from the bounding-box centroid. This produces uniform walls for convex shapes (boxes, cylinders) but may produce uneven walls on complex concave geometry. For those cases, model the inner void explicitly and use `.subtract()`.

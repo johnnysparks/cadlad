@@ -136,6 +136,84 @@ export function roundedRect(
   return extrudePolygon(pts, 1);
 }
 
+// ── Tapered Box ───────────────────────────────────────────
+
+/**
+ * Box that tapers from one cross-section to another along Z.
+ *
+ * Creates a solid that transitions from (w1 × d1) at z=0 to (w2 × d2) at z=height.
+ * Useful for handles, brackets, and any shape that narrows or widens.
+ *
+ * @param height Length of the taper along Z
+ * @param w1 Width at bottom (z=0)
+ * @param d1 Depth at bottom (z=0)
+ * @param w2 Width at top (z=height)
+ * @param d2 Depth at top (z=height)
+ */
+export function taperedBox(
+  height: number,
+  w1: number,
+  d1: number,
+  w2: number,
+  d2: number,
+): Solid {
+  const bottom: Vec2[] = [
+    [-w1 / 2, -d1 / 2], [w1 / 2, -d1 / 2],
+    [w1 / 2, d1 / 2], [-w1 / 2, d1 / 2],
+  ];
+  const top: Vec2[] = [
+    [-w2 / 2, -d2 / 2], [w2 / 2, -d2 / 2],
+    [w2 / 2, d2 / 2], [-w2 / 2, d2 / 2],
+  ];
+  return loft([bottom, top], [0, height]);
+}
+
+// ── Rounded Box ───────────────────────────────────────────
+
+/**
+ * Box with all edges and corners rounded to a uniform radius.
+ *
+ * Built as the convex hull of 8 spheres placed at the inner corners.
+ * Unlike roundedRect (which only rounds XY corners), this rounds
+ * ALL 12 edges and all 8 corners uniformly.
+ *
+ * @param width  X dimension
+ * @param depth  Y dimension
+ * @param height Z dimension
+ * @param radius Corner/edge radius (clamped to half of smallest dimension)
+ * @param segments Sphere segments for smoothness (default 16)
+ */
+export function roundedBox(
+  width: number,
+  depth: number,
+  height: number,
+  radius: number,
+  segments?: number,
+): Solid {
+  const r = Math.min(radius, width / 2, depth / 2, height / 2);
+  const n = segments ?? 16;
+  const manifold = getManifold();
+
+  // Inner box corners (offset inward by radius)
+  const hw = width / 2 - r;
+  const hd = depth / 2 - r;
+  const hh = height / 2 - r;
+
+  const corners: Vec3[] = [
+    [-hw, -hd, -hh], [hw, -hd, -hh],
+    [hw, hd, -hh],   [-hw, hd, -hh],
+    [-hw, -hd, hh],  [hw, -hd, hh],
+    [hw, hd, hh],    [-hw, hd, hh],
+  ];
+
+  // Place a sphere at each corner and hull them all
+  const spheres = corners.map(([x, y, z]) =>
+    manifold.Manifold.sphere(r, n).translate(x, y, z)
+  );
+
+  return new Solid(manifold.Manifold.hull(spheres));
+}
+
 // ── Sweep ─────────────────────────────────────────────────
 
 /**
@@ -193,7 +271,7 @@ export function sweep(profile: Vec2[], path: Vec3[]): Solid {
  * Build a column-major 4x4 rotation matrix that maps Z-axis to the given direction.
  * Returns a Mat4 (16 numbers) compatible with Manifold.transform().
  */
-function alignZToDirection(nx: number, ny: number, nz: number): [
+export function alignZToDirection(nx: number, ny: number, nz: number): [
   number, number, number, number,
   number, number, number, number,
   number, number, number, number,

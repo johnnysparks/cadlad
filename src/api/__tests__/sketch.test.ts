@@ -96,3 +96,37 @@ describe("circle", () => {
     }
   });
 });
+
+describe("extrudeAlong", () => {
+  it("extruding along +Z matches regular extrude", () => {
+    const regular = rect(10, 10).extrude(20);
+    const along = rect(10, 10).extrudeAlong([0, 0, 1], 20);
+    expect(along.volume()).toBeCloseTo(regular.volume(), 0);
+  });
+
+  it("extruding along +X produces geometry along X axis", () => {
+    const s = rect(4, 4).extrudeAlong([1, 0, 0], 20);
+    const bb = s.boundingBox();
+    // Should extend primarily along X
+    expect(bb.max[0] - bb.min[0]).toBeCloseTo(20, 0);
+    expect(s.volume()).toBeGreaterThan(0);
+  });
+
+  it("extruding along +Y produces geometry along Y axis", () => {
+    const s = rect(4, 4).extrudeAlong([0, 1, 0], 20);
+    const bb = s.boundingBox();
+    expect(bb.max[1] - bb.min[1]).toBeCloseTo(20, 0);
+    expect(s.volume()).toBeGreaterThan(0);
+  });
+
+  it("extruding along diagonal preserves volume", () => {
+    const s = rect(4, 4).extrudeAlong([1, 1, 1], 20);
+    // Volume should be the same regardless of direction
+    const expected = rect(4, 4).extrude(20).volume();
+    expect(s.volume()).toBeCloseTo(expected, 0);
+  });
+
+  it("throws on zero direction vector", () => {
+    expect(() => rect(4, 4).extrudeAlong([0, 0, 0], 10)).toThrow("zero");
+  });
+});
