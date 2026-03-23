@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { initManifold } from "../manifold-backend.js";
-import { box, cylinder, sphere, roundedRect, extrudePolygon } from "../primitives.js";
+import { box, cylinder, sphere, roundedRect, roundedBox, taperedBox, extrudePolygon } from "../primitives.js";
 
 beforeAll(async () => {
   await initManifold();
@@ -72,5 +72,63 @@ describe("extrudePolygon", () => {
     const pts: [number, number][] = [[0, 0], [0, 10], [10, 10], [10, 0]];
     const s = extrudePolygon(pts, 5);
     expect(s.volume()).toBeCloseTo(500, 0);
+  });
+});
+
+describe("roundedBox", () => {
+  it("creates geometry with positive volume", () => {
+    const s = roundedBox(20, 20, 20, 3);
+    expect(s.volume()).toBeGreaterThan(0);
+  });
+
+  it("volume is less than a sharp box (corners/edges are rounded)", () => {
+    const sharp = box(20, 20, 20).volume();
+    const rounded = roundedBox(20, 20, 20, 3).volume();
+    expect(rounded).toBeLessThan(sharp);
+    // But not drastically less — most of the volume is preserved
+    expect(rounded).toBeGreaterThan(sharp * 0.7);
+  });
+
+  it("is centered at origin", () => {
+    const bb = roundedBox(20, 30, 10, 2).boundingBox();
+    expect(bb.min[0]).toBeCloseTo(-10, 0);
+    expect(bb.max[0]).toBeCloseTo(10, 0);
+    expect(bb.min[1]).toBeCloseTo(-15, 0);
+    expect(bb.max[1]).toBeCloseTo(15, 0);
+    expect(bb.min[2]).toBeCloseTo(-5, 0);
+    expect(bb.max[2]).toBeCloseTo(5, 0);
+  });
+
+  it("clamps radius to half of smallest dimension", () => {
+    // Radius 20 is larger than 10/2=5, should clamp
+    const s = roundedBox(10, 20, 30, 20);
+    expect(s.volume()).toBeGreaterThan(0);
+  });
+});
+
+describe("taperedBox", () => {
+  it("creates geometry with positive volume", () => {
+    const s = taperedBox(10, 20, 20, 10, 10);
+    expect(s.volume()).toBeGreaterThan(0);
+  });
+
+  it("identical top and bottom approximates a box", () => {
+    const s = taperedBox(10, 20, 20, 20, 20);
+    const expected = 20 * 20 * 10;
+    // Hull-based loft is close but not exact
+    expect(s.volume()).toBeGreaterThan(expected * 0.8);
+    expect(s.volume()).toBeLessThan(expected * 1.2);
+  });
+
+  it("tapered box has less volume than full box", () => {
+    const tapered = taperedBox(10, 20, 20, 10, 10);
+    const full = 20 * 20 * 10;
+    expect(tapered.volume()).toBeLessThan(full);
+    expect(tapered.volume()).toBeGreaterThan(0);
+  });
+
+  it("has correct height", () => {
+    const bb = taperedBox(15, 20, 20, 10, 10).boundingBox();
+    expect(bb.max[2] - bb.min[2]).toBeCloseTo(15, 0);
   });
 });

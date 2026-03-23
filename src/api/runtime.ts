@@ -15,7 +15,7 @@ import type { ModelResult, Body, ParamDef, Hint } from "../engine/types.js";
 // All API symbols that get injected into model scope
 import { param } from "./params.js";
 import { Sketch, rect, circle } from "./sketch.js";
-import { box, cylinder, sphere, roundedRect, sweep, loft } from "../engine/primitives.js";
+import { box, cylinder, sphere, roundedRect, roundedBox, taperedBox, sweep, loft } from "../engine/primitives.js";
 import { assembly } from "./assembly.js";
 
 /**
@@ -44,13 +44,13 @@ export async function evaluateModel(
     // Build a function that receives the API as arguments
     const apiNames = [
       "param", "Sketch", "rect", "circle",
-      "box", "cylinder", "sphere", "roundedRect",
+      "box", "cylinder", "sphere", "roundedRect", "roundedBox", "taperedBox",
       "sweep", "loft",
       "assembly", "Solid", "Assembly",
     ];
     const apiValues = [
       param, Sketch, rect, circle,
-      box, cylinder, sphere, roundedRect,
+      box, cylinder, sphere, roundedRect, roundedBox, taperedBox,
       sweep, loft,
       assembly, Solid, Assembly,
     ];

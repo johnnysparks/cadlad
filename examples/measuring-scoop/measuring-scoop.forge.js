@@ -1,37 +1,94 @@
-// Measuring scoop — bowl with flat bottom and handle
-const bowlD = param("Bowl Diameter", 30, { min: 20, max: 50, unit: "mm" });
-const bowlDepth = param("Bowl Depth", 15, { min: 8, max: 25, unit: "mm" });
-const wallT = param("Wall Thickness", 2, { min: 1.5, max: 3, unit: "mm" });
-const handleL = param("Handle Length", 40, { min: 25, max: 60, unit: "mm" });
-const handleW = param("Handle Width", 12, { min: 8, max: 18, unit: "mm" });
-const handleT = param("Handle Thickness", 3, { min: 2, max: 5, unit: "mm" });
+// Measuring Scoop — cup-shaped bowl with tapered handle
+//
+// A kitchen measuring scoop: round cup with flat bottom for stability,
+// tapered handle attached at the rim. Revolve for the bowl, simple
+// tapered box for the handle.
 
-// Bowl — hemisphere via sphere subtract
+const bowlD     = param("Bowl Diameter", 40, { min: 25, max: 60, unit: "mm" });
+const bowlDepth = param("Bowl Depth", 22, { min: 12, max: 35, unit: "mm" });
+const wallT     = param("Wall Thickness", 1.8, { min: 1.2, max: 3, unit: "mm" });
+const handleL   = param("Handle Length", 55, { min: 30, max: 80, unit: "mm" });
+const handleW   = param("Handle Width", 14, { min: 8, max: 20, unit: "mm" });
+const handleT   = param("Handle Thickness", 4, { min: 2.5, max: 6, unit: "mm" });
+
 const outerR = bowlD / 2;
 const innerR = outerR - wallT;
+const flatR  = outerR * 0.4;
 
-const outerSphere = sphere(outerR);
-const innerSphere = sphere(innerR);
+// ── Bowl (revolved profile) ──────────────────────────────────────────
+const outerProfile = Sketch.begin(0, 0)
+  .lineTo(flatR, 0)
+  .lineTo(outerR * 0.7, bowlDepth * 0.12)
+  .lineTo(outerR * 0.92, bowlDepth * 0.45)
+  .lineTo(outerR, bowlDepth * 0.8)
+  .lineTo(outerR, bowlDepth)
+  .lineTo(0, bowlDepth)
+  .lineTo(0, 0)
+  .close();
 
-// Cut the top half off to make a bowl
-const topCut = box(bowlD + 2, bowlD + 2, bowlD)
-  .translate(0, 0, bowlD / 2);
+const outerBowl = outerProfile.revolve(48);
 
-// Flat bottom
-const bottomCut = box(bowlD + 2, bowlD + 2, bowlD)
-  .translate(0, 0, -bowlD / 2 - bowlDepth + outerR);
+const innerFlatR = Math.max(flatR - wallT, 1);
+const innerTop   = bowlDepth - wallT;
+const innerProfile = Sketch.begin(0, wallT)
+  .lineTo(innerFlatR, wallT)
+  .lineTo(innerR * 0.7, wallT + innerTop * 0.12)
+  .lineTo(innerR * 0.92, wallT + innerTop * 0.45)
+  .lineTo(innerR, wallT + innerTop * 0.8)
+  .lineTo(innerR, bowlDepth + 2)
+  .lineTo(0, bowlDepth + 2)
+  .lineTo(0, wallT)
+  .close();
 
-const bowl = outerSphere
-  .subtract(innerSphere)
-  .subtract(topCut)
-  .subtract(bottomCut)
-  .color("#ddd8cc");
+const innerCavity = innerProfile.revolve(48);
+const bowl = outerBowl.subtract(innerCavity);
 
-// Handle
-const handle = box(handleL, handleW, handleT)
-  .translate(outerR + handleL / 2 - 2, 0, -bowlDepth / 2 + handleT / 2)
-  .color("#ccc5b8");
+// ── Handle ───────────────────────────────────────────────────────────
+// Starts at the bowl outer wall and extends along +X.
+// Side profile: sketch in XZ showing the taper from thick (bowl end)
+// to thin (grip end), positioned at rim height.
 
-const scoop = bowl.union(handle).named("Measuring Scoop").color("#ddd8cc");
+const handleStartX = outerR - 2;  // overlap slightly into bowl wall
+const handleEndX   = handleStartX + handleL;
+const handleTopZ   = bowlDepth;
+const handleBotZ   = bowlDepth - handleT;
+const tipT         = handleT * 0.6;
+const tipBotZ      = bowlDepth - tipT;
 
-return scoop;
+// Side profile (XZ plane) — viewed from the side
+const handleSideProfile = Sketch.begin(handleStartX, handleBotZ)
+  .lineTo(handleEndX, tipBotZ)           // bottom edge tapers up
+  .lineTo(handleEndX, handleTopZ)        // tip top
+  .lineTo(handleStartX, handleTopZ)      // junction top (at rim)
+  .lineTo(handleStartX, handleBotZ)      // back to start
+  .close();
+
+// Extrude along Y direction directly — no manual rotate needed
+const handleRaw = handleSideProfile.extrudeAlong([0, 1, 0], handleW)
+  .translate(0, -handleW / 2, 0);        // center on Y
+
+// Cut away the part inside the bowl cavity so no artifact shows inside
+const bowlCarve = cylinder(bowlDepth * 3, innerR - 0.5)
+  .translate(0, 0, bowlDepth / 2);
+const handle = handleRaw.subtract(bowlCarve);
+
+// Taper the width: use taperedBox for a clean narrowing from bowl to tip
+const tipW = handleW * 0.65;
+const taperCutLen = handleL * 1.2;
+const taperCutW = handleW - tipW;
+const topTaper = taperedBox(taperCutLen, 0.01, handleT * 3, taperCutW, handleT * 3)
+  .translate(handleStartX + taperCutLen / 2, handleW / 2, bowlDepth - handleT / 2);
+const botTaper = taperedBox(taperCutLen, 0.01, handleT * 3, taperCutW, handleT * 3)
+  .translate(handleStartX + taperCutLen / 2, -handleW / 2, bowlDepth - handleT / 2);
+
+const handleTapered = handle
+  .subtract(topTaper)
+  .subtract(botTaper);
+
+// ── Assembly ─────────────────────────────────────────────────────────
+return {
+  model: assembly("Measuring Scoop")
+    .add("Bowl", bowl.color("#e8e0d0"))
+    .add("Handle", handleTapered.color("#d4c9b5")),
+  camera: [60, -40, 50]
+};

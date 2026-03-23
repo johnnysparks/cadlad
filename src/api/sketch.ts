@@ -6,8 +6,8 @@
  */
 
 import type { Vec2, Vec3 } from "../engine/types.js";
-import { extrudePolygon, revolve as revolveEngine, sweep as sweepEngine } from "../engine/primitives.js";
-import type { Solid } from "../engine/solid.js";
+import { extrudePolygon, revolve as revolveEngine, sweep as sweepEngine, alignZToDirection } from "../engine/primitives.js";
+import { Solid } from "../engine/solid.js";
 
 // ── Geometry helpers ──────────────────────────────────────────
 
@@ -237,6 +237,44 @@ export class Sketch {
       console.warn(`${prefix}: ${issue.message}`);
     }
     return sweepEngine(this._points, path);
+  }
+
+  /**
+   * Extrude this sketch along an arbitrary direction vector.
+   *
+   * Eliminates the need to extrude along Z then manually rotate into position.
+   * The profile is drawn in XY as usual, then the extrusion follows the given
+   * direction instead of defaulting to +Z.
+   *
+   * @param direction Unit-ish direction vector [x, y, z] for the extrusion axis.
+   * @param height    Length of extrusion along that direction.
+   */
+  extrudeAlong(direction: Vec3, height: number): Solid {
+    const issues = this.validate();
+    for (const issue of issues) {
+      const prefix = issue.type === "error" ? "🚫 Sketch" : "⚠️ Sketch";
+      console.warn(`${prefix}: ${issue.message}`);
+    }
+
+    // Extrude along Z first
+    const base = extrudePolygon(this._points, height);
+
+    // Normalize the direction
+    const [dx, dy, dz] = direction;
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len < 1e-10) {
+      throw new Error("extrudeAlong: direction vector must not be zero");
+    }
+    const nx = dx / len, ny = dy / len, nz = dz / len;
+
+    // If direction is already +Z, skip rotation
+    if (Math.abs(nx) < 1e-6 && Math.abs(ny) < 1e-6 && nz > 0) {
+      return base;
+    }
+
+    // Build rotation matrix to align Z with the target direction
+    const mat = alignZToDirection(nx, ny, nz);
+    return new Solid(base._manifold.transform(mat));
   }
 }
 
