@@ -93,16 +93,34 @@ async function main() {
   await mkdir(REF_DIR, { recursive: true });
   await mkdir(CUR_DIR, { recursive: true });
 
-  const files = (await readdir(EXAMPLES_DIR))
-    .filter((f) => f.endsWith(".forge.js"))
-    .sort();
+  // Discover examples: each subfolder contains a {name}.forge.js file
+  const entries = await readdir(EXAMPLES_DIR, { withFileTypes: true });
+  const files = [];
+
+  // Folder-based examples (new layout: examples/{name}/{name}.forge.js)
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      const dirFiles = await readdir(join(EXAMPLES_DIR, entry.name));
+      const forge = dirFiles.find((f) => f.endsWith(".forge.js"));
+      if (forge) files.push(join(entry.name, forge));
+    }
+  }
+
+  // Fallback: flat .forge.js files in root (transitional compatibility)
+  for (const entry of entries) {
+    if (!entry.isDirectory() && entry.name.endsWith(".forge.js")) {
+      files.push(entry.name);
+    }
+  }
+
+  files.sort();
 
   if (files.length === 0) {
     console.error("No .forge.js files found in", EXAMPLES_DIR);
     process.exit(1);
   }
 
-  console.log(`Found ${files.length} examples: ${files.join(", ")}`);
+  console.log(`Found ${files.length} examples: ${files.map(f => basename(f, ".forge.js")).join(", ")}`);
 
   const puppeteer = await loadPuppeteer();
   const launch = puppeteer.default?.launch ? puppeteer.default : puppeteer;

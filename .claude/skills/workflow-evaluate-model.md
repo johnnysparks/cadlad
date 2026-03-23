@@ -33,7 +33,7 @@ Quick path if Puppeteer is already installed:
 
 ```bash
 # Render one model from 7 angles
-node /tmp/cadlad_sniff/render.mjs examples/mymodel.forge.js /tmp/screenshots
+node /tmp/cadlad_sniff/render.mjs examples/mymodel/mymodel.forge.js /tmp/screenshots
 
 # Snapshot-test all examples against references
 node scripts/snapshot-test.mjs --url http://localhost:5173

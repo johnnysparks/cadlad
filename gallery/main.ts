@@ -23,7 +23,7 @@ interface Example {
 }
 
 // Vite glob import — reads all .forge.js files as raw strings at build time
-const exampleModules = import.meta.glob("../examples/*.forge.js", {
+const exampleModules = import.meta.glob("../examples/*/*.forge.js", {
   query: "?raw",
   import: "default",
   eager: true,
