@@ -12,4 +12,4 @@ const asm = assembly("Lamp Post")
   .add("pole", pole, [0, 0, 3 + poleH / 2])
   .add("top", topSphere, [0, 0, 3 + poleH + poleR * 1.8]);
 
-return asm.toSolid();
+return asm;

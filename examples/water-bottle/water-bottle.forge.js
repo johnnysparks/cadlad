@@ -39,16 +39,19 @@ const threadInner = cylinder(2, neckR - 0.5)
   .translate(0, 0, bodyH / 2 + neckH * 0.6);
 const threadRing = thread.subtract(threadInner);
 
-// Cap
+// Cap (separate part — sits above neck with gap)
 const cap = cylinder(capH, neckR + 1.5)
   .translate(0, 0, bodyH / 2 + neckH + capH / 2 + 1)
   .color("#dd5555");
 
-const bottle = body
+const bottleBody = body
   .union(bottomCap)
   .union(neck)
   .union(threadRing)
-  .union(cap)
-  .named("Water Bottle").color("#88bbdd");
+  .named("Bottle Body");
+
+const bottle = assembly("Water Bottle")
+  .add("body", bottleBody)
+  .add("cap", cap);
 
 return { model: bottle, camera: [60, 80, 80] };

@@ -219,6 +219,18 @@ export class Solid {
     return this._manifold.surfaceArea();
   }
 
+  // ── Connectivity ─────────────────────────────────────────────
+
+  /**
+   * Return the number of disconnected solid components in this mesh.
+   * A single contiguous solid returns 1. Two floating parts returns 2, etc.
+   * Internal voids (from shell/subtract) have negative volume and are not counted.
+   */
+  numComponents(): number {
+    const parts = this._manifold.decompose();
+    return parts.filter(p => p.volume() > 0).length;
+  }
+
   // ── Export ─────────────────────────────────────────────────
 
   /** Extract a renderable triangle mesh. */

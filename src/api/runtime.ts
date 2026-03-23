@@ -76,12 +76,28 @@ export async function evaluateModel(
     }
 
     if (model instanceof Solid) {
+      const nComp = model.numComponents();
+      if (nComp > 1) {
+        errors.push(
+          `Model has ${nComp} disconnected parts. ` +
+          `Use assembly() to group separate parts, or union overlapping solids so they connect. ` +
+          `Disconnected geometry in a single Solid is not allowed.`
+        );
+      }
       bodies.push(model.toBody());
     } else if (model instanceof Assembly) {
       bodies.push(...model.toBodies());
     } else if (Array.isArray(model)) {
       for (const item of model) {
         if (item instanceof Solid) {
+          const nComp = item.numComponents();
+          if (nComp > 1) {
+            errors.push(
+              `A returned Solid has ${nComp} disconnected parts. ` +
+              `Use assembly() to group separate parts, or union overlapping solids so they connect. ` +
+              `Disconnected geometry in a single Solid is not allowed.`
+            );
+          }
           bodies.push(item.toBody());
         } else if (item instanceof Assembly) {
           bodies.push(...item.toBodies());

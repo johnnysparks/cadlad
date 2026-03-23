@@ -53,4 +53,4 @@ const hingedBox = assembly("Hinged Box")
   .add("lid", lid.union(lk1).union(lk2), [0, 0, 0])
   .add("pin", pin, [0, 0, 0]);
 
-return hingedBox.toSolid();
+return hingedBox;

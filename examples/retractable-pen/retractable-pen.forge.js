@@ -27,19 +27,19 @@ const grip = cylinder(barrelH * 0.2, barrelR + 0.5, barrelR + 0.5, 32)
   .translate(0, 0, -barrelH * 0.25)
   .color("#2a4477");
 
-// Conical tip
+// Conical tip (overlaps barrel by 0.5mm)
 const tip = cylinder(tipL, 0.8, barrelR, 16)
-  .translate(0, 0, -barrelH / 2 - tipL / 2)
+  .translate(0, 0, -barrelH / 2 - tipL / 2 + 0.5)
   .color("#cccccc");
 
-// Click button at top
+// Click button at top (overlaps barrel by 0.5mm)
 const button = cylinder(buttonH, barrelR - 0.5, barrelR - 0.5, 16)
-  .translate(0, 0, barrelH / 2 + buttonH / 2)
+  .translate(0, 0, barrelH / 2 + buttonH / 2 - 0.5)
   .color("#cc3333");
 
-// Pocket clip
+// Pocket clip (overlaps barrel by 0.25mm)
 const clip = box(clipW, 1.5, clipL)
-  .translate(0, -barrelR - 0.75, barrelH / 2 - clipL / 2)
+  .translate(0, -barrelR - 0.5, barrelH / 2 - clipL / 2)
   .color("#aaaaaa");
 
 // Build vertical then lay flat — natural "on the desk" orientation
