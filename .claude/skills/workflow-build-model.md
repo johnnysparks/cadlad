@@ -9,9 +9,17 @@ npm run dev    # Vite at localhost:5173 (check if already running first)
 ls examples/   # See what exists — don't duplicate
 ```
 
-## The file
+## The folder
 
-Create `examples/YOUR-MODEL.forge.js`. No imports — the API is injected at runtime.
+Create `examples/your-model/your-model.forge.js`. No imports — the API is injected at runtime.
+
+Each example lives in its own folder:
+```
+examples/your-model/
+  your-model.forge.js   # the model (required)
+  README.md             # design notes, requirements, what worked/didn't
+  reference/            # inspiration images
+```
 
 Must `return` one of: a Solid, an Assembly, an array of Solids, or `{ model, camera: [x,y,z] }`.
 
@@ -90,7 +98,7 @@ See: `workflow-evaluate-model.md`
 
 ## Done criteria
 
-- [ ] File at `examples/NAME.forge.js`
+- [ ] Folder at `examples/NAME/NAME.forge.js` with `README.md`
 - [ ] Loads without errors in studio (localhost:5173, paste code or use gallery)
 - [ ] Parameters work across their min/max range
 - [ ] Visually evaluated from multiple angles

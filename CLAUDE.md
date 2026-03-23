@@ -22,8 +22,8 @@ src/
   api/       Public modeling API: runtime, params, sketch, assembly, hints
   studio/    Browser IDE: Monaco editor, Three.js viewport, param panel
   cli/       Node CLI: run, export, studio launcher
-examples/    .forge.js model files (no imports, API injected at runtime)
-gallery/     Gallery page (auto-reads from examples/ via import.meta.glob)
+examples/    Folder-per-example: examples/{name}/{name}.forge.js + README.md + reference/
+gallery/     Gallery page (auto-reads from examples/*/*.forge.js via import.meta.glob)
 scripts/     CI checks, snapshot tests, hook installer
 snapshots/   Visual regression test references
 ```
@@ -142,7 +142,7 @@ Before taking screenshots, **sniff the runtime first** (which browser binary exi
 
 ```bash
 # Render a model from all 7 angles
-node /tmp/cadlad_sniff/render.mjs examples/mymodel.forge.js /tmp
+node /tmp/cadlad_sniff/render.mjs examples/mymodel/mymodel.forge.js /tmp
 
 # Snapshot test all examples
 node scripts/snapshot-test.mjs --url http://localhost:5173
@@ -165,7 +165,7 @@ The studio exposes `window.__cadlad` for automation:
 - **High-contrast mode**: gallery toggle — light gray surfaces, dark edge strokes, white background. Best for evaluating geometry.
 - **Color survives transforms**: `_derive()` carries `_color` and `_name` through all Solid operations (translate, rotate, scale, union, subtract, etc.)
 - **Z-up → Y-up**: gallery rotates mesh group -90° on X. Studio viewport uses Manifold's Z-up directly.
-- Gallery auto-reads all .forge.js files from examples/ — add a file and it appears
+- Gallery auto-reads all .forge.js files from examples/*/ — add a folder and it appears
 - Models can return `{ model, camera: [x,y,z] }` to control their gallery viewing angle
 
 ## Git workflow
