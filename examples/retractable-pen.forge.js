@@ -28,7 +28,7 @@ const grip = cylinder(barrelH * 0.2, barrelR + 0.5, barrelR + 0.5, 32)
   .color("#2a4477");
 
 // Conical tip
-const tip = cylinder(tipL, barrelR, 0.8, 16)
+const tip = cylinder(tipL, 0.8, barrelR, 16)
   .translate(0, 0, -barrelH / 2 - tipL / 2)
   .color("#cccccc");
 
