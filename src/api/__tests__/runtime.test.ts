@@ -64,4 +64,37 @@ describe("evaluateModel", () => {
     const result = await evaluateModel("throw new Error('boom')");
     expect(result.errors).toContain("boom");
   });
+
+  it("errors on disconnected parts in a single Solid", async () => {
+    const code = `
+      const a = box(10, 10, 10);
+      const b = box(10, 10, 10).translate(50, 50, 50);
+      return a.union(b);
+    `;
+    const result = await evaluateModel(code);
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors[0]).toContain("disconnected parts");
+  });
+
+  it("allows disconnected parts in an assembly", async () => {
+    const code = `
+      const a = box(10, 10, 10);
+      const b = box(10, 10, 10).translate(50, 50, 50);
+      return assembly("parts").add("a", a).add("b", b);
+    `;
+    const result = await evaluateModel(code);
+    expect(result.errors).toHaveLength(0);
+    expect(result.bodies).toHaveLength(2);
+  });
+
+  it("allows a single connected Solid", async () => {
+    const code = `
+      const a = box(10, 10, 10);
+      const b = box(10, 10, 10).translate(5, 0, 0);
+      return a.union(b);
+    `;
+    const result = await evaluateModel(code);
+    expect(result.errors).toHaveLength(0);
+    expect(result.bodies).toHaveLength(1);
+  });
 });
