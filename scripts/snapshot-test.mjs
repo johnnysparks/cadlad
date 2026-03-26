@@ -16,6 +16,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { join, basename, resolve } from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -79,9 +80,8 @@ const args = process.argv.slice(2);
 const UPDATE = args.includes("--update");
 const EXAMPLES_DIR = argVal("--examples-dir") || join(ROOT, "examples");
 const BASE_URL = argVal("--url") || "http://localhost:5173";
-const REF_DIR = join(ROOT, "snapshots", "reference");
-const CUR_DIR = join(ROOT, "snapshots", "current");
-const REPORT_PATH = join(ROOT, "snapshots", "report.json");
+const TMP_DIR = join(tmpdir(), "cadlad-snapshots");
+const REPORT_PATH = join(TMP_DIR, "report.json");
 const RENDER_WAIT = parseInt(argVal("--wait") || "4000");
 
 function argVal(flag) {
@@ -90,8 +90,7 @@ function argVal(flag) {
 }
 
 async function main() {
-  await mkdir(REF_DIR, { recursive: true });
-  await mkdir(CUR_DIR, { recursive: true });
+  await mkdir(TMP_DIR, { recursive: true });
 
   // Discover examples: each subfolder contains a {name}.forge.js file
   const entries = await readdir(EXAMPLES_DIR, { withFileTypes: true });
@@ -146,8 +145,11 @@ async function main() {
   for (const file of files) {
     const name = basename(file, ".forge.js");
     const code = await readFile(join(EXAMPLES_DIR, file), "utf-8");
-    const refPath = join(REF_DIR, `${name}.png`);
-    const curPath = join(CUR_DIR, `${name}.png`);
+    const exampleDir = join(EXAMPLES_DIR, name);
+    const snapshotDir = join(exampleDir, "snapshots");
+    const refPath = join(snapshotDir, "reference.png");
+    const curPath = join(TMP_DIR, `${name}.png`);
+    await mkdir(snapshotDir, { recursive: true });
 
     console.log(`\n--- ${name} ---`);
 
