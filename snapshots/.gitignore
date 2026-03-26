@@ -1,4 +1,0 @@
-# Current snapshots are transient (generated during test runs)
-current/*.png
-# Report is transient
-report.json
