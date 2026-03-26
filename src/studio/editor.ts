@@ -35,33 +35,33 @@ const base = cylinder(6, baseR)
   .translate(0, 0, 3)
   .color("#c9a84c");
 
-// Stem — narrow column rising from the base
-const stem = cylinder(stemH, stemR)
-  .translate(0, 0, 6 + stemH / 2)
+// Stem — overlaps base by 1mm, extends 1mm into bowl
+const stem = cylinder(stemH + 2, stemR)
+  .translate(0, 0, 5 + stemH / 2)
   .color("#c9a84c");
 
 // Bowl — tapered hollow cup (wider at top)
+const bowlZ = 5 + stemH + bowlH / 2;
 const outer = cylinder(bowlH, stemR + 4, bowlR);
 const inner = cylinder(bowlH, stemR + 4 - wall, bowlR - wall)
   .translate(0, 0, wall);
 const bowl = outer.subtract(inner)
-  .translate(0, 0, 6 + stemH + bowlH / 2)
+  .translate(0, 0, bowlZ)
   .color("#dbb84c");
 
-// Handles on each side
-const handle = box(6, 4, bowlH * 0.5).color("#b89830");
-const lHandle = handle.translate(-bowlR - 1, 0, 6 + stemH + bowlH * 0.5);
-const rHandle = handle.translate( bowlR + 1, 0, 6 + stemH + bowlH * 0.5);
+// Handles — positioned to intersect the bowl wall
+const midR = (stemR + 4 + bowlR) / 2;
+const handle = box(midR, 4, bowlH * 0.4).color("#b89830");
+const lHandle = handle.translate(-midR / 2 - 1, 0, bowlZ);
+const rHandle = handle.translate( midR / 2 + 1, 0, bowlZ);
 
-// Smooth hard edges (>60°) for a polished look
-return base
-  .union(stem)
-  .union(bowl)
-  .union(lHandle)
-  .union(rHandle)
-  .smooth(3, 60)
-  .named("Trophy Cup")
-  .color("#c9a84c");
+// Assemble with distinct colors per part
+return assembly("Trophy Cup")
+  .add("Base", base)
+  .add("Stem", stem)
+  .add("Bowl", bowl)
+  .add("Left Handle", lHandle)
+  .add("Right Handle", rHandle);
 `;
 
 /** CadLad API type declarations for IntelliSense */
