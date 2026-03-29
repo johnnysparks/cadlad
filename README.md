@@ -98,7 +98,7 @@ return asm.toSolid();
 
 ## Examples
 
-The `examples/` directory contains ready-to-run models:
+The `projects/` directory contains ready-to-run models:
 
 | File | Description |
 |---|---|
@@ -113,10 +113,10 @@ Paste any example into the studio editor or run via CLI.
 
 ```bash
 # Validate a model
-cadlad run examples/box-with-hole.forge.js
+cadlad run projects/box-with-hole.forge.js
 
 # Export to STL
-cadlad export examples/box-with-hole.forge.js -o output.stl
+cadlad export projects/box-with-hole.forge.js -o output.stl
 ```
 
 ## Architecture
@@ -127,7 +127,7 @@ src/
   api/             Public modeling API (param, sketch, assembly, runtime)
   studio/          Browser IDE (Monaco + Three.js + param panel)
   cli/             Node.js CLI tool
-examples/          Example .forge.js models
+projects/          Example .forge.js models
 ```
 
 ### Design Principles

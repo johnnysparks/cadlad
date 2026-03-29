@@ -78,7 +78,7 @@ function findChromeBinary() {
 
 const args = process.argv.slice(2);
 const UPDATE = args.includes("--update");
-const EXAMPLES_DIR = argVal("--examples-dir") || join(ROOT, "examples");
+const EXAMPLES_DIR = argVal("--examples-dir") || join(ROOT, "projects");
 const BASE_URL = argVal("--url") || "http://localhost:5173";
 const TMP_DIR = join(tmpdir(), "cadlad-snapshots");
 const REPORT_PATH = join(TMP_DIR, "report.json");
@@ -96,7 +96,7 @@ async function main() {
   const entries = await readdir(EXAMPLES_DIR, { withFileTypes: true });
   const files = [];
 
-  // Folder-based examples (new layout: examples/{name}/{name}.forge.js)
+  // Folder-based projects (layout: projects/{name}/{name}.forge.js)
   for (const entry of entries) {
     if (entry.isDirectory()) {
       const dirFiles = await readdir(join(EXAMPLES_DIR, entry.name));

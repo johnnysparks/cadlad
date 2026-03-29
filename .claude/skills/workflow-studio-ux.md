@@ -28,7 +28,7 @@ src/studio/
 ```
 gallery/
   index.html            # Gallery HTML shell
-  main.ts               # Reads all examples/*.forge.js via Vite glob import
+  main.ts               # Reads all projects/*.forge.js via Vite glob import
                         # Renders each to static image (disposable WebGL renderer)
                         # Click for interactive 3D orbit viewer
                         # "Open in Studio" links (base64 ?code= param)
