@@ -19,7 +19,7 @@ cd "$REPO_ROOT"
 REPORT="$REPO_ROOT/snapshots/report.json"
 REF_DIR="$REPO_ROOT/snapshots/reference"
 CUR_DIR="$REPO_ROOT/snapshots/current"
-EXAMPLES_DIR="$REPO_ROOT/examples"
+EXAMPLES_DIR="$REPO_ROOT/projects"
 
 if [ ! -f "$REPORT" ]; then
   echo "No snapshot report found at $REPORT"

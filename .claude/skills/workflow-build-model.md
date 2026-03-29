@@ -1,21 +1,23 @@
-# Workflow: Build a New Example Model
+# Workflow: Build a New Project Model
 
 You're creating a `.forge.js` model file. This is the most common task in this repo.
+
+> **For interactive iteration with frequent screenshots**, see `workflow-vibe-modeling.md`.
 
 ## Pre-flight
 
 ```bash
 npm run dev    # Vite at localhost:5173 (check if already running first)
-ls examples/   # See what exists — don't duplicate
+ls projects/   # See what exists — don't duplicate
 ```
 
 ## The folder
 
-Create `examples/your-model/your-model.forge.js`. No imports — the API is injected at runtime.
+Create `projects/your-model/your-model.forge.js`. No imports — the API is injected at runtime.
 
 Each example lives in its own folder:
 ```
-examples/your-model/
+projects/your-model/
   your-model.forge.js   # the model (required)
   README.md             # design notes, requirements, what worked/didn't
   reference/            # inspiration images
@@ -103,7 +105,7 @@ See: `workflow-evaluate-model.md`
 
 ## Done criteria
 
-- [ ] Folder at `examples/NAME/NAME.forge.js` with `README.md`
+- [ ] Folder at `projects/NAME/NAME.forge.js` with `README.md`
 - [ ] Loads without errors in studio (localhost:5173, paste code or use gallery)
 - [ ] Parameters work across their min/max range
 - [ ] Visually evaluated from multiple angles

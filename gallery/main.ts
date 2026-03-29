@@ -1,5 +1,5 @@
 /**
- * Gallery — renders all example models from the examples/ folder.
+ * Gallery — renders all project models from the projects/ folder.
  *
  * Uses a SINGLE disposable WebGL renderer per card to avoid the browser's
  * context limit (~8-16). Each model is rendered → captured to dataURL → disposed.
@@ -23,7 +23,7 @@ interface Example {
 }
 
 // Vite glob import — reads all .forge.js files as raw strings at build time
-const exampleModules = import.meta.glob("../examples/*/*.forge.js", {
+const exampleModules = import.meta.glob("../projects/*/*.forge.js", {
   query: "?raw",
   import: "default",
   eager: true,
