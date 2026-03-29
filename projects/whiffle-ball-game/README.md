@@ -59,14 +59,56 @@ per side for a 3" (76mm) ball.
 
 ---
 
-## Frame & Mounting
+## Disc Orientation
 
-- Simple **A-frame or rectangular box frame** in 2×4 lumber or steel square tube
-- Shaft mounted horizontally through **pillow-block bearings** at each end
-- Frame height: disc center at ~900–1100mm (waist-to-chest height for shooting)
-- Frame depth: shaft length = (number of discs × spacing) + bearing overhangs
-- Discs hang/slot onto the shaft via set-screw hubs or keyed shaft sections
-- Optional: removable discs for easy transport / configurable difficulty
+**Perfectly vertical.** The shooter aims horizontally, the discs face them like wheels. The whole
+machine can be shimmed for a slight tilt if needed, but the designed position is vertical.
+
+---
+
+## Drive Mechanism — Friction Roller System
+
+This is the key mechanical detail. There is **no motor per disc**.
+
+```
+   [Central shaft — alignment + structural only, does not drive]
+         |         |         |
+        [D1]      [D2]      [D3]   ← discs, vertical, on central shaft
+         |         |         |
+   ======|=========|=========|====  ← bottom roller shaft A (driven)
+   ======|=========|=========|====  ← bottom roller shaft B (guide/reverse)
+```
+
+### How it works
+
+1. **Central shaft** runs horizontally through all disc centers. Its job is alignment and lateral
+   stiffness — it keeps discs from tilting or drifting along the axis. It does **not** drive rotation.
+
+2. **Bottom roller shafts** (2×, parallel to the central shaft, positioned below disc centers) carry
+   **rubber-tired wheels or dowel rollers** that contact the disc rim or face. The disc weight rests
+   on these rollers — they provide radial support and are the friction drive surface.
+
+3. **One bottom shaft is powered.** A hand drill connects to a short dowel or rubber wheel coupling
+   on one end of the shaft. Spinning the drill spins that shaft, which friction-drives all discs
+   that contact it.
+
+4. **Counter-rotation between adjacent discs** comes from roller geometry:
+   - Odd discs (1, 3) contact the powered shaft from above → spin direction A
+   - Even discs (2, 4) contact the opposing shaft (or a small idler between them and the powered
+     shaft) → spin direction B (reversed)
+   - Simple belt or chain between the two bottom shafts reverses direction, no gearbox needed
+
+5. **Speed control** = drill trigger. Slow squeeze = slow spin, full trigger = fast spin.
+   No electronics required.
+
+### Frame & Mounting
+
+- **Rectangular box frame** in 2×4 lumber or steel square tube — shooter-facing open face
+- Central shaft: pillow-block bearings at each end of the frame
+- Bottom roller shafts: pillow-block or simple flange bearings, positioned ~disc_radius below center
+- Frame height: disc center at ~950–1050mm (chest height — easier to aim level)
+- Frame depth: (disc count × spacing) + ~150mm for bearing overhangs each end
+- Discs slot onto the central shaft — removable for transport, configurable difficulty order
 
 ---
 
