@@ -66,7 +66,41 @@ machine can be shimmed for a slight tilt if needed, but the designed position is
 
 ---
 
-## Drive Mechanism — Friction Roller System
+## Drive Mechanism — REVISED: Passive Rocker / Pendulum
+
+> v3 pivot: No motor. Each disc is a "flower" on a counterweighted rocker arm.
+> A push or a ball hit sets it swaying; high inertia + low dampening keeps it going.
+> Adjacent rockers sway in different phases, making simultaneous hole alignment unpredictable.
+
+### Rocker anatomy (one unit)
+
+```
+     [flower disc — big petals with gaps]
+           |
+           |  ← upper arm
+           |
+    ⊙ ← pivot bearing on shaft   (Z = pivotZ ~750mm)
+           |
+           |  ← lower arm
+           |
+     [●●●] ← heavy counterweight (iron/steel disc)
+```
+
+- **Pivot shaft**: one horizontal rod running along Y (depth axis) through ALL rocker bearings
+- **Upper arm**: arm length from pivot to flower center (~300mm)
+- **Lower arm**: arm length from pivot to counterweight (~220mm)
+- **Counterweight**: heavy cylindrical iron/steel weight — provides inertia, returns to center
+- **Motion**: each rocker is an independent pendulum swinging side-to-side (X axis sway)
+  - High mass → high inertia → keeps swaying after a single push or ball hit
+  - Low friction at bearing → minimal dampening → long oscillation duration
+  - Adjacent rockers set to sway in different phases for maximum unpredictability
+
+### No motor / no drill needed
+
+The game operator gives each rocker a starting push. Ball impacts add energy. The counterweights
+do the rest. Simple, reliable, silent, zero electronics.
+
+## Drive Mechanism — ARCHIVED: Friction Roller System
 
 This is the key mechanical detail. There is **no motor per disc**.
 
