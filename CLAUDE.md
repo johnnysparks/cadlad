@@ -164,6 +164,8 @@ Before taking screenshots, **sniff the runtime first** (which browser binary exi
 node scripts/vibe-snap.mjs projects/mymodel/mymodel.forge.js
 node scripts/vibe-snap.mjs projects/mymodel/mymodel.forge.js --angles 1  # just iso
 node scripts/vibe-snap.mjs projects/mymodel/mymodel.forge.js --angles 7  # all 7
+node scripts/headless-doctor.mjs                                          # diagnose Chromium shared libs (Linux)
+sudo node scripts/headless-doctor.mjs --install                           # install common Debian/Ubuntu runtime libs
 
 # Render a model from all 7 angles (legacy)
 node /tmp/cadlad_sniff/render.mjs projects/mymodel/mymodel.forge.js /tmp

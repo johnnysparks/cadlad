@@ -13,6 +13,7 @@
     "build": "tsc && vite build",
     "build:cli": "tsc -p tsconfig.cli.json",
     "preview": "vite preview",
+    "headless:doctor": "node scripts/headless-doctor.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src/",
