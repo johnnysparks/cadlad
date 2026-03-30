@@ -1,162 +1,205 @@
-// Whiffle Ball Carnival Shooter — cadlad forge
-// Leaf blower PVC cannon fires 3" whiffle balls through layered plexiglass panels
-// Front panels: wide holes → back panels: tight holes = scaled depth & difficulty
-// Black chalkboard backdrop for neon ball contrast + chalk marker artwork
+// Whiffle Ball Carnival Shooter — v4: A-frame mount, no top box
+//
+// Flower rockers hang from a pivot shaft supported by two A-frames.
+// Open structure — no box over the top.
+// Chalkboard is just the back wall.
 
-const panelW   = param("Panel Width",    610, { min: 400, max: 800,  unit: "mm" });
-const panelH   = param("Panel Height",  1220, { min: 800, max: 1600, unit: "mm" });
-const panelT   = param("Panel Thickness", 10, { min:   6, max:   16, unit: "mm" });
-const layerGap = param("Layer Gap",      152, { min: 100, max: 300,  unit: "mm" }); // 6"
-const ballR    = param("Ball Radius",     38, { min:  30, max:   45, unit: "mm" }); // 3" ball
+const spacing  = param("Rocker Spacing", 160, { min: 120, max: 240, unit: "mm" });
+const ballR    = param("Ball Radius",     38, { min:  30, max:  45, unit: "mm" });
 
-const PLEXI = "#AADDF5";  // pale blue — clear plexiglass tint
-const CHALK = "#0D0D0D";  // near-black chalkboard
-const STEEL = "#909090";  // aluminum frame
-const NEON  = "#CCFF00";  // neon yellow-green ball
-const PVC_W = "#E8E8E8";  // white PVC pipe
-const ORNG  = "#E87020";  // leaf blower orange
+const pivotZ   = 750;
+const upperArm = 300;
+const lowerArm = 220;
+const discT    = 10;
 
-// Hole radii per panel (front = generous/easy, back = tight/hard)
-// Ball dia = 76mm; front = 164mm clear, mid = 108mm, back = 88mm (6mm clearance/side)
-const hR = [82, 54, 44];
+const PLEXI1 = "#BCEEFF";
+const PLEXI2 = "#7DCCE8";
+const PLEXI3 = "#3DAAD8";
+const CHALK  = "#0D0D0D";
+const WOOD   = "#C8A060";
+const STEEL  = "#909090";
+const IRON   = "#383838";
+const NEON   = "#CCFF00";
+const ORNG   = "#E87020";
+const PVC_W  = "#ECECEC";
 
-// Build a plexiglass panel with 4 holes in 2×2 grid, panel normal along Y
-function makePanel(holeRad, yPos) {
-  let p = box(panelW, panelT, panelH).translate(0, yPos, panelH / 2);
-
-  const ox = panelW * 0.265;  // ±162mm horizontal offset
-  const oz = panelH * 0.215;  // ±263mm vertical offset
-
-  // Long cutter along +Y axis, centered on the panel's Y position
-  const cutLen = panelT + 60;
-  for (const dx of [-ox, ox]) {
-    for (const dz of [-oz, oz]) {
-      const cut = cylinder(cutLen, holeRad)
-        .rotate(-90, 0, 0)                              // Z → +Y
-        .translate(dx, yPos - cutLen / 2, panelH / 2 + dz); // centered at yPos
-      p = p.subtract(cut);
-    }
-  }
-  return p.color(PLEXI);
+// ── Helper: flat disc in XZ plane, centered at (cx, cy, cz) ──────────────────
+function discAt(r, h, cx, cy, cz) {
+  return cylinder(h, r).rotate(-90, 0, 0).translate(cx, cy - h / 2, cz);
 }
 
-// Three plexiglass panels — front (easy) to back (hard)
-const frontPanel = makePanel(hR[0], 0);
-const midPanel   = makePanel(hR[1], layerGap);
-const backPanel  = makePanel(hR[2], layerGap * 2);
+// ── Rocker unit built in unit space — pivot at (0, 0, 0) ─────────────────────
+function makeRocker(numPetals, petalR, petalDist, color) {
+  const armLen = upperArm + lowerArm;
+  const arm = box(30, 18, armLen)
+    .translate(0, 0, (upperArm - lowerArm) / 2)
+    .color(WOOD);
+  const bearing = discAt(42, 36, 0, 0, 0).color(STEEL);
+  const cw      = discAt(82, 72, 0, 0, -lowerArm).color(IRON);
+  const hub     = discAt(58, discT, 0, 0, upperArm);
+  let flower = hub;
+  for (let i = 0; i < numPetals; i++) {
+    const a = (i * 2 * Math.PI) / numPetals;
+    flower = flower.union(
+      discAt(petalR, discT,
+        petalDist * Math.cos(a), 0,
+        upperArm + petalDist * Math.sin(a))
+    );
+  }
+  return { arm, bearing, cw, flower: flower.color(color) };
+}
 
-// Black chalkboard backdrop — slightly wider/taller for full coverage
-const chalkboard = box(panelW + 120, 22, panelH + 180)
-  .translate(0, layerGap * 2 + 95, panelH / 2 - 60)
+function placeRocker(parts, tiltDeg, yPos) {
+  const p = s => s.rotate(0, tiltDeg, 0).translate(0, yPos, pivotZ);
+  return { arm: p(parts.arm), bearing: p(parts.bearing),
+           cw:  p(parts.cw),  flower:  p(parts.flower) };
+}
+
+const y1 = 0, y2 = spacing, y3 = spacing * 2;
+
+const r1 = placeRocker(makeRocker(4, 70, 160, PLEXI1),  20, y1);
+const r2 = placeRocker(makeRocker(5, 58, 162, PLEXI2), -16, y2);
+const r3 = placeRocker(makeRocker(6, 42, 158, PLEXI3),   9, y3);
+
+// ── Pivot shaft ───────────────────────────────────────────────────────────────
+const shaftY0  = -120;
+const shaftLen = y3 + 370;
+const pivotShaft = cylinder(shaftLen, 18)
+  .rotate(-90, 0, 0).translate(0, shaftY0, pivotZ).color(STEEL);
+
+// ── A-frame geometry ──────────────────────────────────────────────────────────
+// Each A-frame: two diagonal legs meeting at the pivot shaft, spreading to the floor.
+//   Left leg : foot at (-legSpread, yPos, 0) → apex at (0, yPos, pivotZ)
+//   Right leg: foot at (+legSpread, yPos, 0) → apex at (0, yPos, pivotZ)
+//
+// Rotation proof (side = -1 = left):
+//   rotate(0, +legAngle, 0) tilts a Z-axis box toward +X at the top
+//   translate(-legSpread/2, yPos, pivotZ/2) puts center at leg midpoint
+//   → top ends up at (0, yPos, pivotZ), bottom at (-legSpread, yPos, 0) ✓
+
+const legSpread = 390;
+const legW      = 48;
+const legLen    = Math.sqrt(legSpread * legSpread + pivotZ * pivotZ);
+const legAngle  = Math.atan2(legSpread, pivotZ) * 180 / Math.PI;
+
+const yFront = shaftY0 - 20;
+const yBack  = y3 + 180;
+
+function aLeg(side, yPos) {
+  return box(legW, legW, legLen)
+    .rotate(0, -side * legAngle, 0)
+    .translate(side * legSpread / 2, yPos, pivotZ / 2)
+    .color(WOOD);
+}
+
+// Horizontal foot crossbar connecting both legs at floor level
+function footBarX(yPos) {
+  return box(legSpread * 2 + legW, legW, legW)
+    .translate(0, yPos, legW / 2)
+    .color(WOOD);
+}
+
+// Side ground rails connecting front and back A-frames (Y direction)
+function groundRailY(side) {
+  const d = yBack - yFront + legW;
+  return box(legW, d, legW)
+    .translate(side * legSpread, (yFront + yBack) / 2, legW / 2)
+    .color(WOOD);
+}
+
+// Small apex block where both legs meet the pivot shaft
+function apexBlock(yPos) {
+  return box(100, legW + 10, 100)
+    .translate(0, yPos, pivotZ)
+    .color(WOOD);
+}
+
+// A-frame crossbar — the horizontal bar that makes it a proper "A"
+// Positioned at braceZ height; span matches leg positions at that height.
+const braceZ    = 310;
+const xAtBrace  = legSpread * (pivotZ - braceZ) / pivotZ;  // ~228mm
+function aFrameCrossbar(yPos) {
+  return box(xAtBrace * 2 + legW * 2, legW, legW)
+    .translate(0, yPos, braceZ)
+    .color(WOOD);
+}
+
+// Cross-rails connecting front and back A-frames at brace height
+function braceRailY(side) {
+  const d = yBack - yFront + legW;
+  return box(legW, d, legW)
+    .translate(side * xAtBrace, (yFront + yBack) / 2, braceZ)
+    .color(WOOD);
+}
+
+// ── Ball return ramp (sits between the A-frames) ──────────────────────────────
+const ramp = box(legSpread * 2 - 60, y3 + 160, 18)
+  .rotate(7, 0, 0)
+  .translate(0, y1 + (y3 + 160) / 2, pivotZ - lowerArm - 58)
+  .color(WOOD);
+
+// ── Chalkboard — just a wall ──────────────────────────────────────────────────
+const chalkboard = box(900, 20, 1500)
+  .translate(0, y3 + 108, 760)
   .color(CHALK);
 
-// Frame — 4 corner posts + top perimeter rails
-const postSz  = 40;
-const postHgt = panelH + 140;
-const pxOff   = panelW / 2 + postSz / 2 + 8; // 333mm from center
-const pyFront = -(postSz + 8);               // -48mm
-const pyBack  = layerGap * 2 + postSz + 8;  // 352mm
+// ── PVC cannon (hand-held — no cradle stand) ──────────────────────────────────
+const aimZ      = pivotZ + upperArm;
+const muzzleY   = -120;
+const barrelLen = 500;
+const barrelOD  = 44;
 
-function vPost(x, y) {
-  return box(postSz, postSz, postHgt)
-    .translate(x, y, postHgt / 2)
-    .color(STEEL);
-}
+const cannon = cylinder(barrelLen, barrelOD)
+  .rotate(-90, 0, 0).translate(0, muzzleY - barrelLen, aimZ)
+  .subtract(
+    cylinder(barrelLen + 10, barrelOD - 7)
+      .rotate(-90, 0, 0).translate(0, muzzleY - barrelLen - 5, aimZ)
+  ).color(PVC_W);
 
-// Front/back horizontal top rails
-function topRailX(y) {
-  const w = panelW + postSz * 2 + 16;
-  return box(w, postSz, postSz)
-    .translate(0, y, postHgt)
-    .color(STEEL);
-}
+const blower = box(200, 165, 230)
+  .translate(0, muzzleY - barrelLen - 85, aimZ).color(ORNG);
 
-// Left/right side top rails
-function topRailY(x) {
-  const d = pyBack - pyFront + postSz;
-  return box(postSz, d, postSz)
-    .translate(x, (pyFront + pyBack) / 2, postHgt)
-    .color(STEEL);
-}
+// ── Neon balls ────────────────────────────────────────────────────────────────
+const ball1 = sphere(ballR).translate(0, -200, aimZ).color(NEON);
+const ball2 = sphere(ballR).translate(25, y2 - 50, aimZ + 15).color(NEON);
 
-// Horizontal cross-rail at mid-height to hold panels (one per panel row)
-function midRail(x, yPos) {
-  const d = pyBack - pyFront + postSz;
-  return box(postSz, d, postSz)
-    .translate(x, (pyFront + pyBack) / 2, panelH / 2)
-    .color(STEEL);
-}
-
-// PVC cannon — 600mm barrel, 96mm OD (~3.5" nominal pipe), aims at panel center height
-const barrelLen = 600;
-const barrelOD  = 48;        // radius = 48mm → 96mm OD
-const muzzleY   = -120;      // muzzle sits 120mm in front of front panel (Y=0)
-const breezeY   = muzzleY - barrelLen;  // -720mm
-const cannonZ   = panelH * 0.50;       // aimed at panel mid-height
-
-// Barrel: after rotate(-90,0,0) cylinder is along +Y, translate so Y=[breezeY, muzzleY]
-const barrel = cylinder(barrelLen, barrelOD)
-  .rotate(-90, 0, 0)
-  .translate(0, breezeY, cannonZ)
-  .color(PVC_W);
-
-// Barrel hollow (thin PVC wall)
-const barrelInner = cylinder(barrelLen + 20, barrelOD - 8)
-  .rotate(-90, 0, 0)
-  .translate(0, breezeY - 10, cannonZ);
-const hollowBarrel = barrel.subtract(barrelInner).color(PVC_W);
-
-// Cannon stand post under barrel midpoint
-const standMidY = (muzzleY + breezeY) / 2; // -420mm
-const standH    = cannonZ - barrelOD;
-const standPost = cylinder(standH, 18)
-  .translate(0, standMidY, 0)
-  .color(STEEL);
-
-const standBase = box(200, 400, 20)
-  .translate(0, standMidY, 10)
-  .color(STEEL);
-
-// Leaf blower body (attached at cannon breech end)
-const blowerBody = box(200, 160, 230)
-  .translate(0, breezeY - 80, cannonZ)
-  .color(ORNG);
-
-const blowerHandle = box(40, 40, 200)
-  .translate(60, breezeY - 80, cannonZ - 160)
-  .color(ORNG);
-
-// Whiffle balls — one in flight, one near mid-panel for scale
-const ballFlight = sphere(ballR)
-  .translate(0, -220, cannonZ)
-  .color(NEON);
-
-const ballNearMid = sphere(ballR)
-  .translate(hR[0] * 0.4, layerGap * 0.65, panelH / 2 + hR[1] * 0.4)
-  .color(NEON);
-
-const game = assembly("Whiffle Ball Cannon Game")
+// ── Assembly ──────────────────────────────────────────────────────────────────
+const game = assembly("Whiffle Ball Bee Blast")
   .add("Chalkboard",   chalkboard)
-  .add("Back Panel",   backPanel)
-  .add("Mid Panel",    midPanel)
-  .add("Front Panel",  frontPanel)
-  .add("Post FL",      vPost(-pxOff, pyFront))
-  .add("Post FR",      vPost( pxOff, pyFront))
-  .add("Post BL",      vPost(-pxOff, pyBack))
-  .add("Post BR",      vPost( pxOff, pyBack))
-  .add("Top Rail F",   topRailX(pyFront))
-  .add("Top Rail B",   topRailX(pyBack))
-  .add("Top Rail L",   topRailY(-pxOff))
-  .add("Top Rail R",   topRailY( pxOff))
-  .add("Cannon",       hollowBarrel)
-  .add("Stand Post",   standPost)
-  .add("Stand Base",   standBase)
-  .add("Blower Body",  blowerBody)
-  .add("Blower Handle", blowerHandle)
-  .add("Ball Flight",  ballFlight)
-  .add("Ball Near Mid", ballNearMid);
+  .add("Flower 1",     r1.flower)
+  .add("Arm 1",        r1.arm)
+  .add("CW 1",         r1.cw)
+  .add("Bearing 1",    r1.bearing)
+  .add("Flower 2",     r2.flower)
+  .add("Arm 2",        r2.arm)
+  .add("CW 2",         r2.cw)
+  .add("Bearing 2",    r2.bearing)
+  .add("Flower 3",     r3.flower)
+  .add("Arm 3",        r3.arm)
+  .add("CW 3",         r3.cw)
+  .add("Bearing 3",    r3.bearing)
+  .add("Pivot Shaft",  pivotShaft)
+  .add("Leg FL",       aLeg(-1, yFront))
+  .add("Leg FR",       aLeg( 1, yFront))
+  .add("Leg BL",       aLeg(-1, yBack))
+  .add("Leg BR",       aLeg( 1, yBack))
+  .add("Foot Front",   footBarX(yFront))
+  .add("Foot Back",    footBarX(yBack))
+  .add("Rail L",       groundRailY(-1))
+  .add("Rail R",       groundRailY( 1))
+  .add("Apex Front",   apexBlock(yFront))
+  .add("Apex Back",    apexBlock(yBack))
+  .add("Crossbar F",   aFrameCrossbar(yFront))
+  .add("Crossbar B",   aFrameCrossbar(yBack))
+  .add("Brace Rail L", braceRailY(-1))
+  .add("Brace Rail R", braceRailY( 1))
+  .add("Ramp",         ramp)
+  .add("Cannon",       cannon)
+  .add("Blower",       blower)
+  .add("Ball 1",       ball1)
+  .add("Ball 2",       ball2);
 
 return {
   model: game,
-  camera: [-700, -1100, 900],
+  camera: [-550, -950, 1150],
 };
