@@ -1,23 +1,16 @@
-// Whiffle Ball Carnival Shooter — v3: swaying flower rockers
+// Whiffle Ball Carnival Shooter — v4: A-frame mount, no top box
 //
-// Big plexiglass "flowers" hang on counterweighted rocker arms. A push (or a
-// ball hit) sets them swaying side-to-side like flowers in a breeze.
-// High counterweight inertia + low bearing friction = long lazy oscillation.
-// Adjacent rockers sway in different phases — simultaneous alignment is the skill.
-//
-// Depth progression (front → back = easy → hard):
-//   Flower 1: 4 wide petals  — generous gaps ~86mm  (ball = 76mm)
-//   Flower 2: 5 medium petals — moderate gaps ~84mm
-//   Flower 3: 6 narrow petals — tight gaps ~76mm (barely clears)
+// Flower rockers hang from a pivot shaft supported by two A-frames.
+// Open structure — no box over the top.
+// Chalkboard is just the back wall.
 
 const spacing  = param("Rocker Spacing", 160, { min: 120, max: 240, unit: "mm" });
 const ballR    = param("Ball Radius",     38, { min:  30, max:  45, unit: "mm" });
 
-// Rocker geometry
-const pivotZ   = 750;   // pivot shaft height from floor (Z)
-const upperArm = 300;   // arm: pivot to flower center
-const lowerArm = 220;   // arm: pivot to counterweight center
-const discT    = 10;    // flower disc thickness
+const pivotZ   = 750;
+const upperArm = 300;
+const lowerArm = 220;
+const discT    = 10;
 
 const PLEXI1 = "#BCEEFF";
 const PLEXI2 = "#7DCCE8";
@@ -30,156 +23,136 @@ const NEON   = "#CCFF00";
 const ORNG   = "#E87020";
 const PVC_W  = "#ECECEC";
 
-// ── Helper: flat cylinder (disc) in XZ plane, centered at (cx, cy, cz) ───────
-// Normal along Y. Used for flower petals, counterweights, bearings.
+// ── Helper: flat disc in XZ plane, centered at (cx, cy, cz) ──────────────────
 function discAt(r, h, cx, cy, cz) {
-  return cylinder(h, r)
-    .rotate(-90, 0, 0)
-    .translate(cx, cy - h / 2, cz);
+  return cylinder(h, r).rotate(-90, 0, 0).translate(cx, cy - h / 2, cz);
 }
 
-// ── Build one rocker unit in UNIT SPACE — pivot at (0, 0, 0) ─────────────────
-// Arm spans Z from -lowerArm to +upperArm.
-// Flower is centered at Z = +upperArm.
-// Counterweight is centered at Z = -lowerArm.
-// Apply .rotate(0, tiltDeg, 0).translate(0, yPos, pivotZ) to place in the world.
+// ── Rocker unit built in unit space — pivot at (0, 0, 0) ─────────────────────
 function makeRocker(numPetals, petalR, petalDist, color) {
-  const armW   = 30;
-  const armT   = 18;
-  const armLen = upperArm + lowerArm;   // 520mm total
-
-  // Vertical arm bar (box centered along the arm span)
-  const arm = box(armW, armT, armLen)
-    .translate(0, 0, (upperArm - lowerArm) / 2)  // shift so Z: [-lowerArm, +upperArm]
+  const armLen = upperArm + lowerArm;
+  const arm = box(30, 18, armLen)
+    .translate(0, 0, (upperArm - lowerArm) / 2)
     .color(WOOD);
-
-  // Pivot bearing (disc at Z=0)
   const bearing = discAt(42, 36, 0, 0, 0).color(STEEL);
-
-  // Counterweight (heavy iron disc at Z=-lowerArm)
-  const cw = discAt(82, 72, 0, 0, -lowerArm).color(IRON);
-
-  // Flower: hub disc + numPetals petal discs, all at Z=+upperArm
-  const hub = discAt(58, discT, 0, 0, upperArm);
-  let flowerSolid = hub;
+  const cw      = discAt(82, 72, 0, 0, -lowerArm).color(IRON);
+  const hub     = discAt(58, discT, 0, 0, upperArm);
+  let flower = hub;
   for (let i = 0; i < numPetals; i++) {
     const a = (i * 2 * Math.PI) / numPetals;
-    flowerSolid = flowerSolid.union(
+    flower = flower.union(
       discAt(petalR, discT,
         petalDist * Math.cos(a), 0,
         upperArm + petalDist * Math.sin(a))
     );
   }
-  const flower = flowerSolid.color(color);
-
-  return { arm, bearing, cw, flower };
+  return { arm, bearing, cw, flower: flower.color(color) };
 }
 
-// Apply tilt + world placement to all parts of a rocker unit
 function placeRocker(parts, tiltDeg, yPos) {
-  const place = s => s.rotate(0, tiltDeg, 0).translate(0, yPos, pivotZ);
-  return {
-    arm:     place(parts.arm),
-    bearing: place(parts.bearing),
-    cw:      place(parts.cw),
-    flower:  place(parts.flower),
-  };
+  const p = s => s.rotate(0, tiltDeg, 0).translate(0, yPos, pivotZ);
+  return { arm: p(parts.arm), bearing: p(parts.bearing),
+           cw:  p(parts.cw),  flower:  p(parts.flower) };
 }
 
-// ── Three rocker units ────────────────────────────────────────────────────────
-// Petal gaps (chord between petal edges) vs 76mm ball:
-//   4 petals @ dist=160, r=70:  gap ≈ 86mm  ✓ generous
-//   5 petals @ dist=162, r=58:  gap ≈ 84mm  ✓ moderate
-//   6 petals @ dist=158, r=42:  gap ≈ 76mm  ✓ tight
 const y1 = 0, y2 = spacing, y3 = spacing * 2;
 
-const rp1 = makeRocker(4, 70, 160, PLEXI1);
-const rp2 = makeRocker(5, 58, 162, PLEXI2);
-const rp3 = makeRocker(6, 42, 158, PLEXI3);
-
-// Different tilt angles simulate mid-sway in different phases
-const r1 = placeRocker(rp1,  14, y1);
-const r2 = placeRocker(rp2, -11, y2);
-const r3 = placeRocker(rp3,   7, y3);
+const r1 = placeRocker(makeRocker(4, 70, 160, PLEXI1),  14, y1);
+const r2 = placeRocker(makeRocker(5, 58, 162, PLEXI2), -11, y2);
+const r3 = placeRocker(makeRocker(6, 42, 158, PLEXI3),   7, y3);
 
 // ── Pivot shaft ───────────────────────────────────────────────────────────────
-const shaftLen = y3 + 350;
-const shaftY0  = -115;
+const shaftY0  = -120;
+const shaftLen = y3 + 370;
 const pivotShaft = cylinder(shaftLen, 18)
-  .rotate(-90, 0, 0)
-  .translate(0, shaftY0, pivotZ)
-  .color(STEEL);
+  .rotate(-90, 0, 0).translate(0, shaftY0, pivotZ).color(STEEL);
 
-// ── Frame (2×4 lumber) ────────────────────────────────────────────────────────
-const frameHW  = 390;                         // half-width — covers disc at max tilt
-const frameTop = pivotZ + upperArm + 180;     // 1230mm
-const yFront   = shaftY0 - 20;               // -135mm
-const yBack    = y3 + 185;                   // ~505mm
-const pSz      = 45;
+// ── A-frame geometry ──────────────────────────────────────────────────────────
+// Each A-frame: two diagonal legs meeting at the pivot shaft, spreading to the floor.
+//   Left leg : foot at (-legSpread, yPos, 0) → apex at (0, yPos, pivotZ)
+//   Right leg: foot at (+legSpread, yPos, 0) → apex at (0, yPos, pivotZ)
+//
+// Rotation proof (side = -1 = left):
+//   rotate(0, +legAngle, 0) tilts a Z-axis box toward +X at the top
+//   translate(-legSpread/2, yPos, pivotZ/2) puts center at leg midpoint
+//   → top ends up at (0, yPos, pivotZ), bottom at (-legSpread, yPos, 0) ✓
 
-function fPost(x, y) {
-  return box(pSz, pSz, frameTop).translate(x, y, frameTop / 2).color(WOOD);
-}
-function topBeamX(y) {
-  return box(frameHW * 2 + pSz, pSz, pSz).translate(0, y, frameTop).color(WOOD);
-}
-function topBeamY(x) {
-  return box(pSz, yBack - yFront + pSz, pSz)
-    .translate(x, (yFront + yBack) / 2, frameTop).color(WOOD);
-}
-function pivBeamX(y) {
-  // Horizontal beam at pivot height on front/back faces — shaft rides through center
-  return box(frameHW * 2 + pSz, pSz, pSz).translate(0, y, pivotZ).color(WOOD);
-}
-function baseBeamY(x) {
-  return box(pSz, yBack - yFront + pSz, pSz)
-    .translate(x, (yFront + yBack) / 2, pSz / 2).color(WOOD);
-}
-function baseBeamX(y) {
-  return box(frameHW * 2 + pSz, pSz, pSz).translate(0, y, pSz / 2).color(WOOD);
+const legSpread = 390;
+const legW      = 48;
+const legLen    = Math.sqrt(legSpread * legSpread + pivotZ * pivotZ);
+const legAngle  = Math.atan2(legSpread, pivotZ) * 180 / Math.PI;
+
+const yFront = shaftY0 - 20;
+const yBack  = y3 + 180;
+
+function aLeg(side, yPos) {
+  return box(legW, legW, legLen)
+    .rotate(0, -side * legAngle, 0)
+    .translate(side * legSpread / 2, yPos, pivotZ / 2)
+    .color(WOOD);
 }
 
-// ── Ball return ramp (slopes front-to-back, catches cleared balls) ─────────────
-const rampW = frameHW * 2 - 80;
-const rampD = y3 - y1 + 120;
-const ramp  = box(rampW, rampD, 18)
-  .rotate(8, 0, 0)          // slight forward slope — balls roll back to player
-  .translate(0, y1 + rampD / 2, pivotZ - lowerArm - 55)
+// Horizontal foot crossbar connecting both legs at floor level
+function footBarX(yPos) {
+  return box(legSpread * 2 + legW, legW, legW)
+    .translate(0, yPos, legW / 2)
+    .color(WOOD);
+}
+
+// Side ground rails connecting front and back A-frames (Y direction)
+function groundRailY(side) {
+  const d = yBack - yFront + legW;
+  return box(legW, d, legW)
+    .translate(side * legSpread, (yFront + yBack) / 2, legW / 2)
+    .color(WOOD);
+}
+
+// Small apex block where both legs meet the pivot shaft
+function apexBlock(yPos) {
+  return box(100, legW + 10, 100)
+    .translate(0, yPos, pivotZ)
+    .color(WOOD);
+}
+
+// ── Ball return ramp (sits between the A-frames) ──────────────────────────────
+const ramp = box(legSpread * 2 - 60, y3 + 160, 18)
+  .rotate(7, 0, 0)
+  .translate(0, y1 + (y3 + 160) / 2, pivotZ - lowerArm - 58)
   .color(WOOD);
 
-// ── PVC cannon (aimed at flower height) ───────────────────────────────────────
+// ── Chalkboard — just a wall ──────────────────────────────────────────────────
+const chalkboard = box(900, 20, 1500)
+  .translate(0, y3 + 108, 760)
+  .color(CHALK);
+
+// ── PVC cannon on a simple cradle ─────────────────────────────────────────────
+const aimZ      = pivotZ + upperArm;
+const muzzleY   = -120;
 const barrelLen = 500;
 const barrelOD  = 44;
-const muzzleY   = -115;
-const aimZ      = pivotZ + upperArm;   // 1050mm — flower center height when upright
 
-const barrelOut = cylinder(barrelLen, barrelOD)
-  .rotate(-90, 0, 0).translate(0, muzzleY - barrelLen, aimZ);
-const barrelIn  = cylinder(barrelLen + 10, barrelOD - 7)
-  .rotate(-90, 0, 0).translate(0, muzzleY - barrelLen - 5, aimZ);
-const cannon    = barrelOut.subtract(barrelIn).color(PVC_W);
+const cannon = cylinder(barrelLen, barrelOD)
+  .rotate(-90, 0, 0).translate(0, muzzleY - barrelLen, aimZ)
+  .subtract(
+    cylinder(barrelLen + 10, barrelOD - 7)
+      .rotate(-90, 0, 0).translate(0, muzzleY - barrelLen - 5, aimZ)
+  ).color(PVC_W);
 
-const blowerBody = box(200, 165, 230)
+const blower = box(200, 165, 230)
   .translate(0, muzzleY - barrelLen - 85, aimZ).color(ORNG);
 
-// Simple cannon cradle
-const cradleH    = aimZ - barrelOD;
-const cradlePost = cylinder(cradleH, 18)
+const cradlePost = cylinder(aimZ - barrelOD, 18)
   .translate(0, muzzleY - barrelLen * 0.5, 0).color(WOOD);
 const cradleBase = box(180, 300, 20)
   .translate(0, muzzleY - barrelLen * 0.5, 10).color(WOOD);
 
-// ── Chalkboard backdrop ────────────────────────────────────────────────────────
-const chalkboard = box(900, 22, 1500)
-  .translate(0, y3 + 115, 810).color(CHALK);
-
 // ── Neon balls ────────────────────────────────────────────────────────────────
-const ballFlight = sphere(ballR).translate(0, -200, aimZ).color(NEON);
-const ballMid    = sphere(ballR).translate(25, y2 - 50, aimZ + 15).color(NEON);
+const ball1 = sphere(ballR).translate(0, -200, aimZ).color(NEON);
+const ball2 = sphere(ballR).translate(25, y2 - 50, aimZ + 15).color(NEON);
 
 // ── Assembly ──────────────────────────────────────────────────────────────────
 const game = assembly("Whiffle Ball Bee Blast")
-  .add("Chalkboard",    chalkboard)
+  .add("Chalkboard",   chalkboard)
   .add("Flower 1",     r1.flower)
   .add("Arm 1",        r1.arm)
   .add("CW 1",         r1.cw)
@@ -193,29 +166,25 @@ const game = assembly("Whiffle Ball Bee Blast")
   .add("CW 3",         r3.cw)
   .add("Bearing 3",    r3.bearing)
   .add("Pivot Shaft",  pivotShaft)
-  .add("Post FL",      fPost(-frameHW, yFront))
-  .add("Post FR",      fPost( frameHW, yFront))
-  .add("Post BL",      fPost(-frameHW, yBack))
-  .add("Post BR",      fPost( frameHW, yBack))
-  .add("Top F",        topBeamX(yFront))
-  .add("Top B",        topBeamX(yBack))
-  .add("Top L",        topBeamY(-frameHW))
-  .add("Top R",        topBeamY( frameHW))
-  .add("Pivot Beam F", pivBeamX(yFront))
-  .add("Pivot Beam B", pivBeamX(yBack))
-  .add("Base L",       baseBeamY(-frameHW))
-  .add("Base R",       baseBeamY( frameHW))
-  .add("Base F",       baseBeamX(yFront))
-  .add("Base B",       baseBeamX(yBack))
-  .add("Ball Ramp",    ramp)
+  .add("Leg FL",       aLeg(-1, yFront))
+  .add("Leg FR",       aLeg( 1, yFront))
+  .add("Leg BL",       aLeg(-1, yBack))
+  .add("Leg BR",       aLeg( 1, yBack))
+  .add("Foot Front",   footBarX(yFront))
+  .add("Foot Back",    footBarX(yBack))
+  .add("Rail L",       groundRailY(-1))
+  .add("Rail R",       groundRailY( 1))
+  .add("Apex Front",   apexBlock(yFront))
+  .add("Apex Back",    apexBlock(yBack))
+  .add("Ramp",         ramp)
   .add("Cannon",       cannon)
-  .add("Blower",       blowerBody)
+  .add("Blower",       blower)
   .add("Cradle Post",  cradlePost)
   .add("Cradle Base",  cradleBase)
-  .add("Ball 1",       ballFlight)
-  .add("Ball 2",       ballMid);
+  .add("Ball 1",       ball1)
+  .add("Ball 2",       ball2);
 
 return {
   model: game,
-  camera: [-500, -900, 1200],
+  camera: [-550, -950, 1150],
 };
