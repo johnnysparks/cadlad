@@ -57,9 +57,9 @@ function placeRocker(parts, tiltDeg, yPos) {
 
 const y1 = 0, y2 = spacing, y3 = spacing * 2;
 
-const r1 = placeRocker(makeRocker(4, 70, 160, PLEXI1),  14, y1);
-const r2 = placeRocker(makeRocker(5, 58, 162, PLEXI2), -11, y2);
-const r3 = placeRocker(makeRocker(6, 42, 158, PLEXI3),   7, y3);
+const r1 = placeRocker(makeRocker(4, 70, 160, PLEXI1),  20, y1);
+const r2 = placeRocker(makeRocker(5, 58, 162, PLEXI2), -16, y2);
+const r3 = placeRocker(makeRocker(6, 42, 158, PLEXI3),   9, y3);
 
 // ── Pivot shaft ───────────────────────────────────────────────────────────────
 const shaftY0  = -120;
@@ -114,6 +114,24 @@ function apexBlock(yPos) {
     .color(WOOD);
 }
 
+// A-frame crossbar — the horizontal bar that makes it a proper "A"
+// Positioned at braceZ height; span matches leg positions at that height.
+const braceZ    = 310;
+const xAtBrace  = legSpread * (pivotZ - braceZ) / pivotZ;  // ~228mm
+function aFrameCrossbar(yPos) {
+  return box(xAtBrace * 2 + legW * 2, legW, legW)
+    .translate(0, yPos, braceZ)
+    .color(WOOD);
+}
+
+// Cross-rails connecting front and back A-frames at brace height
+function braceRailY(side) {
+  const d = yBack - yFront + legW;
+  return box(legW, d, legW)
+    .translate(side * xAtBrace, (yFront + yBack) / 2, braceZ)
+    .color(WOOD);
+}
+
 // ── Ball return ramp (sits between the A-frames) ──────────────────────────────
 const ramp = box(legSpread * 2 - 60, y3 + 160, 18)
   .rotate(7, 0, 0)
@@ -125,7 +143,7 @@ const chalkboard = box(900, 20, 1500)
   .translate(0, y3 + 108, 760)
   .color(CHALK);
 
-// ── PVC cannon on a simple cradle ─────────────────────────────────────────────
+// ── PVC cannon (hand-held — no cradle stand) ──────────────────────────────────
 const aimZ      = pivotZ + upperArm;
 const muzzleY   = -120;
 const barrelLen = 500;
@@ -140,11 +158,6 @@ const cannon = cylinder(barrelLen, barrelOD)
 
 const blower = box(200, 165, 230)
   .translate(0, muzzleY - barrelLen - 85, aimZ).color(ORNG);
-
-const cradlePost = cylinder(aimZ - barrelOD, 18)
-  .translate(0, muzzleY - barrelLen * 0.5, 0).color(WOOD);
-const cradleBase = box(180, 300, 20)
-  .translate(0, muzzleY - barrelLen * 0.5, 10).color(WOOD);
 
 // ── Neon balls ────────────────────────────────────────────────────────────────
 const ball1 = sphere(ballR).translate(0, -200, aimZ).color(NEON);
@@ -176,11 +189,13 @@ const game = assembly("Whiffle Ball Bee Blast")
   .add("Rail R",       groundRailY( 1))
   .add("Apex Front",   apexBlock(yFront))
   .add("Apex Back",    apexBlock(yBack))
+  .add("Crossbar F",   aFrameCrossbar(yFront))
+  .add("Crossbar B",   aFrameCrossbar(yBack))
+  .add("Brace Rail L", braceRailY(-1))
+  .add("Brace Rail R", braceRailY( 1))
   .add("Ramp",         ramp)
   .add("Cannon",       cannon)
   .add("Blower",       blower)
-  .add("Cradle Post",  cradlePost)
-  .add("Cradle Base",  cradleBase)
   .add("Ball 1",       ball1)
   .add("Ball 2",       ball2);
 
