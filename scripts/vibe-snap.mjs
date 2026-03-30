@@ -150,20 +150,28 @@ Start it first:  npm run dev`);
   const chromePath = findChromeBinary();
   if (chromePath) info(`Chrome: ${chromePath}`);
 
-  const browser = await launch.launch({
-    headless: "new",
-    ...(chromePath ? { executablePath: chromePath } : {}),
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--enable-webgl",
-      "--ignore-gpu-blocklist",
-      "--use-gl=angle",
-      "--use-angle=swiftshader-webgl",
-      "--disable-dev-shm-usage",
-    ],
-    protocolTimeout: 120000,
-  });
+  let browser;
+  try {
+    browser = await launch.launch({
+      headless: "new",
+      ...(chromePath ? { executablePath: chromePath } : {}),
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--enable-webgl",
+        "--ignore-gpu-blocklist",
+        "--use-gl=angle",
+        "--use-angle=swiftshader-webgl",
+        "--disable-dev-shm-usage",
+      ],
+      protocolTimeout: 120000,
+    });
+  } catch (err) {
+    console.error(`ERROR: failed to launch headless browser: ${err.message}`);
+    console.error("Tip: run `node scripts/headless-doctor.mjs` to diagnose Chromium shared libs.");
+    console.error("Tip: run `sudo node scripts/headless-doctor.mjs --install` on Debian/Ubuntu.");
+    process.exit(1);
+  }
 
   const page = await browser.newPage();
   page.on("pageerror", (e) => info(`PAGE ERROR: ${e.message}`));

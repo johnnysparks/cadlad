@@ -13,6 +13,7 @@ How to capture CadLad model screenshots in any environment. The approach: sniff 
 Run all of these before doing anything else:
 
 ```bash
+npm run headless:doctor                                              # CadLad quick diagnosis (Linux shared libs)
 uname -s                                                          # OS
 node -v && npm -v                                                 # runtime
 which google-chrome || which chromium || which chromium-browser    # system browser
@@ -51,10 +52,16 @@ ldd "$CHROME_BIN" 2>/dev/null | grep "not found" || echo "all libs present"
 
 If shared libs are missing (Linux):
 ```bash
+# Project helper (preferred in CadLad):
+sudo node scripts/headless-doctor.mjs --install
+
+# Manual apt fallback:
 sudo apt-get update && sudo apt-get install -y \
-  libatk1.0-0 libatk-bridge2.0-0 libcups2t64 libxkbcommon0 \
+  libatk1.0-0 libatk-bridge2.0-0 libxkbcommon0 \
   libatspi2.0-0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-  libgbm1 libasound2t64
+  libgbm1 libnss3 libnspr4 libgtk-3-0 libdrm2 libxshmfence1
+sudo apt-get install -y libasound2 || sudo apt-get install -y libasound2t64
+sudo apt-get install -y libcups2 || sudo apt-get install -y libcups2t64
 ```
 
 Quick launch test (static page only):
