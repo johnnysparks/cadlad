@@ -16,7 +16,7 @@
     "headless:doctor": "node scripts/headless-doctor.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint src/",
+    "lint": "node scripts/lint.mjs",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
