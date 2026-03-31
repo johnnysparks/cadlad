@@ -6,8 +6,6 @@
  *  1. Local ./node_modules/.bin/vitest  (preferred — matches project's vitest config)
  *  2. Global `vitest` in PATH
  *  3. Exit 0 with explanation if neither found.
- *     Discovered in codex env: no vitest globally installed at /opt/node22/bin/;
- *     only eslint, tsc, playwright, nodemon, etc. are present globally.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';

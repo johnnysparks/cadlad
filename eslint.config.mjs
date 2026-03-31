@@ -1,6 +1,5 @@
 // Dynamic imports: gracefully handles environments where @eslint/js or
-// typescript-eslint are not installed (e.g. global ESLint v10 with no
-// local node_modules, as found in codex/CI envs).
+// typescript-eslint are not installed (e.g. global ESLint with no local node_modules).
 const jsModule = await import('@eslint/js').catch(() => null);
 const tsModule = await import('typescript-eslint').catch(() => null);
 
@@ -30,7 +29,6 @@ if (tsModule) {
   config = [ignores, jsModule.default.configs.recommended, { files: ['src/**/*.{js,mjs,cjs}'] }];
 } else {
   // Bare minimum: no plugins available. Lint JS-only files with basic built-in rules.
-  // Discovered in codex env: ESLint v10.0.0 globally installed, no @eslint/js or typescript-eslint.
   config = [ignores, { files: ['src/**/*.{js,mjs,cjs}'], rules: { 'no-unused-vars': 'warn' } }];
 }
 

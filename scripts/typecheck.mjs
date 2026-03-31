@@ -4,8 +4,6 @@
  *
  * Strategy:
  *  1. Prefer local tsc; fall back to global tsc in PATH.
- *     Discovered in codex env: TypeScript v5.9.3 globally at /opt/node22/bin/tsc,
- *     no local node_modules installed.
  *  2. Run `tsc --noEmit`, capture output.
  *  3. Identify files with TS2307 "Cannot find module" errors for packages listed
  *     in package.json (i.e. deps not installed, not internal typos).
