@@ -7,8 +7,6 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
 // Environment sniff: prefer local install, fall back to global eslint in PATH.
-// Discovered in codex env: ESLint v10.0.0 globally installed at /opt/node22/bin/eslint
-// with no local node_modules present. @eslint/js and typescript-eslint also absent globally.
 const localBin = './node_modules/eslint/bin/eslint.js';
 const hasLocal = existsSync(localBin);
 

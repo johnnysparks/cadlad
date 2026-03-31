@@ -14,10 +14,10 @@
     "build:cli": "tsc -p tsconfig.cli.json",
     "preview": "vite preview",
     "headless:doctor": "node scripts/headless-doctor.mjs",
-    "test": "vitest run",
+    "test": "node scripts/test.mjs",
     "test:watch": "vitest",
     "lint": "node scripts/lint.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "node scripts/typecheck.mjs"
   },
   "keywords": [
     "cad",
