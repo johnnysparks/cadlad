@@ -15,6 +15,7 @@ async function boot() {
   const paramEl = document.getElementById("param-panel")!;
   const runBtn = document.getElementById("btn-run")!;
   const exportBtn = document.getElementById("btn-export-stl")!;
+  const toggleParamsBtn = document.getElementById("btn-toggle-params") as HTMLButtonElement;
 
   // Error bar
   const errorBar = document.createElement("div");
@@ -42,6 +43,33 @@ async function boot() {
     // Re-run on param change
     runModel();
   });
+
+  const mobilePortraitQuery = window.matchMedia("(max-width: 900px) and (orientation: portrait)");
+  let isParamsOpen = false;
+
+  const setParamsOpen = (open: boolean) => {
+    isParamsOpen = open;
+    document.body.classList.toggle("params-open", open);
+    toggleParamsBtn?.setAttribute("aria-expanded", String(open));
+  };
+
+  const syncResponsiveLayout = () => {
+    const isMobilePortrait = mobilePortraitQuery.matches;
+    document.body.classList.toggle("mobile-portrait", isMobilePortrait);
+    if (!isMobilePortrait) {
+      setParamsOpen(true);
+    } else {
+      setParamsOpen(false);
+    }
+  };
+
+  toggleParamsBtn?.addEventListener("click", () => {
+    if (!document.body.classList.contains("mobile-portrait")) return;
+    setParamsOpen(!isParamsOpen);
+  });
+
+  mobilePortraitQuery.addEventListener("change", syncResponsiveLayout);
+  syncResponsiveLayout();
 
   async function runModel() {
     const code = editor.getValue();
