@@ -9,6 +9,9 @@ import { Viewport } from "./viewport.js";
 import { ParamPanel } from "./param-panel.js";
 import { LiveSessionClient, type LiveSessionState, type PatchEventPayload } from "./live-session-client.js";
 import { evaluateModel } from "../api/runtime.js";
+import { EditorDecorations } from "./editor-decorations.js";
+import { PatchHistoryPanel } from "./patch-history.js";
+import type { PatchEvent } from "./types/live-session.js";
 
 const REMOTE_RUN_DEBOUNCE_MS = 150;
 
@@ -21,6 +24,7 @@ async function boot() {
   const runBtn = document.getElementById("btn-run")!;
   const exportBtn = document.getElementById("btn-export-stl")!;
   const toggleParamsBtn = document.getElementById("btn-toggle-params") as HTMLButtonElement;
+  const toolbarActions = document.getElementById("toolbar-actions")!;
   const liveBtn = document.getElementById("btn-live-session") as HTMLButtonElement;
   const liveStatus = document.getElementById("live-session-status") as HTMLElement;
   const liveFeedback = document.getElementById("live-session-feedback") as HTMLElement;
@@ -73,6 +77,26 @@ async function boot() {
 
   const viewport = new Viewport(viewportEl);
   let lastResult: Awaited<ReturnType<typeof evaluateModel>> | null = null;
+  const editorDecorations = new EditorDecorations(editor);
+  let patchHistory: PatchEvent[] = [];
+  let selectedPatchId: string | undefined;
+
+  const runStatus = document.createElement("div");
+  runStatus.id = "patch-run-status";
+  runStatus.textContent = "No patch activity";
+  toolbarActions.prepend(runStatus);
+
+  const patchHistoryPanel = new PatchHistoryPanel(viewportEl, {
+    onSelectPatch: (patchId) => {
+      selectedPatchId = patchId;
+      editorDecorations.highlightPatchHistory(patchHistory, selectedPatchId);
+      patchHistoryPanel.setPatches(patchHistory, selectedPatchId);
+    },
+    onRevertPatch: (patchId) => {
+      console.info(`[live-session] revert requested for patch ${patchId}`);
+      runStatus.textContent = `Revert requested: ${patchId}`;
+    },
+  });
 
   const paramPanel = new ParamPanel(paramEl, (_name, _value) => {
     // Re-run on param change
@@ -149,6 +173,24 @@ async function boot() {
     }
   }
 
+  function applyPatchHistory(nextPatches: PatchEvent[]): void {
+    patchHistory = nextPatches;
+    if (selectedPatchId && !patchHistory.some((patch) => patch.patchId === selectedPatchId)) {
+      selectedPatchId = undefined;
+    }
+
+    patchHistoryPanel.setPatches(patchHistory, selectedPatchId);
+    editorDecorations.highlightPatchHistory(patchHistory, selectedPatchId);
+
+    const latestPatch = patchHistory[patchHistory.length - 1];
+    if (!latestPatch) {
+      runStatus.textContent = "No patch activity";
+      return;
+    }
+
+    const outcome = latestPatch.runResult?.state ?? "running";
+    runStatus.textContent = `r${latestPatch.revision}: ${latestPatch.summary.title} (${outcome})`;
+  }
   const scheduleRemoteRun = () => {
     if (remoteRunTimer !== null) {
       window.clearTimeout(remoteRunTimer);
