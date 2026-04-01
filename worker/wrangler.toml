@@ -15,7 +15,7 @@ class_name = "LiveSession"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["LiveSession"]
+new_sqlite_classes = ["LiveSession"]
 
 [dev]
 port = 8787
@@ -33,4 +33,4 @@ class_name = "LiveSession"
 
 [[env.preview.migrations]]
 tag = "v1"
-new_classes = ["LiveSession"]
+new_sqlite_classes = ["LiveSession"]
