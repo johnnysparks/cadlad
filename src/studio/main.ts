@@ -53,7 +53,33 @@ async function boot() {
   // Error bar
   const errorBar = document.createElement("div");
   errorBar.id = "error-bar";
+  const errorBarText = document.createElement("span");
+  errorBarText.id = "error-bar-text";
+  const errorBarCopy = document.createElement("button");
+  errorBarCopy.id = "error-bar-copy";
+  errorBarCopy.textContent = "copy";
+  errorBarCopy.title = "Copy full error to clipboard";
+  errorBar.appendChild(errorBarText);
+  errorBar.appendChild(errorBarCopy);
   viewportEl.appendChild(errorBar);
+
+  let errorCopyTimer: number | null = null;
+  const copyErrorText = () => {
+    const text = errorBarText.textContent ?? "";
+    if (!text) return;
+    navigator.clipboard?.writeText(text).then(() => {
+      errorBarCopy.textContent = "copied!";
+      errorBar.classList.add("copied");
+      if (errorCopyTimer !== null) window.clearTimeout(errorCopyTimer);
+      errorCopyTimer = window.setTimeout(() => {
+        errorBarCopy.textContent = "copy";
+        errorBar.classList.remove("copied");
+        errorCopyTimer = null;
+      }, 1500);
+    }).catch(() => { /* clipboard unavailable */ });
+  };
+  errorBar.addEventListener("click", copyErrorText);
+  errorBarCopy.addEventListener("click", (e) => { e.stopPropagation(); copyErrorText(); });
 
   // Init components
   const editor = createEditor(editorPane);
@@ -164,7 +190,7 @@ async function boot() {
       lastResult = result;
 
       if (result.errors.length > 0) {
-        errorBar.textContent = result.errors.join("\n");
+        errorBarText.textContent = result.errors.join("\n");
         errorBar.classList.add("visible");
       }
 
@@ -186,7 +212,7 @@ async function boot() {
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      errorBar.textContent = msg;
+      errorBarText.textContent = msg;
       errorBar.classList.add("visible");
       if (liveSessionId) {
         setLiveUi("failed", msg);
@@ -407,7 +433,7 @@ async function boot() {
     },
     /** Return the result of the most recent successful run. */
     getResult() { return lastResult; },
-    getErrors() { return errorBar.textContent || ""; },
+    getErrors() { return errorBarText.textContent || ""; },
     hasError() { return errorBar.classList.contains("visible"); },
 
     // ── Params ──────────────────────────────────────────────────────────────
