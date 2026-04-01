@@ -2,9 +2,6 @@ name = "cadlad-live-sessions"
 main = "src/index.ts"
 compatibility_date = "2024-09-25"
 
-# Studio origin used for CORS and liveUrl construction.
-# Override via `wrangler dev --var STUDIO_ORIGIN:http://localhost:5173`
-# or set in the Cloudflare dashboard for production.
 [vars]
 STUDIO_ORIGIN = "http://localhost:5173"
 
@@ -14,7 +11,7 @@ class_name = "LiveSession"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["LiveSession"]
+new_sqlite_classes = ["LiveSession"]
 
 [dev]
 port = 8787
