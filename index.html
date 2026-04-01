@@ -11,12 +11,17 @@
     <header id="toolbar">
       <h1>CadLad</h1>
       <div id="toolbar-actions">
+        <button id="btn-live-session" title="Create live assistant session">🤖☁️ Live</button>
         <button id="btn-run" title="Run model (Ctrl+Enter)">▶ Run</button>
         <button id="btn-export-stl" title="Export STL">STL</button>
         <button id="btn-toggle-params" title="Toggle parameters" aria-controls="param-panel" aria-expanded="false">Params</button>
         <a href="./gallery/" id="btn-gallery" title="Example Gallery" style="color:inherit;text-decoration:none;padding:4px 8px;font-size:13px;opacity:0.7">Gallery</a>
       </div>
     </header>
+    <div id="live-session-strip" aria-live="polite">
+      <span id="live-session-status" data-state="idle">Live: off</span>
+      <span id="live-session-feedback"></span>
+    </div>
     <main id="workspace">
       <div id="editor-pane"></div>
       <div id="param-panel"></div>

@@ -10,6 +10,7 @@ export class ParamPanel {
   private container: HTMLElement;
   private onChange: ParamChangeCallback;
   private values: Map<string, number> = new Map();
+  private definitions: ParamDef[] = [];
 
   constructor(container: HTMLElement, onChange: ParamChangeCallback) {
     this.container = container;
@@ -18,6 +19,7 @@ export class ParamPanel {
 
   /** Rebuild sliders from param definitions. */
   setParams(params: ParamDef[]): void {
+    this.definitions = params;
     this.container.innerHTML = "";
 
     if (params.length === 0) {
@@ -38,6 +40,7 @@ export class ParamPanel {
       nameSpan.textContent = p.name + (p.unit ? ` (${p.unit})` : "");
       const valSpan = document.createElement("span");
       valSpan.className = "val";
+      valSpan.dataset.paramValue = p.name;
       valSpan.textContent = String(p.value);
       label.appendChild(nameSpan);
       label.appendChild(valSpan);
@@ -48,6 +51,7 @@ export class ParamPanel {
       input.max = String(p.max ?? p.value * 3);
       input.step = String(p.step ?? 1);
       input.value = String(this.values.get(p.name) ?? p.value);
+      input.dataset.paramName = p.name;
 
       input.addEventListener("input", () => {
         const v = parseFloat(input.value);
@@ -65,5 +69,24 @@ export class ParamPanel {
   /** Get current parameter values. */
   getValues(): Map<string, number> {
     return new Map(this.values);
+  }
+
+  /** Replace panel values from an external source (e.g. live session). */
+  setValues(values: Record<string, number>): void {
+    for (const [name, value] of Object.entries(values)) {
+      this.values.set(name, value);
+      const input = this.container.querySelector<HTMLInputElement>(`input[data-param-name="${CSS.escape(name)}"]`);
+      if (input) input.value = String(value);
+      const valEl = this.container.querySelector<HTMLElement>(`[data-param-value="${CSS.escape(name)}"]`);
+      if (valEl) valEl.textContent = String(value);
+    }
+  }
+
+  getValueObject(): Record<string, number> {
+    return Object.fromEntries(this.values.entries());
+  }
+
+  getParamDefinitions(): ParamDef[] {
+    return [...this.definitions];
   }
 }
