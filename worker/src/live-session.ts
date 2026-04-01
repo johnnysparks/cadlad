@@ -9,6 +9,8 @@ import type {
   SessionSummary,
   ApplyPatchRequest,
   RevertRequest,
+  PostRunResultRequest,
+  RunResult,
 } from './types.js';
 
 const MAX_PATCHES = 100;
@@ -26,6 +28,7 @@ interface StoredSession {
   writeToken: string;
   createdAt: number;
   updatedAt: number;
+  lastRunResult?: RunResult | null;
 }
 
 // ── Durable Object ────────────────────────────────────────────────────────────
@@ -47,6 +50,8 @@ export class LiveSession implements DurableObject {
   private writeToken = '';
   private createdAt = 0;
   private updatedAt = 0;
+  /** Latest run result posted by a connected studio */
+  private lastRunResult: RunResult | null = null;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -64,6 +69,7 @@ export class LiveSession implements DurableObject {
         this.writeToken = stored.writeToken;
         this.createdAt = stored.createdAt;
         this.updatedAt = stored.updatedAt;
+        this.lastRunResult = stored.lastRunResult ?? null;
       }
     });
   }
@@ -85,8 +91,10 @@ export class LiveSession implements DurableObject {
       if (request.method === 'GET' && (sub === '' || sub === '/')) return this.handleGetSession();
       if (request.method === 'GET' && sub === '/history') return this.handleGetHistory(url);
       if (request.method === 'GET' && sub === '/events') return this.handleSSE(request);
+      if (request.method === 'GET' && sub === '/run-result') return this.handleGetRunResult();
       if (request.method === 'POST' && sub === '/patch') return this.handlePatch(request);
       if (request.method === 'POST' && sub === '/revert') return this.handleRevert(request);
+      if (request.method === 'POST' && sub === '/run-result') return this.handlePostRunResult(request);
 
       return err('Not found', 'NOT_FOUND', 404);
     } catch (e) {
@@ -253,6 +261,34 @@ export class LiveSession implements DurableObject {
     return ok({ patch: revertPatch, session: this.fullState() }, 201);
   }
 
+  private handleGetRunResult(): Response {
+    if (!this.lastRunResult) {
+      return ok({ runResult: null, message: 'No run result posted yet. Connect CadLad Studio to the session and run the model.' });
+    }
+    return ok({ runResult: this.lastRunResult, revision: this.revision });
+  }
+
+  private async handlePostRunResult(request: Request): Promise<Response> {
+    const authErr = this.checkAuth(request);
+    if (authErr) return authErr;
+
+    const body = await request.json() as PostRunResultRequest;
+    if (typeof body.revision !== 'number' || !body.result) {
+      return err('revision (number) and result (RunResult) are required', 'INVALID_REQUEST', 400);
+    }
+
+    this.lastRunResult = body.result;
+    if (body.result.success) this.lastSuccessfulRevision = body.revision;
+
+    this.updatedAt = Date.now();
+    await this.persist();
+
+    const event: SessionEvent = { type: 'run_result_posted', result: body.result, revision: body.revision };
+    this.broadcast(event);
+
+    return ok({ ok: true });
+  }
+
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   private checkAuth(request: Request): Response | null {
@@ -279,6 +315,10 @@ export class LiveSession implements DurableObject {
       writeToken: this.writeToken,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
+      // Persist without screenshot to keep storage bounded
+      lastRunResult: this.lastRunResult
+        ? { ...this.lastRunResult, screenshot: undefined }
+        : null,
     };
     await this.state.storage.put('session', stored);
   }

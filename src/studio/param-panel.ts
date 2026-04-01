@@ -47,6 +47,7 @@ export class ParamPanel {
 
       const input = document.createElement("input");
       input.type = "range";
+      input.dataset.param = p.name;
       input.min = String(p.min ?? 0);
       input.max = String(p.max ?? p.value * 3);
       input.step = String(p.step ?? 1);
@@ -88,5 +89,19 @@ export class ParamPanel {
 
   getParamDefinitions(): ParamDef[] {
     return [...this.definitions];
+  }
+
+  /**
+   * Programmatically set a single param value and update the slider UI if rendered.
+   * Used by the __cadlad.setParam() automation surface.
+   */
+  setValue(name: string, value: number): void {
+    this.values.set(name, value);
+    const slider = this.container.querySelector<HTMLInputElement>(`input[data-param="${CSS.escape(name)}"]`);
+    if (slider) {
+      slider.value = String(value);
+      const valSpan = slider.closest(".param-group")?.querySelector<HTMLElement>(".val");
+      if (valSpan) valSpan.textContent = String(value);
+    }
   }
 }
