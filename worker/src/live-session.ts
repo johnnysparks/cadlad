@@ -98,7 +98,7 @@ export class LiveSession implements DurableObject {
   // ── Route handlers ──────────────────────────────────────────────────────────
 
   private async handleInit(request: Request): Promise<Response> {
-    const body = await request.json<InitPayload>();
+    const body = await request.json() as InitPayload;
 
     this.id = body.sessionId;
     this.source = body.source ?? '';
@@ -166,8 +166,8 @@ export class LiveSession implements DurableObject {
       });
     }, HEARTBEAT_INTERVAL_MS);
 
-    // Clear heartbeat when the stream closes
-    readable.pipeTo(new WritableStream()).catch(() => clearInterval(heartbeat));
+    // Heartbeat failures (caught above) clear the interval when the stream closes.
+    // The abort signal also cleans up synchronously when the client disconnects.
 
     return new Response(readable, {
       status: 200,
@@ -185,7 +185,7 @@ export class LiveSession implements DurableObject {
     const authErr = this.checkAuth(request);
     if (authErr) return authErr;
 
-    const body = await request.json<ApplyPatchRequest>();
+    const body = await request.json() as ApplyPatchRequest;
     if (!body.type || !body.summary) return err('type and summary are required', 'INVALID_REQUEST', 400);
 
     const newRevision = this.revision + 1;
@@ -221,7 +221,7 @@ export class LiveSession implements DurableObject {
     const authErr = this.checkAuth(request);
     if (authErr) return authErr;
 
-    const body = await request.json<RevertRequest>();
+    const body = await request.json() as RevertRequest;
     const target = this.patches.find(p => p.id === body.patchId);
     if (!target) return err('Patch not found', 'PATCH_NOT_FOUND', 404);
 

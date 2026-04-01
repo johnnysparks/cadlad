@@ -44,7 +44,7 @@ export default {
 async function handleCreateSession(request: Request, env: Env, origin: string): Promise<Response> {
   let body: { source?: string; params?: Record<string, number> };
   try {
-    body = await request.json();
+    body = await request.json() as { source?: string; params?: Record<string, number> };
   } catch {
     return json({ error: 'Invalid JSON body', code: 'INVALID_REQUEST' }, 400, corsHeaders(origin));
   }
