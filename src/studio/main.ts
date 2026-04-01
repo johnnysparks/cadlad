@@ -329,7 +329,7 @@ async function boot() {
 
   liveBtn.addEventListener("click", async () => {
     liveBtn.disabled = true;
-    setLiveUi("connecting", "creating session");
+    setLiveUi("connecting", liveClient.apiBase);
 
     try {
       const created = await liveClient.createSession({
@@ -351,7 +351,14 @@ async function boot() {
       await attachLiveSession(created.sessionId, created.writeToken);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      setLiveUi("failed", msg);
+      // Auto-probe worker health to surface deployment vs. routing issues
+      const ping = await liveClient.ping();
+      const healthNote = ping.ok
+        ? `worker reachable (${ping.status})`
+        : ping.status === 0
+          ? `worker unreachable — ${ping.url}`
+          : `worker responded ${ping.status} — ${ping.url}`;
+      setLiveUi("failed", `${msg} | health: ${healthNote}`);
     } finally {
       liveBtn.disabled = false;
     }

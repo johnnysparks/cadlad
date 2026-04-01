@@ -19,7 +19,14 @@ export default {
     }
 
     // POST /api/live/session — create a new live session
-    if (request.method === 'POST' && url.pathname === '/api/live/session') {
+    if (url.pathname === '/api/live/session') {
+      if (request.method !== 'POST') {
+        return json(
+          { error: `Method ${request.method} not allowed. Use POST.`, code: 'METHOD_NOT_ALLOWED', hint: 'POST /api/live/session with JSON body {source: string, params?: object}' },
+          405,
+          { ...corsHeaders(origin), Allow: 'POST, OPTIONS' },
+        );
+      }
       return handleCreateSession(request, env, origin);
     }
 
@@ -32,7 +39,13 @@ export default {
 
     // Health check
     if (url.pathname === '/' || url.pathname === '/health') {
-      return json({ status: 'ok', service: 'cadlad-live-sessions' }, 200, corsHeaders(origin));
+      return json({
+        status: 'ok',
+        service: 'cadlad-live-sessions',
+        timestamp: new Date().toISOString(),
+        studioOrigin: env.STUDIO_ORIGIN || '(dynamic — reflects request Origin)',
+        routes: ['POST /api/live/session', 'GET /api/live/session/:id', 'GET /api/live/session/:id/events', 'POST /api/live/session/:id/patch', 'GET /health'],
+      }, 200, corsHeaders(origin));
     }
 
     return json({ error: 'Not found', code: 'NOT_FOUND' }, 404, corsHeaders(origin));
