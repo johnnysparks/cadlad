@@ -62,9 +62,13 @@ export class LiveSessionClient {
   constructor(options: LiveSessionClientOptions = {}) {
     const envBase = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_LIVE_SESSION_API_BASE;
     const configuredBase = options.apiBase ?? envBase;
+    const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+    const fallbackBase = isLocalhost
+      ? `${window.location.protocol}//${window.location.hostname}:8787`
+      : window.location.origin;
     this.apiBase = configuredBase
       ? configuredBase.replace(/\/$/, "")
-      : `${window.location.protocol}//${window.location.hostname}:8787`;
+      : fallbackBase;
   }
 
   async createSession(payload: { source: string; params: Record<string, number> }): Promise<CreateLiveSessionResponse> {

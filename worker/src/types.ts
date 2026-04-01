@@ -141,7 +141,7 @@ export interface Env {
   /**
    * The origin of the CadLad studio (e.g. https://cadlad.studio or
    * http://localhost:5173). Used to construct liveUrl and CORS headers.
-   * Defaults to '*' when unset.
+   * When unset, the worker reflects the incoming request Origin.
    */
   STUDIO_ORIGIN?: string;
 }
