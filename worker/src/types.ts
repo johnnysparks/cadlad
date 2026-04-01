@@ -16,6 +16,10 @@ export interface Patch {
   revision: number;
   type: 'create' | 'source_replace' | 'param_update' | 'revert';
   summary: string;
+  /** Why this change was made — agent's stated reason */
+  intent?: string;
+  /** Technical approach taken — brief description of the strategy */
+  approach?: string;
   sourceBefore: string;
   sourceAfter: string;
   paramsBefore: Record<string, number>;
@@ -27,11 +31,35 @@ export interface Patch {
   createdAt: number;
 }
 
+export interface ModelStats {
+  /** Total triangle count across all bodies */
+  triangles: number;
+  /** Number of distinct bodies / assembly parts */
+  bodies: number;
+  /** Axis-aligned bounding box in model-space (Z-up) */
+  boundingBox: {
+    min: [number, number, number];
+    max: [number, number, number];
+  };
+  /** Approximate volume in model units³ (sum of all bodies) */
+  volume?: number;
+  /** Approximate surface area in model units² (sum of all bodies) */
+  surfaceArea?: number;
+}
+
 export interface RunResult {
   success: boolean;
   errors: string[];
   warnings: string[];
   timestamp: number;
+  /** Geometry statistics from the last successful evaluation */
+  stats?: ModelStats;
+  /**
+   * Base64-encoded PNG data URL of the latest viewport render.
+   * Populated by the connected studio after each rerender.
+   * Small thumbnail recommended (≤512px) to keep storage light.
+   */
+  screenshot?: string;
 }
 
 // ── SSE event types ───────────────────────────────────────────────────────────
@@ -41,6 +69,8 @@ export type SessionEvent =
   | { type: 'patch_applied'; patch: Patch; session: SessionSummary }
   | { type: 'patch_reverted'; patch: Patch; session: SessionSummary }
   | { type: 'run_status'; result: RunResult; revision: number }
+  /** Broadcast when the studio posts a run result (screenshot + stats) */
+  | { type: 'run_result_posted'; result: RunResult; revision: number }
   | { type: 'error'; message: string }
   | { type: 'heartbeat'; ts: number };
 
@@ -70,8 +100,18 @@ export interface ApplyPatchRequest {
   params?: Record<string, number>;
   /** Human-readable description of what changed */
   summary: string;
+  /** Why this change was made — agent's stated reason */
+  intent?: string;
+  /** Technical approach taken — brief description of the strategy */
+  approach?: string;
   /** Optional: pre-populated run result if caller already evaluated the model */
   runResult?: RunResult;
+}
+
+/** POST /api/live/session/:id/run-result — studio posts result after each rerender */
+export interface PostRunResultRequest {
+  revision: number;
+  result: RunResult;
 }
 
 export interface RevertRequest {

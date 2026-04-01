@@ -1,0 +1,23 @@
+{
+  "name": "cadlad-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server — assistant bridge for CadLad live sessions",
+  "type": "module",
+  "main": "dist/server.js",
+  "bin": {
+    "cadlad-mcp": "./dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -389,21 +389,56 @@ async function boot() {
     URL.revokeObjectURL(url);
   });
 
-  // Expose for test automation (Puppeteer snapshot tests)
+  // Expose for test automation (Puppeteer snapshot tests) and live-session bridge
   (window as any).__cadlad = {
-    setCode(code: string) {
-      editor.setValue(code);
+    // ── Core ────────────────────────────────────────────────────────────────
+    setCode(code: string) { editor.setValue(code); },
+    /** Run the current editor source. Returns the ModelResult on completion. */
+    async run(): Promise<typeof lastResult> {
+      await runModel();
+      return lastResult;
     },
-    run: runModel,
-    getErrors() {
-      return errorBar.textContent || "";
+    /** Return the result of the most recent successful run. */
+    getResult() { return lastResult; },
+    getErrors() { return errorBar.textContent || ""; },
+    hasError() { return errorBar.classList.contains("visible"); },
+
+    // ── Params ──────────────────────────────────────────────────────────────
+    /** Get a snapshot of current param name→value map. */
+    getParams(): Record<string, number> { return paramPanel.getValueObject(); },
+    /** Update a single param by name and rerun. No-op if name not found. */
+    async setParam(name: string, value: number): Promise<void> {
+      paramPanel.setValue(name, value);
+      await runModel();
     },
-    hasError() {
-      return errorBar.classList.contains("visible");
+
+    // ── Camera ──────────────────────────────────────────────────────────────
+    setView(view: string) { viewport.setView(view as any); },
+    /** Set camera to an arbitrary [x,y,z] position in Y-up Three.js space. */
+    setCameraPosition(pos: [number, number, number], target?: [number, number, number]) {
+      viewport.setCameraPosition(pos, target);
     },
-    setView(view: string) {
-      viewport.setView(view as any);
+    getCameraPosition(): [number, number, number] { return viewport.getCameraPosition(); },
+
+    // ── Screenshot ──────────────────────────────────────────────────────────
+    /**
+     * Capture the current viewport as a base64 PNG data URL.
+     * If a named view is provided, temporarily switches to that view for the capture.
+     */
+    captureFrame(view?: string): string {
+      if (view) return viewport.captureView(view as any);
+      return viewport.captureFrame();
     },
+
+    // ── Cross-section ────────────────────────────────────────────────────────
+    /**
+     * Apply a cross-section cut along an axis at the given offset.
+     * @example __cadlad.setCrossSection('z', 10)  // horizontal cut 10mm up
+     */
+    setCrossSection(axis: "x" | "y" | "z", offset: number) {
+      viewport.setCrossSection(axis, offset);
+    },
+    clearCrossSection() { viewport.clearCrossSection(); },
   };
 
   const sessionFromUrl = urlParams.get("session");

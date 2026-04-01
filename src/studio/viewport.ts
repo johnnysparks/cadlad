@@ -15,14 +15,17 @@ export class Viewport {
   private container: HTMLElement;
   private meshGroup: THREE.Group;
   private animId = 0;
+  private crossSectionPlane: THREE.Plane | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    // preserveDrawingBuffer required for captureFrame() / canvas.toDataURL()
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setClearColor(0x181825);
     this.renderer.shadowMap.enabled = true;
+    this.renderer.localClippingEnabled = true; // required for setCrossSection()
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
@@ -125,6 +128,76 @@ export class Viewport {
     this.camera.position.set(center.x + dx, center.y + dy, center.z + dz);
     this.controls.target.copy(center);
     this.controls.update();
+  }
+
+  /**
+   * Capture the current viewport as a base64 PNG data URL.
+   * Forces a synchronous render so the result is always up-to-date.
+   * Requires preserveDrawingBuffer: true (set in constructor).
+   */
+  captureFrame(): string {
+    this.controls.update();
+    this.renderer.render(this.scene, this.camera);
+    return this.renderer.domElement.toDataURL("image/png");
+  }
+
+  /**
+   * Capture a thumbnail at a specific named view.
+   * Repositions the camera, renders once, then returns to the current view.
+   */
+  captureView(view: "front" | "back" | "top" | "bottom" | "left" | "right" | "iso"): string {
+    const prevPos = this.camera.position.clone();
+    const prevTarget = this.controls.target.clone();
+    this.setView(view);
+    const dataUrl = this.captureFrame();
+    this.camera.position.copy(prevPos);
+    this.controls.target.copy(prevTarget);
+    this.controls.update();
+    return dataUrl;
+  }
+
+  /**
+   * Set camera to an arbitrary world-space position.
+   * @param pos  Camera position [x, y, z] in Y-up Three.js space
+   * @param target  Optional look-at target; defaults to mesh group center
+   */
+  setCameraPosition(pos: [number, number, number], target?: [number, number, number]): void {
+    this.camera.position.set(pos[0], pos[1], pos[2]);
+    if (target) {
+      this.controls.target.set(target[0], target[1], target[2]);
+    } else {
+      const bbox = new THREE.Box3().setFromObject(this.meshGroup);
+      if (!bbox.isEmpty()) {
+        bbox.getCenter(this.controls.target);
+      }
+    }
+    this.controls.update();
+  }
+
+  /** Get the current camera position in Y-up Three.js space. */
+  getCameraPosition(): [number, number, number] {
+    return [this.camera.position.x, this.camera.position.y, this.camera.position.z];
+  }
+
+  /**
+   * Apply a cross-section clipping plane along a world axis.
+   * @param axis   'x' | 'y' | 'z' — axis whose positive half is shown
+   * @param offset Distance along the axis where the cut is made (model units)
+   */
+  setCrossSection(axis: "x" | "y" | "z", offset: number): void {
+    const normals: Record<string, THREE.Vector3> = {
+      x: new THREE.Vector3(-1, 0, 0),
+      y: new THREE.Vector3(0, -1, 0),
+      z: new THREE.Vector3(0, 0, -1),
+    };
+    this.crossSectionPlane = new THREE.Plane(normals[axis], offset);
+    this.renderer.clippingPlanes = [this.crossSectionPlane];
+  }
+
+  /** Remove any active cross-section clipping plane. */
+  clearCrossSection(): void {
+    this.crossSectionPlane = null;
+    this.renderer.clippingPlanes = [];
   }
 
   dispose(): void {
