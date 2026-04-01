@@ -7,7 +7,12 @@
 import { createEditor } from "./editor.js";
 import { Viewport } from "./viewport.js";
 import { ParamPanel } from "./param-panel.js";
+import { LiveSessionClient, type LiveSessionState, type PatchEventPayload } from "./live-session-client.js";
 import { evaluateModel } from "../api/runtime.js";
+
+const REMOTE_RUN_DEBOUNCE_MS = 150;
+
+type LiveUiState = "idle" | "connecting" | "connected" | "patching" | "rerunning" | "failed";
 
 async function boot() {
   const editorPane = document.getElementById("editor-pane")!;
@@ -16,6 +21,9 @@ async function boot() {
   const runBtn = document.getElementById("btn-run")!;
   const exportBtn = document.getElementById("btn-export-stl")!;
   const toggleParamsBtn = document.getElementById("btn-toggle-params") as HTMLButtonElement;
+  const liveBtn = document.getElementById("btn-live-session") as HTMLButtonElement;
+  const liveStatus = document.getElementById("live-session-status") as HTMLElement;
+  const liveFeedback = document.getElementById("live-session-feedback") as HTMLElement;
 
   // Error bar
   const errorBar = document.createElement("div");
@@ -25,15 +33,42 @@ async function boot() {
   // Init components
   const editor = createEditor(editorPane);
 
+  const liveClient = new LiveSessionClient();
+  let liveSessionId: string | null = null;
+  let liveToken: string | null = null;
+  let liveSource: EventSource | null = null;
+  let remoteRunTimer: number | null = null;
+
+  const setLiveUi = (state: LiveUiState, detail = "") => {
+    liveStatus.dataset.state = state;
+    const labels: Record<LiveUiState, string> = {
+      idle: "Live: off",
+      connecting: "Live: connecting",
+      connected: "Live: connected",
+      patching: "Live: patching",
+      rerunning: "Live: rerunning",
+      failed: "Live: failed",
+    };
+    liveStatus.textContent = labels[state];
+    liveFeedback.textContent = detail;
+  };
+
+  setLiveUi("idle");
+
   // Load code from URL if provided (?code=base64)
   const urlParams = new URLSearchParams(window.location.search);
   const codeParam = urlParams.get("code");
   if (codeParam) {
     try {
       editor.setValue(decodeURIComponent(escape(atob(codeParam))));
-      // Clean the URL so refreshing doesn't re-load
-      window.history.replaceState({}, "", window.location.pathname);
-    } catch { /* ignore bad base64 */ }
+      // Clean only the code payload so refreshing doesn't re-load.
+      urlParams.delete("code");
+      const nextSearch = urlParams.toString();
+      const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`;
+      window.history.replaceState({}, "", nextUrl);
+    } catch {
+      /* ignore bad base64 */
+    }
   }
 
   const viewport = new Viewport(viewportEl);
@@ -71,9 +106,13 @@ async function boot() {
   mobilePortraitQuery.addEventListener("change", syncResponsiveLayout);
   syncResponsiveLayout();
 
-  async function runModel() {
+  async function runModel(options: { fromRemote?: boolean } = {}) {
     const code = editor.getValue();
     errorBar.classList.remove("visible");
+
+    if (options.fromRemote && liveSessionId) {
+      setLiveUi("rerunning", `rev sync: ${liveSessionId.slice(0, 8)}`);
+    }
 
     try {
       const result = await evaluateModel(code, paramPanel.getValues());
@@ -97,21 +136,145 @@ async function boot() {
       }
 
       paramPanel.setParams(result.params);
+      if (liveSessionId) {
+        setLiveUi("connected", "ready");
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       errorBar.textContent = msg;
       errorBar.classList.add("visible");
+      if (liveSessionId) {
+        setLiveUi("failed", msg);
+      }
     }
   }
 
+  const scheduleRemoteRun = () => {
+    if (remoteRunTimer !== null) {
+      window.clearTimeout(remoteRunTimer);
+    }
+    remoteRunTimer = window.setTimeout(() => {
+      remoteRunTimer = null;
+      void runModel({ fromRemote: true });
+    }, REMOTE_RUN_DEBOUNCE_MS);
+  };
+
+  const applyRemoteSession = (session: Partial<LiveSessionState>) => {
+    if (typeof session.source === "string" && session.source !== editor.getValue()) {
+      editor.setValue(session.source);
+    }
+
+    if (session.params) {
+      paramPanel.setValues(session.params);
+    }
+
+    if (session.id) {
+      liveSessionId = session.id;
+    }
+
+    scheduleRemoteRun();
+  };
+
+  const handleLiveEvent = (event: PatchEventPayload) => {
+    switch (event.type) {
+      case "session_snapshot":
+        setLiveUi("connected", "snapshot synced");
+        if (event.session) applyRemoteSession(event.session);
+        break;
+      case "patch_applied":
+      case "patch_reverted": {
+        setLiveUi("patching", event.patch?.summary ?? "assistant update");
+        const patchPayload = {
+          source: event.patch?.sourceAfter,
+          params: event.patch?.paramsAfter,
+          revision: event.patch?.revision,
+          ...event.session,
+        };
+        applyRemoteSession(patchPayload);
+        break;
+      }
+      case "run_status":
+        setLiveUi("connected", "run status received");
+        break;
+      case "error":
+        setLiveUi("failed", event.message ?? "session error");
+        break;
+      default:
+        break;
+    }
+  };
+
+  const attachLiveSession = async (sessionId: string, token: string | null) => {
+    liveSessionId = sessionId;
+    liveToken = token;
+    liveSource?.close();
+    setLiveUi("connecting", `session ${sessionId.slice(0, 8)}`);
+
+    const session = await liveClient.fetchSession(sessionId);
+    applyRemoteSession(session);
+
+    liveSource = liveClient.subscribe(
+      sessionId,
+      token,
+      handleLiveEvent,
+      () => setLiveUi("failed", "connection lost; retrying"),
+    );
+
+    setLiveUi("connected", "listening for patches");
+  };
+
+  const copyText = async (text: string): Promise<boolean> => {
+    if (!navigator.clipboard || !navigator.clipboard.writeText) return false;
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  liveBtn.addEventListener("click", async () => {
+    liveBtn.disabled = true;
+    setLiveUi("connecting", "creating session");
+
+    try {
+      const created = await liveClient.createSession({
+        source: editor.getValue(),
+        params: paramPanel.getValueObject(),
+      });
+
+      const copied = await copyText(created.liveUrl);
+      setLiveUi(
+        "connected",
+        copied ? "live link copied to clipboard" : "session ready (copy failed)",
+      );
+
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.set("session", created.sessionId);
+      nextUrl.searchParams.set("token", created.writeToken);
+      window.history.replaceState({}, "", nextUrl.toString());
+
+      await attachLiveSession(created.sessionId, created.writeToken);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setLiveUi("failed", msg);
+    } finally {
+      liveBtn.disabled = false;
+    }
+  });
+
   // Run button
-  runBtn.addEventListener("click", runModel);
+  runBtn.addEventListener("click", () => {
+    void runModel();
+  });
 
   // Ctrl+Enter to run
   editor.addCommand(
     // Monaco KeyMod.CtrlCmd | Monaco KeyCode.Enter
     2048 | 3, // CtrlCmd | Enter
-    runModel,
+    () => {
+      void runModel();
+    },
   );
 
   // Export STL
@@ -134,12 +297,31 @@ async function boot() {
 
   // Expose for test automation (Puppeteer snapshot tests)
   (window as any).__cadlad = {
-    setCode(code: string) { editor.setValue(code); },
+    setCode(code: string) {
+      editor.setValue(code);
+    },
     run: runModel,
-    getErrors() { return errorBar.textContent || ""; },
-    hasError() { return errorBar.classList.contains("visible"); },
-    setView(view: string) { viewport.setView(view as any); },
+    getErrors() {
+      return errorBar.textContent || "";
+    },
+    hasError() {
+      return errorBar.classList.contains("visible");
+    },
+    setView(view: string) {
+      viewport.setView(view as any);
+    },
   };
+
+  const sessionFromUrl = urlParams.get("session");
+  const tokenFromUrl = urlParams.get("token");
+  if (sessionFromUrl) {
+    try {
+      await attachLiveSession(sessionFromUrl, tokenFromUrl);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setLiveUi("failed", msg);
+    }
+  }
 
   // Run the default model on load
   await runModel();
@@ -167,19 +349,30 @@ function meshToSTLBuffer(mesh: { positions: Float32Array; indices: Uint32Array }
     const vx = pos[c] - pos[a], vy = pos[c + 1] - pos[a + 1], vz = pos[c + 2] - pos[a + 2];
     let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
     const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-    if (len > 0) { nx /= len; ny /= len; nz /= len; }
-
-    view.setFloat32(offset, nx, true); offset += 4;
-    view.setFloat32(offset, ny, true); offset += 4;
-    view.setFloat32(offset, nz, true); offset += 4;
-
-    for (const vi of [a, b, c]) {
-      view.setFloat32(offset, pos[vi], true); offset += 4;
-      view.setFloat32(offset, pos[vi + 1], true); offset += 4;
-      view.setFloat32(offset, pos[vi + 2], true); offset += 4;
+    if (len > 0) {
+      nx /= len;
+      ny /= len;
+      nz /= len;
     }
 
-    view.setUint16(offset, 0, true); offset += 2;
+    view.setFloat32(offset, nx, true);
+    offset += 4;
+    view.setFloat32(offset, ny, true);
+    offset += 4;
+    view.setFloat32(offset, nz, true);
+    offset += 4;
+
+    for (const vi of [a, b, c]) {
+      view.setFloat32(offset, pos[vi], true);
+      offset += 4;
+      view.setFloat32(offset, pos[vi + 1], true);
+      offset += 4;
+      view.setFloat32(offset, pos[vi + 2], true);
+      offset += 4;
+    }
+
+    view.setUint16(offset, 0, true);
+    offset += 2;
   }
 
   return buf;
