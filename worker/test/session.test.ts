@@ -408,3 +408,62 @@ describe('GET /api/live/session/:id/events', () => {
     expect(res.status).toBe(404);
   });
 });
+
+
+describe('worker + pages integration behavior', () => {
+  it('reflects request Origin in CORS and liveUrl when STUDIO_ORIGIN is unset', async () => {
+    const origin = 'https://preview-123.cadlad.pages.dev';
+    const res = await SELF.fetch(`${BASE}/api/live/session`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: origin,
+      },
+      body: JSON.stringify({ source: SOURCE, params: PARAMS }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(origin);
+
+    const data = await res.json() as CreateSessionResponse;
+    expect(data.liveUrl.startsWith(`${origin}?session=`)).toBe(true);
+  });
+
+  it('supports run-result endpoint for session health telemetry', async () => {
+    const { sessionId, writeToken } = await createSession();
+
+    const before = await SELF.fetch(`${BASE}/api/live/session/${sessionId}/run-result`);
+    expect(before.status).toBe(200);
+    const beforeBody = await before.json() as { runResult: null; message: string };
+    expect(beforeBody.runResult).toBeNull();
+
+    const payload = {
+      revision: 1,
+      result: {
+        success: true,
+        errors: [],
+        warnings: [],
+        timestamp: Date.now(),
+        stats: {
+          triangles: 100,
+          bodies: 1,
+          boundingBox: { min: [0, 0, 0], max: [1, 1, 1] },
+        },
+      },
+    };
+
+    const post = await SELF.fetch(`${BASE}/api/live/session/${sessionId}/run-result`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader(writeToken) },
+      body: JSON.stringify(payload),
+    });
+    expect(post.status).toBe(200);
+
+    const after = await SELF.fetch(`${BASE}/api/live/session/${sessionId}/run-result`);
+    expect(after.status).toBe(200);
+    const afterBody = await after.json() as { runResult: typeof payload.result; revision: number };
+    expect(afterBody.revision).toBe(1);
+    expect(afterBody.runResult.success).toBe(true);
+    expect(afterBody.runResult.stats?.triangles).toBe(100);
+  });
+});

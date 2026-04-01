@@ -12,22 +12,24 @@ fans out Server-Sent Events to connected browsers.
 
 | Environment | URL |
 |---|---|
-| Local dev | `http://localhost:8787` |
-| Production | `https://<worker-name>.<workers-subdomain>.workers.dev` |
+| Local dev (`wrangler dev`) | `http://localhost:8787` |
+| Preview Worker (`--env preview`) | `https://cadlad-live-sessions-preview.<workers-subdomain>.workers.dev` |
+| Production Worker | `https://cadlad-live-sessions.<workers-subdomain>.workers.dev` |
+| Pages frontend preview | `https://<hash-or-branch>.cadlad.pages.dev` |
 
-> Example production URL using this repo defaults: `https://cadlad-live-sessions.<your-subdomain>.workers.dev`
+> Pages previews should call the Worker URL via `VITE_LIVE_SESSION_API_BASE`; they are separate deployments.
 
 ---
 
 ## Authentication
 
-All **write** endpoints (`POST /patch`, `POST /revert`) require the session's write token.
+All **write** endpoints (`POST /patch`, `POST /revert`, `POST /run-result`) require the session's write token.
 Pass it in either:
 
 - `Authorization: Bearer <writeToken>` header, or
 - `?token=<writeToken>` query param
 
-**Read** endpoints (`GET /session`, `GET /history`, `GET /events`) are public in v1.
+**Read** endpoints (`GET /session`, `GET /history`, `GET /events`, `GET /run-result`) are public in v1.
 
 ---
 
@@ -144,7 +146,7 @@ data: <JSON>\n\n
 { type: "patch_reverted", patch: Patch, session: SessionSummary }
 
 // Run result reported by the client (informational)
-{ type: "run_status", result: RunResult, revision: number }
+{ type: "run_result_posted", result: RunResult, revision: number }
 
 // Keep-alive
 { type: "heartbeat", ts: number }
@@ -190,6 +192,69 @@ Apply a source or param change. **Requires write token.**
   "patch": { ...Patch },
   "session": { ...SessionState }
 }
+```
+
+---
+
+### `GET /api/live/session/:id/run-result`
+
+Fetch the latest run telemetry posted by a connected studio tab.
+
+**Response `200` (no run yet)**
+
+```json
+{
+  "runResult": null,
+  "message": "No run result posted yet. Connect CadLad Studio to the session and run the model."
+}
+```
+
+**Response `200` (run available)**
+
+```json
+{
+  "runResult": {
+    "success": true,
+    "errors": [],
+    "warnings": [],
+    "timestamp": 1700000000000,
+    "stats": {
+      "triangles": 12034,
+      "bodies": 4,
+      "boundingBox": {
+        "min": [0, 0, 0],
+        "max": [120, 90, 60]
+      }
+    }
+  },
+  "revision": 5
+}
+```
+
+---
+
+### `POST /api/live/session/:id/run-result`
+
+Post the latest studio run result, including optional screenshot/statistics. **Requires write token.**
+
+**Request body**
+
+```json
+{
+  "revision": 5,
+  "result": {
+    "success": true,
+    "errors": [],
+    "warnings": [],
+    "timestamp": 1700000000000
+  }
+}
+```
+
+**Response `200`**
+
+```json
+{ "ok": true }
 ```
 
 ---

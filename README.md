@@ -158,6 +158,15 @@ npm test             # run tests with Vitest
 npm run lint         # lint with ESLint
 ```
 
+### Live-session backend (Cloudflare Worker)
+
+```bash
+npm run worker:dev        # local worker at http://localhost:8787
+npm --prefix worker test  # worker integration tests
+```
+
+For preview/prod deployment details (Pages + Worker), see `docs/live-session-deploy.md`.
+
 ### Writing a Model
 
 Create a `.forge.js` file that calls the CadLad API and returns a `Solid` or `Assembly`:
