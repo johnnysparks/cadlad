@@ -11,7 +11,7 @@ export { LiveSession };
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const origin = env.STUDIO_ORIGIN ?? '*';
+    const origin = resolveStudioOrigin(request, env);
 
     // CORS preflight
     if (request.method === 'OPTIONS') {
@@ -119,6 +119,27 @@ function corsHeaders(origin = '*'): Record<string, string> {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
+}
+
+function resolveStudioOrigin(request: Request, env: Env): string {
+  const configured = env.STUDIO_ORIGIN?.trim();
+  if (configured) return configured;
+
+  const requestOrigin = request.headers.get('Origin')?.trim();
+  if (requestOrigin && isHttpOrigin(requestOrigin)) {
+    return requestOrigin;
+  }
+
+  return '*';
+}
+
+function isHttpOrigin(origin: string): boolean {
+  try {
+    const parsed = new URL(origin);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function json(data: unknown, status: number, headers: Record<string, string> = {}): Response {
