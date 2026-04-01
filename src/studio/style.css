@@ -48,6 +48,7 @@ html, body, #app {
   display: flex;
   align-items: center;
   gap: 6px;
+  align-items: center;
 }
 
 #patch-run-status {
@@ -80,13 +81,58 @@ html, body, #app {
   border-color: var(--accent);
 }
 
+#btn-live-session {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+#live-session-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-surface) 80%, black 20%);
+  font-size: 11px;
+}
+
+#live-session-status {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: var(--text-muted);
+}
+
+#live-session-status[data-state="connected"] {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 40%, var(--border));
+}
+
+#live-session-status[data-state="patching"],
+#live-session-status[data-state="rerunning"],
+#live-session-status[data-state="connecting"] {
+  color: var(--accent);
+}
+
+#live-session-status[data-state="failed"] {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 45%, var(--border));
+}
+
+#live-session-feedback {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── Workspace ───────────────────────────────────── */
 
 #workspace {
   display: grid;
   grid-template-columns: 1fr 200px 1fr;
   grid-template-rows: 1fr;
-  height: calc(100% - 40px);
+  height: calc(100% - 64px);
   position: relative;
 }
 
