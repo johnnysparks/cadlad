@@ -202,10 +202,42 @@ html, body, #app {
   color: var(--bg);
   font-size: 12px;
   display: none;
+  cursor: pointer;
+  user-select: none;
 }
 
 #error-bar.visible {
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+#error-bar-text {
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+#error-bar-copy {
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0.75;
+  padding: 2px 5px;
+  transition: opacity 0.1s;
+}
+
+#error-bar-copy:hover {
+  opacity: 1;
+}
+
+#error-bar.copied #error-bar-copy {
+  opacity: 1;
 }
 
 #patch-history {
