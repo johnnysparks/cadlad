@@ -48,8 +48,8 @@ jobs:
           elif [ -n "${{ secrets.CLOUDFLARE_WORKER_PRODUCTION_URL }}" ]; then
             echo "url=${{ secrets.CLOUDFLARE_WORKER_PRODUCTION_URL }}" >> "$GITHUB_OUTPUT"
           else
-            echo "Missing CLOUDFLARE_WORKER_PREVIEW_URL (preferred) or CLOUDFLARE_WORKER_PRODUCTION_URL secret." >&2
-            exit 1
+            echo "CLOUDFLARE_WORKER_PREVIEW_URL not set; frontend will proxy via Pages Functions (LIVE_SESSION_WORKER_URL in wrangler.toml)." >&2
+            echo "url=" >> "$GITHUB_OUTPUT"
           fi
 
   deploy-pages-preview:
