@@ -17,6 +17,27 @@ const REMOTE_RUN_DEBOUNCE_MS = 150;
 
 type LiveUiState = "idle" | "connecting" | "connected" | "patching" | "rerunning" | "failed";
 
+function toPatchEvent(serverPatch: NonNullable<PatchEventPayload["patch"]>): PatchEvent {
+  return {
+    patchId: serverPatch.id,
+    revision: serverPatch.revision,
+    timestamp: new Date(serverPatch.createdAt ?? Date.now()).toISOString(),
+    author: "assistant",
+    summary: {
+      title: serverPatch.summary,
+      details: serverPatch.summary,
+    },
+    runResult: serverPatch.runResult
+      ? {
+          state: serverPatch.runResult.success ? "success" : "failed",
+          revision: serverPatch.revision,
+          timestamp: new Date(serverPatch.runResult.timestamp).toISOString(),
+          message: serverPatch.runResult.errors?.join("\n"),
+        }
+      : undefined,
+  };
+}
+
 async function boot() {
   const editorPane = document.getElementById("editor-pane")!;
   const viewportEl = document.getElementById("viewport")!;
@@ -214,6 +235,16 @@ async function boot() {
       liveSessionId = session.id;
     }
 
+    if (session.patches) {
+      applyPatchHistory(session.patches.map((patch) => toPatchEvent({
+        id: patch.id,
+        revision: patch.revision,
+        summary: patch.summary,
+        createdAt: patch.createdAt,
+        runResult: patch.runResult,
+      })));
+    }
+
     scheduleRemoteRun();
   };
 
@@ -226,6 +257,10 @@ async function boot() {
       case "patch_applied":
       case "patch_reverted": {
         setLiveUi("patching", event.patch?.summary ?? "assistant update");
+        if (event.patch) {
+          const nextHistory = [...patchHistory, toPatchEvent(event.patch)];
+          applyPatchHistory(nextHistory);
+        }
         const patchPayload = {
           source: event.patch?.sourceAfter,
           params: event.patch?.paramsAfter,
@@ -237,6 +272,23 @@ async function boot() {
       }
       case "run_status":
         setLiveUi("connected", "run status received");
+        if (typeof event.revision === "number" && event.result) {
+          const result = event.result;
+          const nextHistory = patchHistory.map((patch) =>
+            patch.revision === event.revision
+              ? {
+                  ...patch,
+                  runResult: {
+                    state: result.success ? ("success" as const) : ("failed" as const),
+                    revision: patch.revision,
+                    timestamp: new Date(result.timestamp).toISOString(),
+                    message: result.errors?.join("\n"),
+                  },
+                }
+              : patch,
+          );
+          applyPatchHistory(nextHistory);
+        }
         break;
       case "error":
         setLiveUi("failed", event.message ?? "session error");
