@@ -55,6 +55,17 @@ Durable Object class/migrations are declared in `worker/wrangler.toml`.
 
 `wrangler deploy` in CI applies migrations automatically according to migration tags.
 
+
+## Environment matrix
+
+| Surface | Local | Preview | Production |
+|---|---|---|---|
+| Studio page | `http://localhost:5173` | `https://<branch>.cadlad.pages.dev` | your Pages production domain |
+| Live-session API | `http://localhost:8787` | `https://cadlad-live-sessions-preview.<subdomain>.workers.dev` | `https://cadlad-live-sessions.<subdomain>.workers.dev` |
+| Durable Objects namespace | local dev storage | shared `env.preview` namespace | production namespace |
+
+Because preview uses a shared Worker, prefer short-lived sessions in PR reviews and avoid storing sensitive prompts/source.
+
 ## Frontend worker base URL discovery
 
 Studio resolves live-session API base in this order:
@@ -100,3 +111,15 @@ curl -s -X POST "<worker-url>/api/live/session" \
 ## Production note
 
 This change wires preview deployment end-to-end. For production rollout, mirror the same pattern with a main-branch Worker deploy workflow and set a production frontend env (`VITE_LIVE_SESSION_API_BASE`) in Pages project settings.
+
+
+## Integration tests
+
+Run both the frontend and Worker suites before shipping deployment changes:
+
+```bash
+npm test
+npm --prefix worker test
+```
+
+The Worker tests exercise session creation, patch/revert flows, SSE, and run-result telemetry using the Cloudflare Vitest pool.

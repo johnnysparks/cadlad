@@ -63,19 +63,34 @@ export interface PingResult {
   url: string;
 }
 
+interface ResolveApiBaseInput {
+  optionBase?: string;
+  envBase?: string;
+  location: Pick<Location, 'protocol' | 'hostname' | 'origin'>;
+}
+
+export function resolveLiveSessionApiBase({ optionBase, envBase, location }: ResolveApiBaseInput): string {
+  const configuredBase = optionBase ?? envBase;
+  if (configuredBase) {
+    return configuredBase.replace(/\/$/, '');
+  }
+
+  const isLocalhost = ['localhost', '127.0.0.1'].includes(location.hostname);
+  return isLocalhost
+    ? `${location.protocol}//${location.hostname}:8787`
+    : location.origin;
+}
+
 export class LiveSessionClient {
   readonly apiBase: string;
 
   constructor(options: LiveSessionClientOptions = {}) {
     const envBase = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_LIVE_SESSION_API_BASE;
-    const configuredBase = options.apiBase ?? envBase;
-    const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-    const fallbackBase = isLocalhost
-      ? `${window.location.protocol}//${window.location.hostname}:8787`
-      : window.location.origin;
-    this.apiBase = configuredBase
-      ? configuredBase.replace(/\/$/, "")
-      : fallbackBase;
+    this.apiBase = resolveLiveSessionApiBase({
+      optionBase: options.apiBase,
+      envBase,
+      location: window.location,
+    });
   }
 
   async ping(): Promise<PingResult> {

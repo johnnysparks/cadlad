@@ -12,6 +12,16 @@ npm run dev
 
 Local API runs at `http://localhost:8787`.
 
+## Test
+
+```bash
+cd worker
+npm install
+npm test
+```
+
+The suite runs integration tests against the Worker + Durable Object routes with Cloudflare's Vitest pool (session, patch/revert, SSE, run-result).
+
 ## Deploy
 
 ```bash
@@ -50,4 +60,4 @@ Expected:
 { "status": "ok", "service": "cadlad-live-sessions" }
 ```
 
-For full API details and curl flows, see `../docs/live-session-api.md`.
+For full API details and curl flows (including `/run-result` telemetry endpoints), see `../docs/live-session-api.md`.
