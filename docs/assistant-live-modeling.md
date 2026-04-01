@@ -38,11 +38,11 @@ CadLad live session active.
 Session URL: https://cadlad.studio?session=<id>&token=<token>
 API base: https://sessions.cadlad.workers.dev
 
-Tools available: get_session_state, list_patch_history, replace_source,
-  update_params, revert_patch, get_latest_screenshot, get_model_stats
+Tools available: get_session_state, list_patch_history, apply_patch,
+  replace_source, update_params, revert_patch, get_latest_screenshot, get_model_stats
 
 Start by calling get_session_state to read the current model.
-Then make changes with replace_source or update_params.
+Then make changes with apply_patch, replace_source, or update_params.
 After each change, call get_latest_screenshot to see the result.
 If a change breaks the model, call list_patch_history to find the patch ID,
 then call revert_patch to undo it.
@@ -139,6 +139,28 @@ replace_source({
 
 Always include `summary`. Include `intent` and `approach` — they appear in the patch history and help both the user and future model iterations understand the reasoning.
 
+### `apply_patch`
+
+```typescript
+apply_patch({
+  type: "source_replace",
+  source: "const w = param('Width', 120, {min:10,max:300});\nreturn box(w, 50, 30);",
+  summary: "Widen body and simplify side profile",
+  intent: "Make footprint more stable",
+  approach: "Replace tapered shape with direct box baseline"
+})
+```
+
+```typescript
+apply_patch({
+  type: "param_update",
+  params: { "Wall Thickness": 3.2, "Height": 125 },
+  summary: "Tune wall and height for printability"
+})
+```
+
+Generic write tool for direct patching. Use this when your assistant/tooling favors a single mutation endpoint.
+
 ### `update_params`
 
 ```typescript
@@ -193,6 +215,8 @@ Useful for validation without needing a screenshot.
 ### Read before you write
 
 Always call `get_session_state` first. The source may have been edited by the human since the session started.
+
+If your runtime prefers a single writer tool, treat `apply_patch` as canonical and map specialized actions (`replace_source`, `update_params`) to it.
 
 ### Choose fix-forward vs revert
 
