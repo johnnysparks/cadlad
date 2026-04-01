@@ -49,6 +49,19 @@ async function boot() {
   const liveBtn = document.getElementById("btn-live-session") as HTMLButtonElement;
   const liveStatus = document.getElementById("live-session-status") as HTMLElement;
   const liveFeedback = document.getElementById("live-session-feedback") as HTMLElement;
+  const copyLiveErrorBtn = document.getElementById("btn-copy-live-error") as HTMLButtonElement;
+
+  copyLiveErrorBtn.addEventListener("click", async () => {
+    const text = [liveStatus.textContent, liveFeedback.textContent].filter(Boolean).join(" — ");
+    try {
+      await navigator.clipboard.writeText(text);
+      const prev = copyLiveErrorBtn.textContent;
+      copyLiveErrorBtn.textContent = "✓";
+      setTimeout(() => { copyLiveErrorBtn.textContent = prev; }, 1500);
+    } catch {
+      /* clipboard denied — do nothing */
+    }
+  });
 
   // Error bar
   const errorBar = document.createElement("div");
