@@ -17,7 +17,10 @@
     "test": "node scripts/test.mjs",
     "test:watch": "vitest",
     "lint": "node scripts/lint.mjs",
-    "typecheck": "node scripts/typecheck.mjs"
+    "typecheck": "node scripts/typecheck.mjs",
+    "worker:dev": "npm --prefix worker run dev",
+    "worker:deploy": "npm --prefix worker run deploy",
+    "worker:deploy:dry": "npm --prefix worker run deploy:dry"
   },
   "keywords": [
     "cad",

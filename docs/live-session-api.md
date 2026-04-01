@@ -13,7 +13,9 @@ fans out Server-Sent Events to connected browsers.
 | Environment | URL |
 |---|---|
 | Local dev | `http://localhost:8787` |
-| Production | `https://cadlad-live-sessions.<account>.workers.dev` (set in `wrangler.toml`) |
+| Production | `https://<worker-name>.<workers-subdomain>.workers.dev` |
+
+> Example production URL using this repo defaults: `https://cadlad-live-sessions.<your-subdomain>.workers.dev`
 
 ---
 
@@ -272,7 +274,7 @@ interface RunResult {
 ### Prerequisites
 
 - Node.js 18+
-- `wrangler` v3 (`npm install` inside `worker/`)
+- A local install of `wrangler` (installed by `npm install` inside `worker/`)
 
 ### Run locally
 
@@ -287,7 +289,7 @@ npm run dev
 Override the studio origin for liveUrl construction:
 
 ```bash
-wrangler dev --var STUDIO_ORIGIN:http://localhost:5173
+npx wrangler dev --var STUDIO_ORIGIN:http://localhost:5173
 ```
 
 ### Quick test (curl)
@@ -325,15 +327,65 @@ curl -s -X POST "http://localhost:8787/api/live/session/$SESSION/revert" \
 
 ---
 
-## Deployment
+## Deployment (Wrangler)
+
+### One-time setup
 
 ```bash
 cd worker
-npm run deploy
+npm install
+npx wrangler login
 ```
 
-Set `STUDIO_ORIGIN` in the Cloudflare dashboard (Workers → Settings → Variables) to your
-production studio URL, e.g. `https://cadlad.studio`.
+### Verify auth + account selection
+
+```bash
+npx wrangler whoami
+```
+
+### Deploy to Cloudflare
+
+```bash
+npm run deploy
+# equivalent: npx wrangler deploy --config wrangler.toml
+# or from repo root: npm run worker:deploy
+```
+
+### Set production studio origin
+
+Set `STUDIO_ORIGIN` in Cloudflare (Workers & Pages → your worker → Settings → Variables)
+to your production studio URL, for example:
+
+```text
+https://cadlad.studio
+```
+
+This controls:
+
+- CORS allow-origin behavior, and
+- `liveUrl` generation returned by `POST /api/live/session`.
+
+### Dry-run deploy (no publish)
+
+```bash
+npm run deploy:dry
+# or from repo root: npm run worker:deploy:dry
+```
+
+### Post-deploy smoke test
+
+```bash
+# replace with your actual workers.dev URL
+export API_BASE="https://cadlad-live-sessions.<your-subdomain>.workers.dev"
+
+curl -s "$API_BASE/health" | jq
+```
+
+Expected result includes:
+
+```json
+{ "status": "ok", "service": "cadlad-live-sessions" }
+```
 
 ---
 
