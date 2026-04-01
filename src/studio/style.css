@@ -126,6 +126,30 @@ html, body, #app {
   white-space: nowrap;
 }
 
+#btn-copy-live-error {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  margin-left: auto;
+  line-height: 1;
+  border-radius: 4px;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+#btn-copy-live-error:active {
+  background: color-mix(in srgb, var(--error) 20%, transparent);
+}
+
+#live-session-strip:has(#live-session-status[data-state="failed"]) #btn-copy-live-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* ── Workspace ───────────────────────────────────── */
 
 #workspace {
