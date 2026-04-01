@@ -56,8 +56,15 @@ export interface LiveSessionClientOptions {
   apiBase?: string;
 }
 
+export interface PingResult {
+  ok: boolean;
+  status: number;
+  body: Record<string, unknown> | null;
+  url: string;
+}
+
 export class LiveSessionClient {
-  private readonly apiBase: string;
+  readonly apiBase: string;
 
   constructor(options: LiveSessionClientOptions = {}) {
     const envBase = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_LIVE_SESSION_API_BASE;
@@ -71,15 +78,34 @@ export class LiveSessionClient {
       : fallbackBase;
   }
 
+  async ping(): Promise<PingResult> {
+    const url = `${this.apiBase}/health`;
+    try {
+      const res = await fetch(url);
+      let body: Record<string, unknown> | null = null;
+      try { body = await res.json() as Record<string, unknown>; } catch { /* ignore */ }
+      return { ok: res.ok, status: res.status, body, url };
+    } catch {
+      return { ok: false, status: 0, body: null, url };
+    }
+  }
+
   async createSession(payload: { source: string; params: Record<string, number> }): Promise<CreateLiveSessionResponse> {
-    const res = await fetch(`${this.apiBase}/api/live/session`, {
+    const url = `${this.apiBase}/api/live/session`;
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
-      throw new Error(`Live session create failed (${res.status})`);
+      let detail = "";
+      try {
+        const body = await res.json() as Record<string, unknown>;
+        const errMsg = body.error ?? body.message ?? body.code;
+        if (errMsg) detail = ` — ${String(errMsg)}`;
+      } catch { /* ignore */ }
+      throw new Error(`Live session create failed (${res.status})${detail}\nPOST ${url}`);
     }
 
     return res.json() as Promise<CreateLiveSessionResponse>;
@@ -88,7 +114,7 @@ export class LiveSessionClient {
   async fetchSession(sessionId: string): Promise<LiveSessionState> {
     const res = await fetch(`${this.apiBase}/api/live/session/${encodeURIComponent(sessionId)}`);
     if (!res.ok) {
-      throw new Error(`Live session load failed (${res.status})`);
+      throw new Error(`Live session load failed (${res.status})\nGET ${this.apiBase}/api/live/session/${encodeURIComponent(sessionId)}`);
     }
     return res.json() as Promise<LiveSessionState>;
   }
