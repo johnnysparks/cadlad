@@ -104,6 +104,43 @@ const TOOLS = [
     },
   },
   {
+    name: "apply_patch",
+    description:
+      "Apply a direct patch in one call. Use this when you need to change source, params, or both atomically. Supports patch.type = 'source_replace' or 'param_update'.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        type: {
+          type: "string",
+          enum: ["source_replace", "param_update"],
+          description: "Patch type: source_replace for full code update, param_update for param changes",
+        },
+        source: {
+          type: "string",
+          description: "Required when type=source_replace: complete new .forge.js source",
+        },
+        params: {
+          type: "object",
+          description: "Required when type=param_update: map of param name → new numeric value",
+          additionalProperties: { type: "number" },
+        },
+        summary: {
+          type: "string",
+          description: "One-line description shown in patch history",
+        },
+        intent: {
+          type: "string",
+          description: "Why this patch is being applied",
+        },
+        approach: {
+          type: "string",
+          description: "How the patch was implemented",
+        },
+      },
+      required: ["type", "summary"],
+    },
+  },
+  {
     name: "update_params",
     description:
       "Change one or more param() values without touching the source code. Use this to explore the parameter space (e.g., try different wall thicknesses) without rewriting the model.",
@@ -230,6 +267,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             {
               type: "text" as const,
               text: `Patch applied: revision ${result.patch.revision}\n\nSummary: ${result.patch.summary}${result.patch.intent ? `\nIntent: ${result.patch.intent}` : ""}${result.patch.approach ? `\nApproach: ${result.patch.approach}` : ""}\n\nThe studio will rerender automatically. Call get_latest_screenshot after a moment to see the result.`,
+            },
+          ],
+        };
+      }
+
+      case "apply_patch": {
+        const { type, source, params, summary, intent, approach } = args as {
+          type: "source_replace" | "param_update";
+          source?: string;
+          params?: Record<string, number>;
+          summary: string;
+          intent?: string;
+          approach?: string;
+        };
+        if (!type || !summary) {
+          return errorContent("type and summary are required");
+        }
+        if (type === "source_replace" && !source) {
+          return errorContent("source is required when type=source_replace");
+        }
+        if (type === "param_update" && (!params || Object.keys(params).length === 0)) {
+          return errorContent("params is required when type=param_update");
+        }
+        const result = await client.applyPatch({
+          type,
+          source,
+          params,
+          summary,
+          intent,
+          approach,
+        });
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Patch applied: revision ${result.patch.revision}\nType: ${type}\nSummary: ${result.patch.summary}`,
             },
           ],
         };
