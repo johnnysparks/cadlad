@@ -23,6 +23,11 @@ npm run deploy
 # or from repo root: npm run worker:deploy
 ```
 
+GitHub Actions deployment:
+
+- Preview branches/PRs: `.github/workflows/preview-deploy.yml` deploys `--env preview`.
+- Main branch: `.github/workflows/deploy-worker.yml` deploys production worker.
+
 For a no-publish validation build:
 
 ```bash
@@ -30,8 +35,8 @@ npm run deploy:dry
 # or from repo root: npm run worker:deploy:dry
 ```
 
-After deploy, set `STUDIO_ORIGIN` in Cloudflare to your production Studio origin
-(e.g. `https://cadlad.studio`).
+Set `STUDIO_ORIGIN` in Cloudflare if you want strict CORS/live URL origin pinning
+(e.g. `https://cadlad.studio`). If unset, the worker reflects request `Origin`.
 
 ## Smoke test
 
