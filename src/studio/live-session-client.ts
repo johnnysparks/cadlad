@@ -4,6 +4,17 @@ export interface LiveSessionState {
   params: Record<string, number>;
   revision: number;
   lastSuccessfulRevision: number;
+  patches?: Array<{
+    id: string;
+    revision: number;
+    summary: string;
+    createdAt: number;
+    runResult?: {
+      success: boolean;
+      timestamp: number;
+      errors?: string[];
+    };
+  }>;
   createdAt: number;
   updatedAt: number;
 }
@@ -19,11 +30,23 @@ export interface PatchEventPayload {
   type: string;
   ts?: number;
   message?: string;
+  revision?: number;
+  result?: {
+    success: boolean;
+    timestamp: number;
+    errors?: string[];
+  };
   session?: Partial<LiveSessionState>;
   patch?: {
     id: string;
     revision: number;
     summary: string;
+    createdAt?: number;
+    runResult?: {
+      success: boolean;
+      timestamp: number;
+      errors?: string[];
+    };
     sourceAfter?: string;
     paramsAfter?: Record<string, number>;
   };
