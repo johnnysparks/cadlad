@@ -153,10 +153,6 @@ export async function handleMcp(request: Request, env: Env, origin: string): Pro
     return new Response('Method Not Allowed', { status: 405, headers: cors });
   }
 
-  if (!sessionId || !token) {
-    return rpcError(null, -32600, 'Missing required query params: session, token', cors);
-  }
-
   let msg: { id?: unknown; method?: string; params?: unknown };
   try {
     msg = await request.json() as typeof msg;
@@ -173,6 +169,8 @@ export async function handleMcp(request: Request, env: Env, origin: string): Pro
 
   try {
     switch (method) {
+      // initialize and ping don't require a session — they handle the connection handshake.
+      // Session/token are validated per tool call below.
       case 'initialize':
         return rpcResult(id, {
           protocolVersion: '2024-11-05',
@@ -187,6 +185,9 @@ export async function handleMcp(request: Request, env: Env, origin: string): Pro
         return rpcResult(id, { tools: TOOLS }, cors);
 
       case 'tools/call': {
+        if (!sessionId || !token) {
+          return rpcError(id, -32600, 'Missing required query params: session, token. Configure the MCP URL as: /mcp?session=<id>&token=<writeToken>', cors);
+        }
         const p = params as { name?: string; arguments?: Record<string, unknown> } | undefined;
         const toolName = p?.name ?? '';
         const args = p?.arguments ?? {};

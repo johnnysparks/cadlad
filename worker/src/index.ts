@@ -14,14 +14,20 @@ export default {
     const url = new URL(request.url);
     const origin = resolveStudioOrigin(request, env);
 
-    // CORS preflight
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    // For /mcp, always reflect the actual request Origin for CORS.
+    // The MCP endpoint must accept requests from Claude.ai (and other MCP clients),
+    // not just the configured STUDIO_ORIGIN.
+    const mcpOrigin = resolveMcpOrigin(request);
+    if (url.pathname === '/mcp') {
+      if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: corsHeaders(mcpOrigin) });
+      }
+      return handleMcp(request, env, mcpOrigin);
     }
 
-    // POST /mcp?session=<id>&token=<tok> — remote MCP endpoint
-    if (url.pathname === '/mcp') {
-      return handleMcp(request, env, origin);
+    // CORS preflight for non-MCP routes
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
 
     // POST /api/live/session — create a new live session
@@ -138,6 +144,12 @@ function corsHeaders(origin = '*'): Record<string, string> {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
+}
+
+function resolveMcpOrigin(request: Request): string {
+  const requestOrigin = request.headers.get('Origin')?.trim();
+  if (requestOrigin && isHttpOrigin(requestOrigin)) return requestOrigin;
+  return '*';
 }
 
 function resolveStudioOrigin(request: Request, env: Env): string {
