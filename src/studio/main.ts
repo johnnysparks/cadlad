@@ -38,6 +38,54 @@ function toPatchEvent(serverPatch: NonNullable<PatchEventPayload["patch"]>): Pat
   };
 }
 
+/**
+ * Build a copy-paste AI prompt for any chatbot.
+ * Includes both the remote MCP URL (for Claude.ai / MCP-capable clients)
+ * and the raw HTTP API (for any tool-capable assistant).
+ */
+function buildAiPrompt(
+  liveUrl: string,
+  mcpUrl: string,
+  apiBase: string,
+  sessionId: string,
+  token: string,
+): string {
+  return `CadLad live 3D modeling session — you can view and edit this parametric model in real time.
+
+Studio URL: ${liveUrl}
+
+━━━ MCP connection (Claude.ai / Claude Desktop / MCP-capable clients) ━━━
+Add this as a remote MCP server:
+  ${mcpUrl}
+
+Tools: get_session_state · list_patch_history · replace_source · update_params
+       apply_patch · revert_patch · get_latest_screenshot · get_model_stats
+
+━━━ HTTP API (any assistant with tool-use / function-calling) ━━━
+Read model:
+  GET ${apiBase}/api/live/session/${sessionId}
+
+Apply code change:
+  POST ${apiBase}/api/live/session/${sessionId}/patch
+  Authorization: Bearer ${token}
+  {"type":"source_replace","source":"<full .forge.js code>","summary":"<what changed>"}
+
+Update sliders:
+  POST ${apiBase}/api/live/session/${sessionId}/patch
+  Authorization: Bearer ${token}
+  {"type":"param_update","params":{"<ParamName>":<value>},"summary":"<what changed>"}
+
+Get latest render (screenshot + stats):
+  GET ${apiBase}/api/live/session/${sessionId}/run-result
+
+━━━ Instructions ━━━
+1. Read the current model first (get_session_state or GET the session URL).
+2. Make changes with replace_source or update_params.
+3. Wait ~1s then call get_latest_screenshot to see the render.
+4. If a change breaks the model, use list_patch_history then revert_patch.
+The browser studio rerenders automatically after every patch.`;
+}
+
 async function boot() {
   const editorPane = document.getElementById("editor-pane")!;
   const viewportEl = document.getElementById("viewport")!;
@@ -376,10 +424,12 @@ async function boot() {
         params: paramPanel.getValueObject(),
       });
 
-      const copied = await copyText(created.liveUrl);
+      const mcpUrl = `${liveClient.apiBase}/mcp?session=${created.sessionId}&token=${created.writeToken}`;
+      const aiPrompt = buildAiPrompt(created.liveUrl, mcpUrl, liveClient.apiBase, created.sessionId, created.writeToken);
+      const copied = await copyText(aiPrompt);
       setLiveUi(
         "connected",
-        copied ? "live link copied to clipboard" : "session ready (copy failed)",
+        copied ? "AI prompt copied — paste into Claude, Gemini, or ChatGPT" : "session ready (clipboard copy failed)",
       );
 
       const nextUrl = new URL(window.location.href);

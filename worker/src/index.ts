@@ -1,6 +1,7 @@
 // index.ts — Cloudflare Worker entry point for CadLad live-session service
 
 import { LiveSession } from './live-session.js';
+import { handleMcp } from './mcp-handler.js';
 import type { Env, CreateSessionResponse, InitPayload, SessionState } from './types.js';
 
 // Re-export DO class so wrangler can find it
@@ -16,6 +17,11 @@ export default {
     // CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    }
+
+    // POST /mcp?session=<id>&token=<tok> — remote MCP endpoint
+    if (url.pathname === '/mcp') {
+      return handleMcp(request, env, origin);
     }
 
     // POST /api/live/session — create a new live session
@@ -44,7 +50,7 @@ export default {
         service: 'cadlad-live-sessions',
         timestamp: new Date().toISOString(),
         studioOrigin: env.STUDIO_ORIGIN || '(dynamic — reflects request Origin)',
-        routes: ['POST /api/live/session', 'GET /api/live/session/:id', 'GET /api/live/session/:id/events', 'POST /api/live/session/:id/patch', 'GET /health'],
+        routes: ['POST /mcp', 'POST /api/live/session', 'GET /api/live/session/:id', 'GET /api/live/session/:id/events', 'POST /api/live/session/:id/patch', 'GET /health'],
       }, 200, corsHeaders(origin));
     }
 
