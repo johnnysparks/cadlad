@@ -39,7 +39,7 @@ Session URL: https://cadlad.pages.dev?session=<id>&token=<token>
 API base: https://cadlad-live-sessions.johnnymsparks.workers.dev
 
 Tools available: get_session_state, list_patch_history, apply_patch,
-  replace_source, update_params, revert_patch, get_latest_screenshot, get_model_stats
+  replace_source, update_params, revert_patch, get_latest_screenshot, get_model_stats, get_part_stats, query_part_relationship
 
 Start by calling get_session_state to read the current model.
 Make changes with replace_source or update_params.

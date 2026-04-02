@@ -9,6 +9,7 @@ import { Viewport } from "./viewport.js";
 import { ParamPanel } from "./param-panel.js";
 import { LiveSessionClient, type LiveSessionState, type PatchEventPayload } from "./live-session-client.js";
 import { evaluateModel } from "../api/runtime.js";
+import { computeModelStats } from "./model-stats.js";
 import { EditorDecorations } from "./editor-decorations.js";
 import { PatchHistoryPanel } from "./patch-history.js";
 import type { PatchEvent } from "./types/live-session.js";
@@ -353,6 +354,8 @@ async function boot() {
       if (liveSessionId) {
         try {
           const screenshot = viewport.captureFrame();
+          const stats = computeModelStats(result.bodies);
+          void liveClient.postRunResult(liveSessionId, liveToken, liveRevision, {
           // Compute basic stats from mesh data
           let triangles = 0;
           let minX = Infinity, minY = Infinity, minZ = Infinity;
@@ -375,14 +378,7 @@ async function boot() {
             warnings: [],
             timestamp: Date.now(),
             screenshot,
-            stats: result.bodies.length > 0 ? {
-              triangles: Math.floor(triangles),
-              bodies: result.bodies.length,
-              boundingBox: {
-                min: [minX, minY, minZ],
-                max: [maxX, maxY, maxZ],
-              },
-            } : undefined,
+            stats,
           });
         } catch {
           // Best-effort — don't break the run on screenshot/post failure
