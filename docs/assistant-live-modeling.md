@@ -100,12 +100,14 @@ Add to `~/.config/claude-desktop/claude_desktop_config.json`:
 
 ### `get_session_state`
 
-Returns full session: source, params, revision.
+Returns full session state: source, params, revision, plus latest render/screenshot metadata.
 
 ```
 → Session: abc123
   Revision: 4 (last successful: 3)
   Params: {"Width": 120, "Height": 80}
+  Latest render: ready
+  Latest screenshot ref: artifact://render/abc123/r4
   === Source ===
   const w = param("Width", 120, {min:10, max:300});
   ...
@@ -174,7 +176,14 @@ Append-only: creates a new patch that restores state to before the target patch.
 
 ### `get_latest_screenshot`
 
-Returns the most recent render frame posted by the connected Studio as an image. If no studio is connected, returns geometry stats as a text fallback.
+Returns the most recent render frame posted by the connected Studio as an image when available.
+The response now clearly reports render/screenshot state:
+
+- `no_render` — no render has been posted yet
+- `pending` — render request accepted but result not posted yet
+- `failed` — render ran but model evaluation failed
+- `blocked` — screenshot retrieval blocked by policy/tooling
+- `ready` — screenshot is available (or image-backed artifact exists)
 
 **Workflow:**
 1. Apply a patch → studio rerenders automatically
