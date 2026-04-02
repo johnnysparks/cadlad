@@ -2,10 +2,7 @@
  * session-client.ts
  *
  * Typed HTTP client for the CadLad live-session Cloudflare Worker.
- * Every method maps 1:1 to a backend endpoint so the MCP bridge stays thin.
  */
-
-// ── Shared types (duplicated here to avoid cross-package imports at runtime) ──
 
 export interface ModelStats {
   triangles: number;
@@ -24,13 +21,13 @@ export interface RunResult {
   warnings: string[];
   timestamp: number;
   stats?: ModelStats;
-  screenshot?: string; // base64 data URL, in-memory only (not persisted)
+  screenshot?: string;
 }
 
 export interface Patch {
   id: string;
   revision: number;
-  type: "create" | "source_replace" | "param_update" | "revert";
+  type: 'create' | 'source_replace' | 'param_update' | 'revert';
   summary: string;
   intent?: string;
   approach?: string;
@@ -45,6 +42,7 @@ export interface Patch {
 
 export interface SessionState {
   id: string;
+  projectRef: string;
   source: string;
   params: Record<string, number>;
   revision: number;
@@ -62,13 +60,12 @@ export interface PatchHistory {
 }
 
 export interface ApplyPatchRequest {
-  type: "source_replace" | "param_update";
+  type: 'source_replace' | 'param_update';
   source?: string;
   params?: Record<string, number>;
   summary: string;
   intent?: string;
   approach?: string;
-  runResult?: RunResult;
 }
 
 export interface RevertRequest {
@@ -76,65 +73,54 @@ export interface RevertRequest {
   summary?: string;
 }
 
-// ── Client ────────────────────────────────────────────────────────────────────
-
 export class SessionClient {
   private baseUrl: string;
   private sessionId: string;
-  private writeToken: string;
+  private accessToken: string;
 
-  constructor(opts: { apiBase: string; sessionId: string; writeToken: string }) {
-    // Strip trailing slash
-    this.baseUrl = opts.apiBase.replace(/\/$/, "");
+  constructor(opts: { apiBase: string; sessionId: string; accessToken: string }) {
+    this.baseUrl = opts.apiBase.replace(/\/$/, '');
     this.sessionId = opts.sessionId;
-    this.writeToken = opts.writeToken;
+    this.accessToken = opts.accessToken;
   }
 
-  private sessionUrl(path = ""): string {
+  private sessionUrl(path = ''): string {
     return `${this.baseUrl}/api/live/session/${this.sessionId}${path}`;
   }
 
-  private authHeaders(): Record<string, string> {
+  private headers(withAuth = false): Record<string, string> {
     return {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${this.writeToken}`,
+      'Content-Type': 'application/json',
+      ...(withAuth ? { Authorization: `Bearer ${this.accessToken}` } : {}),
     };
   }
 
-  private readHeaders(): Record<string, string> {
-    return { "Content-Type": "application/json" };
-  }
-
-  // ── Read endpoints (no auth required) ────────────────────────────────────
-
   async getSession(): Promise<SessionState> {
-    const res = await fetch(this.sessionUrl());
+    const res = await fetch(this.sessionUrl(), { headers: this.headers(true) });
     if (!res.ok) throw new ApiError(res.status, await res.text());
     return res.json() as Promise<SessionState>;
   }
 
   async getHistory(opts: { limit?: number; offset?: number } = {}): Promise<PatchHistory> {
     const params = new URLSearchParams();
-    if (opts.limit !== undefined) params.set("limit", String(opts.limit));
-    if (opts.offset !== undefined) params.set("offset", String(opts.offset));
-    const qs = params.size ? `?${params}` : "";
-    const res = await fetch(this.sessionUrl(`/history${qs}`), { headers: this.readHeaders() });
+    if (opts.limit !== undefined) params.set('limit', String(opts.limit));
+    if (opts.offset !== undefined) params.set('offset', String(opts.offset));
+    const qs = params.size ? `?${params}` : '';
+    const res = await fetch(this.sessionUrl(`/history${qs}`), { headers: this.headers(true) });
     if (!res.ok) throw new ApiError(res.status, await res.text());
     return res.json() as Promise<PatchHistory>;
   }
 
   async getRunResult(): Promise<{ runResult: RunResult | null; revision?: number; message?: string }> {
-    const res = await fetch(this.sessionUrl("/run-result"), { headers: this.readHeaders() });
+    const res = await fetch(this.sessionUrl('/run-result'), { headers: this.headers(true) });
     if (!res.ok) throw new ApiError(res.status, await res.text());
     return res.json() as Promise<{ runResult: RunResult | null; revision?: number; message?: string }>;
   }
 
-  // ── Write endpoints (require write token) ─────────────────────────────────
-
   async applyPatch(req: ApplyPatchRequest): Promise<{ patch: Patch; session: SessionState }> {
-    const res = await fetch(this.sessionUrl("/patch"), {
-      method: "POST",
-      headers: this.authHeaders(),
+    const res = await fetch(this.sessionUrl('/patch'), {
+      method: 'POST',
+      headers: this.headers(true),
       body: JSON.stringify(req),
     });
     if (!res.ok) throw new ApiError(res.status, await res.text());
@@ -142,9 +128,9 @@ export class SessionClient {
   }
 
   async revertPatch(req: RevertRequest): Promise<{ patch: Patch; session: SessionState }> {
-    const res = await fetch(this.sessionUrl("/revert"), {
-      method: "POST",
-      headers: this.authHeaders(),
+    const res = await fetch(this.sessionUrl('/revert'), {
+      method: 'POST',
+      headers: this.headers(true),
       body: JSON.stringify(req),
     });
     if (!res.ok) throw new ApiError(res.status, await res.text());
@@ -152,45 +138,24 @@ export class SessionClient {
   }
 }
 
-// ── Error helper ──────────────────────────────────────────────────────────────
-
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly body: string,
   ) {
     super(`API error ${status}: ${body}`);
-    this.name = "ApiError";
+    this.name = 'ApiError';
   }
 }
 
-// ── Factory: build a SessionClient from a capability URL ─────────────────────
-
-/**
- * Parse a CadLad capability URL and return a configured SessionClient.
- *
- * Accepts:
- *   https://cadlad.studio?session=<id>&token=<token>
- *   cadlad://session/<id>?token=<token>&api=<apiBase>
- *
- * The `apiBase` query param is required when the session URL points to the
- * studio rather than the API directly. Default: https://sessions.cadlad.workers.dev
- */
-export function clientFromUrl(
-  capabilityUrl: string,
-  apiBase?: string,
-): SessionClient {
+export function clientFromUrl(capabilityUrl: string, apiBase?: string, accessToken?: string): SessionClient {
   const url = new URL(capabilityUrl);
-  const sessionId = url.searchParams.get("session");
-  const writeToken = url.searchParams.get("token");
-  const resolvedApi =
-    apiBase ??
-    url.searchParams.get("api") ??
-    process.env.CADLAD_API_BASE ??
-    "https://sessions.cadlad.workers.dev";
+  const sessionId = url.searchParams.get('session');
+  const resolvedApi = apiBase ?? process.env.CADLAD_API_BASE ?? 'https://sessions.cadlad.workers.dev';
+  const token = accessToken ?? process.env.CADLAD_ACCESS_TOKEN;
 
-  if (!sessionId) throw new Error("Missing 'session' param in capability URL");
-  if (!writeToken) throw new Error("Missing 'token' param in capability URL");
+  if (!sessionId) throw new Error("Missing 'session' param in URL");
+  if (!token) throw new Error('Missing OAuth access token (set CADLAD_ACCESS_TOKEN)');
 
-  return new SessionClient({ apiBase: resolvedApi, sessionId, writeToken });
+  return new SessionClient({ apiBase: resolvedApi, sessionId, accessToken: token });
 }

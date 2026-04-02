@@ -21,7 +21,6 @@ export interface LiveSessionState {
 
 export interface CreateLiveSessionResponse {
   sessionId: string;
-  writeToken: string;
   liveUrl: string;
   session?: LiveSessionState;
 }
@@ -112,6 +111,21 @@ export class LiveSessionClient {
     });
   }
 
+
+  private getAccessToken(): string | null {
+    const url = new URL(window.location.href);
+    const fromQuery = url.searchParams.get("access_token");
+    if (fromQuery) {
+      window.localStorage.setItem("cadlad_access_token", fromQuery);
+      return fromQuery;
+    }
+    return window.localStorage.getItem("cadlad_access_token");
+  }
+
+  private authHeaders(): Record<string, string> {
+    const token = this.getAccessToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
   async ping(): Promise<PingResult> {
     const url = `${this.apiBase}/health`;
     try {
@@ -128,7 +142,7 @@ export class LiveSessionClient {
     const url = `${this.apiBase}/api/live/session`;
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...this.authHeaders() },
       body: JSON.stringify(payload),
     });
 
@@ -146,20 +160,20 @@ export class LiveSessionClient {
   }
 
   async fetchSession(sessionId: string): Promise<LiveSessionState> {
-    const res = await fetch(`${this.apiBase}/api/live/session/${encodeURIComponent(sessionId)}`);
+    const res = await fetch(`${this.apiBase}/api/live/session/${encodeURIComponent(sessionId)}`, { headers: this.authHeaders() });
     if (!res.ok) {
       throw new Error(`Live session load failed (${res.status})\nGET ${this.apiBase}/api/live/session/${encodeURIComponent(sessionId)}`);
     }
     return res.json() as Promise<LiveSessionState>;
   }
 
-  async postRunResult(sessionId: string, token: string, revision: number, result: RunResultPayload): Promise<void> {
+  async postRunResult(sessionId: string, revision: number, result: RunResultPayload): Promise<void> {
     const url = `${this.apiBase}/api/live/session/${encodeURIComponent(sessionId)}/run-result`;
     const res = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        ...this.authHeaders(),
       },
       body: JSON.stringify({ revision, result }),
     });
@@ -168,13 +182,11 @@ export class LiveSessionClient {
     }
   }
 
-  subscribe(sessionId: string, token: string | null, onEvent: (event: PatchEventPayload) => void, onError: (err: Event) => void): EventSource {
+  subscribe(sessionId: string, onEvent: (event: PatchEventPayload) => void, onError: (err: Event) => void): EventSource {
+    const token = this.getAccessToken();
     const url = new URL(`${this.apiBase}/api/live/session/${encodeURIComponent(sessionId)}/events`);
-    if (token) {
-      url.searchParams.set("token", token);
-    }
-
-    const source = new EventSource(url);
+    if (token) url.searchParams.set("access_token", token);
+    const source = new EventSource(url.toString());
     source.onmessage = (message) => {
       try {
         const payload = JSON.parse(message.data) as PatchEventPayload;

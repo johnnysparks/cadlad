@@ -43,8 +43,8 @@ function toPatchEvent(serverPatch: NonNullable<PatchEventPayload["patch"]>): Pat
  * The MCP connector URL is set up once in Claude settings; this gives
  * Claude the session credentials it needs to call the tools.
  */
-function buildClaudePrompt(sessionId: string, token: string): string {
-  return `CadLad session: session="${sessionId}" token="${token}". Call get_session_state to start.`;
+function buildClaudePrompt(sessionId: string): string {
+  return `CadLad session: session="${sessionId}". Call get_session_state to start.`;
 }
 
 /**
@@ -55,8 +55,7 @@ function buildAiPrompt(
   liveUrl: string,
   mcpBase: string,
   apiBase: string,
-  sessionId: string,
-  token: string,
+  sessionId: string
 ): string {
   return `CadLad live 3D modeling session — you can view and edit this parametric model in real time.
 
@@ -67,7 +66,7 @@ Studio URL: ${liveUrl}
      ${mcpBase}/mcp
 
 2. Then paste this into your Claude conversation to connect:
-     ${buildClaudePrompt(sessionId, token)}
+     ${buildClaudePrompt(sessionId)}
 
 Tools: get_session_state · list_patch_history · replace_source · update_params
        apply_patch · revert_patch · get_latest_screenshot · get_model_stats
@@ -78,12 +77,12 @@ Read model:
 
 Apply code change:
   POST ${apiBase}/api/live/session/${sessionId}/patch
-  Authorization: Bearer ${token}
+  Authorization: Bearer <OAuth access token>
   {"type":"source_replace","source":"<full .forge.js code>","summary":"<what changed>"}
 
 Update sliders:
   POST ${apiBase}/api/live/session/${sessionId}/patch
-  Authorization: Bearer ${token}
+  Authorization: Bearer <OAuth access token>
   {"type":"param_update","params":{"<ParamName>":<value>},"summary":"<what changed>"}
 
 Get latest render (screenshot + stats):
@@ -129,8 +128,8 @@ async function boot() {
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") toggleMenu(false); });
 
   copyClaudePromptBtn.addEventListener("click", async () => {
-    if (!liveSessionId || !liveToken) return;
-    const prompt = buildClaudePrompt(liveSessionId, liveToken);
+    if (!liveSessionId) return;
+    const prompt = buildClaudePrompt(liveSessionId);
     try {
       await navigator.clipboard.writeText(prompt);
       const prev = copyClaudePromptBtn.textContent;
@@ -189,8 +188,7 @@ async function boot() {
 
   const liveClient = new LiveSessionClient();
   let liveSessionId: string | null = null;
-  let liveToken: string | null = null;
-  let liveRevision = 0;
+    let liveRevision = 0;
   let liveSource: EventSource | null = null;
   let remoteRunTimer: number | null = null;
 
@@ -352,7 +350,7 @@ async function boot() {
       }
 
       // Post run result (screenshot + stats) to worker so MCP get_latest_screenshot works
-      if (liveSessionId && liveToken) {
+      if (liveSessionId) {
         try {
           const screenshot = viewport.captureFrame();
           // Compute basic stats from mesh data
@@ -371,7 +369,7 @@ async function boot() {
               if (pos[i + 2] > maxZ) maxZ = pos[i + 2];
             }
           }
-          void liveClient.postRunResult(liveSessionId, liveToken, liveRevision, {
+          void liveClient.postRunResult(liveSessionId, liveRevision, {
             success: result.errors.length === 0,
             errors: result.errors,
             warnings: [],
@@ -394,9 +392,9 @@ async function boot() {
       const msg = err instanceof Error ? err.message : String(err);
       errorBarText.textContent = msg;
       errorBar.classList.add("visible");
-      if (liveSessionId && liveToken) {
+      if (liveSessionId) {
         setLiveUi("failed", msg);
-        void liveClient.postRunResult(liveSessionId, liveToken, liveRevision, {
+        void liveClient.postRunResult(liveSessionId, liveRevision, {
           success: false,
           errors: [msg],
           warnings: [],
@@ -516,9 +514,8 @@ async function boot() {
     }
   };
 
-  const attachLiveSession = async (sessionId: string, token: string | null) => {
+  const attachLiveSession = async (sessionId: string) => {
     liveSessionId = sessionId;
-    liveToken = token;
     liveSource?.close();
     setLiveUi("connecting", `session ${sessionId.slice(0, 8)}`);
 
@@ -527,7 +524,6 @@ async function boot() {
 
     liveSource = liveClient.subscribe(
       sessionId,
-      token,
       handleLiveEvent,
       () => setLiveUi("failed", "connection lost; retrying"),
     );
@@ -555,7 +551,7 @@ async function boot() {
         params: paramPanel.getValueObject(),
       });
 
-      const aiPrompt = buildAiPrompt(created.liveUrl, liveClient.apiBase, liveClient.apiBase, created.sessionId, created.writeToken);
+      const aiPrompt = buildAiPrompt(created.liveUrl, liveClient.apiBase, liveClient.apiBase, created.sessionId);
       const copied = await copyText(aiPrompt);
       setLiveUi(
         "connected",
@@ -564,10 +560,9 @@ async function boot() {
 
       const nextUrl = new URL(window.location.href);
       nextUrl.searchParams.set("session", created.sessionId);
-      nextUrl.searchParams.set("token", created.writeToken);
       window.history.replaceState({}, "", nextUrl.toString());
 
-      await attachLiveSession(created.sessionId, created.writeToken);
+      await attachLiveSession(created.sessionId);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       // Auto-probe worker health to surface deployment vs. routing issues
@@ -668,10 +663,9 @@ async function boot() {
   };
 
   const sessionFromUrl = urlParams.get("session");
-  const tokenFromUrl = urlParams.get("token");
   if (sessionFromUrl) {
     try {
-      await attachLiveSession(sessionFromUrl, tokenFromUrl);
+      await attachLiveSession(sessionFromUrl);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setLiveUi("failed", msg);
