@@ -18,14 +18,14 @@ const REMOTE_RUN_DEBOUNCE_MS = 150;
 type LiveUiState = "idle" | "connecting" | "connected" | "patching" | "rerunning" | "failed";
 
 function toPatchEvent(serverPatch: NonNullable<PatchEventPayload["patch"]>): PatchEvent {
+  const compactTitle = serverPatch.summary.trim().replace(/\s+/g, " ");
   return {
     patchId: serverPatch.id,
     revision: serverPatch.revision,
     timestamp: new Date(serverPatch.createdAt ?? Date.now()).toISOString(),
     author: "assistant",
     summary: {
-      title: serverPatch.summary,
-      details: serverPatch.summary,
+      title: compactTitle,
     },
     runResult: serverPatch.runResult
       ? {
