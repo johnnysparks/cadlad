@@ -39,13 +39,21 @@ function toPatchEvent(serverPatch: NonNullable<PatchEventPayload["patch"]>): Pat
 }
 
 /**
+ * Short prompt snippet for pasting into a Claude conversation.
+ * The MCP connector URL is set up once in Claude settings; this gives
+ * Claude the session credentials it needs to call the tools.
+ */
+function buildClaudePrompt(sessionId: string, token: string): string {
+  return `CadLad session: session="${sessionId}" token="${token}". Call get_session_state to start.`;
+}
+
+/**
  * Build a copy-paste AI prompt for any chatbot.
- * Includes both the remote MCP URL (for Claude.ai / MCP-capable clients)
- * and the raw HTTP API (for any tool-capable assistant).
+ * Includes MCP setup instructions and the raw HTTP API for non-MCP clients.
  */
 function buildAiPrompt(
   liveUrl: string,
-  mcpUrl: string,
+  mcpBase: string,
   apiBase: string,
   sessionId: string,
   token: string,
@@ -55,8 +63,11 @@ function buildAiPrompt(
 Studio URL: ${liveUrl}
 
 ━━━ MCP connection (Claude.ai / Claude Desktop / MCP-capable clients) ━━━
-Add this as a remote MCP server:
-  ${mcpUrl}
+1. Add this as a remote MCP server in your client settings (one-time setup):
+     ${mcpBase}/mcp
+
+2. Then paste this into your Claude conversation to connect:
+     ${buildClaudePrompt(sessionId, token)}
 
 Tools: get_session_state · list_patch_history · replace_source · update_params
        apply_patch · revert_patch · get_latest_screenshot · get_model_stats
@@ -99,7 +110,21 @@ async function boot() {
   const liveBtn = document.getElementById("btn-live-session") as HTMLButtonElement;
   const liveStatus = document.getElementById("live-session-status") as HTMLElement;
   const liveFeedback = document.getElementById("live-session-feedback") as HTMLElement;
+  const copyClaudePromptBtn = document.getElementById("btn-copy-claude-prompt") as HTMLButtonElement;
   const copyLiveErrorBtn = document.getElementById("btn-copy-live-error") as HTMLButtonElement;
+
+  copyClaudePromptBtn.addEventListener("click", async () => {
+    if (!liveSessionId || !liveToken) return;
+    const prompt = buildClaudePrompt(liveSessionId, liveToken);
+    try {
+      await navigator.clipboard.writeText(prompt);
+      const prev = copyClaudePromptBtn.textContent;
+      copyClaudePromptBtn.textContent = "✓ Copied!";
+      setTimeout(() => { copyClaudePromptBtn.textContent = prev; }, 1500);
+    } catch {
+      /* clipboard denied */
+    }
+  });
 
   copyLiveErrorBtn.addEventListener("click", async () => {
     const text = [liveStatus.textContent, liveFeedback.textContent].filter(Boolean).join(" — ");
@@ -462,8 +487,7 @@ async function boot() {
         params: paramPanel.getValueObject(),
       });
 
-      const mcpUrl = `${liveClient.apiBase}/mcp?session=${created.sessionId}&token=${created.writeToken}`;
-      const aiPrompt = buildAiPrompt(created.liveUrl, mcpUrl, liveClient.apiBase, created.sessionId, created.writeToken);
+      const aiPrompt = buildAiPrompt(created.liveUrl, liveClient.apiBase, liveClient.apiBase, created.sessionId, created.writeToken);
       const copied = await copyText(aiPrompt);
       setLiveUi(
         "connected",

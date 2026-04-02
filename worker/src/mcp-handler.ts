@@ -22,12 +22,20 @@ import type { Env, SessionState, Patch, RunResult, ModelStats } from './types.js
 
 // ── MCP tool definitions ──────────────────────────────────────────────────────
 
+// session/token are required on all tools so Claude can use a single prompt
+// snippet ("session=… token=…") for every call. The connector URL is fixed;
+// credentials are passed as tool arguments, not URL params.
+const SESSION_PROPS = {
+  session: { type: 'string' as const, description: 'CadLad session ID (from the studio Connect prompt)' },
+  token: { type: 'string' as const, description: 'CadLad write token (from the studio Connect prompt)' },
+};
+
 const TOOLS = [
   {
     name: 'get_session_state',
     description:
       'Read the current CadLad session: source code, parameter values, revision number, and last-successful revision. Always call this first to understand what you\'re working with.',
-    inputSchema: { type: 'object', properties: {}, required: [] },
+    inputSchema: { type: 'object', properties: { ...SESSION_PROPS }, required: ['session', 'token'] },
   },
   {
     name: 'list_patch_history',
@@ -36,10 +44,11 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
+        ...SESSION_PROPS,
         limit: { type: 'number', description: 'Max patches to return (default 20, max 50)' },
         offset: { type: 'number', description: 'Skip first N patches for pagination' },
       },
-      required: [],
+      required: ['session', 'token'],
     },
   },
   {
@@ -49,12 +58,13 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
+        ...SESSION_PROPS,
         source: { type: 'string', description: 'Complete new .forge.js model source code' },
         summary: { type: 'string', description: 'One-line description of what changed' },
         intent: { type: 'string', description: 'Why this change was made' },
         approach: { type: 'string', description: 'Technical approach used' },
       },
-      required: ['source', 'summary'],
+      required: ['session', 'token', 'source', 'summary'],
     },
   },
   {
@@ -64,6 +74,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
+        ...SESSION_PROPS,
         type: { type: 'string', enum: ['source_replace', 'param_update'] },
         source: { type: 'string', description: 'Required for source_replace' },
         params: { type: 'object', additionalProperties: { type: 'number' }, description: 'Required for param_update' },
@@ -71,7 +82,7 @@ const TOOLS = [
         intent: { type: 'string' },
         approach: { type: 'string' },
       },
-      required: ['type', 'summary'],
+      required: ['session', 'token', 'type', 'summary'],
     },
   },
   {
@@ -81,11 +92,12 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
+        ...SESSION_PROPS,
         params: { type: 'object', additionalProperties: { type: 'number' } },
         summary: { type: 'string' },
         intent: { type: 'string' },
       },
-      required: ['params', 'summary'],
+      required: ['session', 'token', 'params', 'summary'],
     },
   },
   {
@@ -95,32 +107,34 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
+        ...SESSION_PROPS,
         patchId: { type: 'string', description: 'ID of the patch to revert (from list_patch_history)' },
         summary: { type: 'string' },
       },
-      required: ['patchId'],
+      required: ['session', 'token', 'patchId'],
     },
   },
   {
     name: 'get_latest_screenshot',
     description:
       'Get the most recent render screenshot posted by the connected CadLad Studio. Returns a PNG image, or model stats text if no screenshot is available.',
-    inputSchema: { type: 'object', properties: {}, required: [] },
+    inputSchema: { type: 'object', properties: { ...SESSION_PROPS }, required: ['session', 'token'] },
   },
   {
     name: 'get_model_stats',
     description:
       'Get geometry statistics from the last run: triangle count, body count, bounding box, volume, surface area.',
-    inputSchema: { type: 'object', properties: {}, required: [] },
+    inputSchema: { type: 'object', properties: { ...SESSION_PROPS }, required: ['session', 'token'] },
   },
-] as const;
+];
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 export async function handleMcp(request: Request, env: Env, origin: string): Promise<Response> {
   const url = new URL(request.url);
-  const sessionId = url.searchParams.get('session');
-  const token = url.searchParams.get('token');
+  // URL params are kept for backward compatibility but tool args take precedence.
+  const sessionIdFromUrl = url.searchParams.get('session');
+  const tokenFromUrl = url.searchParams.get('token');
 
   const cors = corsHeaders(origin);
 
@@ -153,10 +167,6 @@ export async function handleMcp(request: Request, env: Env, origin: string): Pro
     return new Response('Method Not Allowed', { status: 405, headers: cors });
   }
 
-  if (!sessionId || !token) {
-    return rpcError(null, -32600, 'Missing required query params: session, token', cors);
-  }
-
   let msg: { id?: unknown; method?: string; params?: unknown };
   try {
     msg = await request.json() as typeof msg;
@@ -173,6 +183,8 @@ export async function handleMcp(request: Request, env: Env, origin: string): Pro
 
   try {
     switch (method) {
+      // initialize and ping don't require a session — they handle the connection handshake.
+      // Session/token are validated per tool call below.
       case 'initialize':
         return rpcResult(id, {
           protocolVersion: '2024-11-05',
@@ -190,7 +202,7 @@ export async function handleMcp(request: Request, env: Env, origin: string): Pro
         const p = params as { name?: string; arguments?: Record<string, unknown> } | undefined;
         const toolName = p?.name ?? '';
         const args = p?.arguments ?? {};
-        const result = await callTool(toolName, args, sessionId, token, env);
+        const result = await callTool(toolName, args, sessionIdFromUrl, tokenFromUrl, env);
         return rpcResult(id, result, cors);
       }
 
@@ -208,10 +220,18 @@ export async function handleMcp(request: Request, env: Env, origin: string): Pro
 async function callTool(
   name: string,
   args: Record<string, unknown>,
-  sessionId: string,
-  token: string,
+  sessionIdFromUrl: string | null,
+  tokenFromUrl: string | null,
   env: Env,
 ): Promise<{ content: Array<{ type: string; text?: string; data?: string; mimeType?: string }> }> {
+  // Tool args take precedence over URL params (URL params kept for backward compat).
+  const sessionId = (args.session as string | undefined) ?? sessionIdFromUrl;
+  const token = (args.token as string | undefined) ?? tokenFromUrl;
+
+  if (!sessionId) {
+    throw new Error('session is required. Pass it as a tool argument or in the MCP URL (?session=<id>).');
+  }
+
   const stub = env.LIVE_SESSION.get(env.LIVE_SESSION.idFromName(sessionId));
   const base = `http://do/api/live/session/${sessionId}`;
 
@@ -233,6 +253,7 @@ async function callTool(
     }
 
     case 'replace_source': {
+      if (!token) throw new Error('token is required for replace_source. Pass it as a tool argument.');
       const { source, summary, intent, approach } = args as {
         source?: string; summary?: string; intent?: string; approach?: string;
       };
@@ -245,6 +266,7 @@ async function callTool(
     }
 
     case 'apply_patch': {
+      if (!token) throw new Error('token is required for apply_patch. Pass it as a tool argument.');
       const { type, source, params, summary, intent, approach } = args as {
         type?: string; source?: string; params?: Record<string, number>;
         summary?: string; intent?: string; approach?: string;
@@ -261,6 +283,7 @@ async function callTool(
     }
 
     case 'update_params': {
+      if (!token) throw new Error('token is required for update_params. Pass it as a tool argument.');
       const { params, summary, intent } = args as {
         params?: Record<string, number>; summary?: string; intent?: string;
       };
@@ -279,6 +302,7 @@ async function callTool(
     }
 
     case 'revert_patch': {
+      if (!token) throw new Error('token is required for revert_patch. Pass it as a tool argument.');
       const { patchId, summary } = args as { patchId?: string; summary?: string };
       if (!patchId) throw new Error('patchId is required');
       const resp = await doPost(stub, `${base}/revert`, token, { patchId, summary });

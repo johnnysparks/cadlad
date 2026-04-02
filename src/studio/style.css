@@ -126,6 +126,33 @@ html, body, #app {
   white-space: nowrap;
 }
 
+#btn-copy-claude-prompt {
+  display: none;
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--success) 40%, var(--border));
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 8px;
+  margin-left: auto;
+  line-height: 1;
+  border-radius: 4px;
+  color: var(--success);
+  white-space: nowrap;
+  min-height: 24px;
+}
+
+#btn-copy-claude-prompt:hover {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+#live-session-strip:has(#live-session-status[data-state="connected"]) #btn-copy-claude-prompt,
+#live-session-strip:has(#live-session-status[data-state="patching"]) #btn-copy-claude-prompt,
+#live-session-strip:has(#live-session-status[data-state="rerunning"]) #btn-copy-claude-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 #btn-copy-live-error {
   display: none;
   background: none;
@@ -133,7 +160,6 @@ html, body, #app {
   cursor: pointer;
   font-size: 14px;
   padding: 4px 6px;
-  margin-left: auto;
   line-height: 1;
   border-radius: 4px;
   min-width: 32px;
