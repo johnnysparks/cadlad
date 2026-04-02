@@ -64,7 +64,8 @@ That's it. No `CLOUDFLARE_WORKER_PREVIEW_URL` or `CLOUDFLARE_WORKER_PRODUCTION_U
    - `cadlad-live-sessions` (production)
    - `cadlad-live-sessions-preview` (shared preview)
 3. One Cloudflare Pages project: `cadlad`
-4. Pages project has the `functions/` directory wired in (auto-detected from repo)
+
+No manual binding configuration in the Cloudflare dashboard is needed. Service bindings and Worker URLs are declared in `wrangler.toml` and applied automatically by `wrangler pages deploy`.
 
 ### Bootstrap (first time only)
 

@@ -1,20 +1,29 @@
 # Cloudflare Pages project configuration.
-# Sets environment variables for Pages Functions (/api/live/* and /health proxies).
 #
-# When VITE_LIVE_SESSION_API_BASE is not baked into the frontend build, the client
-# falls back to same-origin requests, which Pages Functions then proxy to the Worker.
-# LIVE_SESSION_WORKER_URL tells Pages Functions where to forward those requests.
+# Service bindings wire Pages Functions directly to the Worker with zero latency
+# (no HTTP hop). This is the preferred strategy; LIVE_SESSION_WORKER_URL below
+# is a fallback for environments where the service binding isn't available.
 #
-# For zero-latency production deploys, add a LIVE_SESSION_API service binding in
-# the Cloudflare dashboard (Pages → Settings → Functions → Service bindings).
+# Preview deployments (all non-main branches) use the shared preview Worker.
+# Production (main branch) uses the production Worker.
 
 name = "cadlad"
 pages_build_output_dir = "dist"
 
-# Preview environments (all non-main branches) → shared preview Worker.
+# Preview: service binding → shared preview Worker
+[[services]]
+binding = "LIVE_SESSION_API"
+service = "cadlad-live-sessions-preview"
+
+# Preview: HTTP URL fallback (used if service binding is absent)
 [vars]
 LIVE_SESSION_WORKER_URL = "https://cadlad-live-sessions-preview.johnnymsparks.workers.dev"
 
-# Production (main branch) → production Worker.
+# Production: service binding → production Worker
+[[env.production.services]]
+binding = "LIVE_SESSION_API"
+service = "cadlad-live-sessions"
+
+# Production: HTTP URL fallback
 [env.production.vars]
 LIVE_SESSION_WORKER_URL = "https://cadlad-live-sessions.johnnymsparks.workers.dev"
