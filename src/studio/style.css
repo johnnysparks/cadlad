@@ -160,6 +160,10 @@ html, body, #app {
   position: relative;
 }
 
+#mobile-splitter {
+  display: none;
+}
+
 #editor-pane {
   overflow: hidden;
   border-right: 1px solid var(--border);
@@ -379,8 +383,9 @@ html, body, #app {
   }
 
   #workspace {
+    --viewer-height: 45;
     grid-template-columns: 1fr;
-    grid-template-rows: 45% 55%;
+    grid-template-rows: calc(var(--viewer-height) * 1%) 6px calc((100 - var(--viewer-height)) * 1%);
   }
 
   #viewport {
@@ -388,8 +393,34 @@ html, body, #app {
     min-height: 0;
   }
 
-  #editor-pane {
+  #mobile-splitter {
     grid-row: 2;
+    display: block;
+    width: 100%;
+    border: none;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--bg-elevated) 90%, black 10%);
+    cursor: row-resize;
+    touch-action: none;
+  }
+
+  #mobile-splitter::before {
+    content: "";
+    display: block;
+    width: 42px;
+    height: 2px;
+    margin: 1px auto 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text-muted) 80%, var(--accent) 20%);
+  }
+
+  #mobile-splitter:active {
+    background: color-mix(in srgb, var(--accent) 25%, var(--bg-elevated));
+  }
+
+  #editor-pane {
+    grid-row: 3;
     border-right: none;
     border-top: 1px solid var(--border);
     min-height: 0;

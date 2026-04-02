@@ -41,6 +41,8 @@ function toPatchEvent(serverPatch: NonNullable<PatchEventPayload["patch"]>): Pat
 async function boot() {
   const editorPane = document.getElementById("editor-pane")!;
   const viewportEl = document.getElementById("viewport")!;
+  const workspaceEl = document.getElementById("workspace")!;
+  const mobileSplitter = document.getElementById("mobile-splitter") as HTMLButtonElement;
   const paramEl = document.getElementById("param-panel")!;
   const runBtn = document.getElementById("btn-run")!;
   const exportBtn = document.getElementById("btn-export-stl")!;
@@ -164,6 +166,8 @@ async function boot() {
   });
 
   const mobilePortraitQuery = window.matchMedia("(max-width: 900px) and (orientation: portrait)");
+  let viewerHeightPercent = 45;
+  let splitterPointerId: number | null = null;
   let isParamsOpen = false;
 
   const setParamsOpen = (open: boolean) => {
@@ -175,12 +179,46 @@ async function boot() {
   const syncResponsiveLayout = () => {
     const isMobilePortrait = mobilePortraitQuery.matches;
     document.body.classList.toggle("mobile-portrait", isMobilePortrait);
+    workspaceEl.style.setProperty("--viewer-height", String(viewerHeightPercent));
     if (!isMobilePortrait) {
       setParamsOpen(true);
     } else {
       setParamsOpen(false);
     }
   };
+
+  const setViewerSplit = (nextPercent: number) => {
+    viewerHeightPercent = Math.max(20, Math.min(80, nextPercent));
+    workspaceEl.style.setProperty("--viewer-height", viewerHeightPercent.toFixed(2));
+  };
+
+  const onSplitterPointerMove = (event: PointerEvent) => {
+    if (splitterPointerId !== event.pointerId || !mobilePortraitQuery.matches) return;
+    const rect = workspaceEl.getBoundingClientRect();
+    if (rect.height <= 0) return;
+    const nextPercent = ((event.clientY - rect.top) / rect.height) * 100;
+    setViewerSplit(nextPercent);
+    event.preventDefault();
+  };
+
+  const stopSplitterDrag = (event: PointerEvent) => {
+    if (splitterPointerId !== event.pointerId) return;
+    mobileSplitter.releasePointerCapture(event.pointerId);
+    splitterPointerId = null;
+    window.removeEventListener("pointermove", onSplitterPointerMove);
+    window.removeEventListener("pointerup", stopSplitterDrag);
+    window.removeEventListener("pointercancel", stopSplitterDrag);
+  };
+
+  mobileSplitter.addEventListener("pointerdown", (event) => {
+    if (!mobilePortraitQuery.matches) return;
+    splitterPointerId = event.pointerId;
+    mobileSplitter.setPointerCapture(event.pointerId);
+    window.addEventListener("pointermove", onSplitterPointerMove);
+    window.addEventListener("pointerup", stopSplitterDrag);
+    window.addEventListener("pointercancel", stopSplitterDrag);
+    event.preventDefault();
+  });
 
   toggleParamsBtn?.addEventListener("click", () => {
     if (!document.body.classList.contains("mobile-portrait")) return;
