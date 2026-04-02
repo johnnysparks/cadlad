@@ -181,7 +181,7 @@ Post run telemetry from the studio after model evaluation. **Requires write toke
     "errors": [],
     "warnings": [],
     "timestamp": 1700000000000,
-    "stats": { ... },
+    "stats": { /* includes per-part + pairwise data */ },
     "screenshot": "data:image/png;base64,..."
   }
 }
@@ -217,11 +217,36 @@ interface Patch {
   createdAt: number;
 }
 
+interface ModelStats {
+  triangles: number;
+  bodies: number;
+  boundingBox: { min: [number, number, number]; max: [number, number, number] };
+  volume?: number;
+  surfaceArea?: number;
+  parts?: Array<{
+    index: number;
+    name: string;
+    triangles: number;
+    boundingBox: { min: [number, number, number]; max: [number, number, number] };
+    extents: { x: number; y: number; z: number };
+    volume: number;
+    surfaceArea: number;
+  }>;
+  pairwise?: Array<{
+    partA: string;
+    partB: string;
+    intersects: boolean;
+    minDistance: number;
+  }>;
+}
+
 interface RunResult {
   success: boolean;
   errors: string[];
   warnings: string[];
   timestamp: number;
+  stats?: ModelStats;
+  screenshot?: string;
 }
 ```
 

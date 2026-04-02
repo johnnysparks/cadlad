@@ -9,6 +9,7 @@ import { Viewport } from "./viewport.js";
 import { ParamPanel } from "./param-panel.js";
 import { LiveSessionClient, type LiveSessionState, type PatchEventPayload } from "./live-session-client.js";
 import { evaluateModel } from "../api/runtime.js";
+import { computeModelStats } from "./model-stats.js";
 import { EditorDecorations } from "./editor-decorations.js";
 import { PatchHistoryPanel } from "./patch-history.js";
 import type { PatchEvent } from "./types/live-session.js";
@@ -355,36 +356,14 @@ async function boot() {
       if (liveSessionId && liveToken) {
         try {
           const screenshot = viewport.captureFrame();
-          // Compute basic stats from mesh data
-          let triangles = 0;
-          let minX = Infinity, minY = Infinity, minZ = Infinity;
-          let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-          for (const body of result.bodies) {
-            triangles += body.mesh.indices.length / 3;
-            const pos = body.mesh.positions;
-            for (let i = 0; i < pos.length; i += 3) {
-              if (pos[i] < minX) minX = pos[i];
-              if (pos[i + 1] < minY) minY = pos[i + 1];
-              if (pos[i + 2] < minZ) minZ = pos[i + 2];
-              if (pos[i] > maxX) maxX = pos[i];
-              if (pos[i + 1] > maxY) maxY = pos[i + 1];
-              if (pos[i + 2] > maxZ) maxZ = pos[i + 2];
-            }
-          }
+          const stats = computeModelStats(result.bodies);
           void liveClient.postRunResult(liveSessionId, liveToken, liveRevision, {
             success: result.errors.length === 0,
             errors: result.errors,
             warnings: [],
             timestamp: Date.now(),
             screenshot,
-            stats: result.bodies.length > 0 ? {
-              triangles: Math.floor(triangles),
-              bodies: result.bodies.length,
-              boundingBox: {
-                min: [minX, minY, minZ],
-                max: [maxX, maxY, maxZ],
-              },
-            } : undefined,
+            stats,
           });
         } catch {
           // Best-effort — don't break the run on screenshot/post failure

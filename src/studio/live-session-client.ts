@@ -66,6 +66,24 @@ export interface RunResultPayload {
     };
     volume?: number;
     surfaceArea?: number;
+    parts?: Array<{
+      index: number;
+      name: string;
+      triangles: number;
+      boundingBox: {
+        min: [number, number, number];
+        max: [number, number, number];
+      };
+      extents: { x: number; y: number; z: number };
+      volume: number;
+      surfaceArea: number;
+    }>;
+    pairwise?: Array<{
+      partA: string;
+      partB: string;
+      intersects: boolean;
+      minDistance: number;
+    }>;
   };
   /** Base64 PNG data URL of the viewport render */
   screenshot?: string;

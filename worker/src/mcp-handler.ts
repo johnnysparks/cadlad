@@ -130,6 +130,35 @@ const TOOLS = [
     annotations: { readOnlyHint: true },
     inputSchema: { type: 'object', properties: { ...SESSION_PROPS }, required: ['session', 'token'] },
   },
+  {
+    name: 'get_part_stats',
+    description:
+      'Get named-part stats from the latest run. Optionally filter by partName.',
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...SESSION_PROPS,
+        partName: { type: 'string', description: 'Optional exact part name to return' },
+      },
+      required: ['session', 'token'],
+    },
+  },
+  {
+    name: 'query_part_relationship',
+    description:
+      'Query pairwise relationship between two named parts: intersection flag and minimum distance.',
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...SESSION_PROPS,
+        partA: { type: 'string', description: 'First part name' },
+        partB: { type: 'string', description: 'Second part name' },
+      },
+      required: ['session', 'token', 'partA', 'partB'],
+    },
+  },
 ];
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -364,6 +393,73 @@ async function callTool(
       return { content: [{ type: 'text', text: formatStats(data.runResult.stats) }] };
     }
 
+    case 'get_part_stats': {
+      const resp = await stub.fetch(new Request(`${base}/run-result`));
+      if (resp.status === 404) {
+        return { content: [{ type: 'text', text: 'No run result yet. Open CadLad Studio and run the model.' }] };
+      }
+      if (!resp.ok) throw new Error(`Run-result fetch failed: ${resp.status}`);
+      const data = await resp.json() as { runResult: RunResult | null; revision?: number };
+      const stats = data.runResult?.stats;
+      if (!stats?.parts || stats.parts.length === 0) {
+        return { content: [{ type: 'text', text: 'No named part stats available yet.' }] };
+      }
+
+      const partName = typeof args.partName === 'string' ? args.partName : undefined;
+      if (partName) {
+        const part = stats.parts.find((p) => p.name === partName);
+        if (!part) {
+          return { content: [{ type: 'text', text: `Part not found: ${partName}. Available parts: ${stats.parts.map((p) => p.name).join(', ')}` }] };
+        }
+        return { content: [{ type: 'text', text: formatPartStats(part) }] };
+      }
+
+      return { content: [{ type: 'text', text: stats.parts.map(formatPartStats).join('\n\n') }] };
+    }
+
+    case 'query_part_relationship': {
+      const partA = typeof args.partA === 'string' ? args.partA : '';
+      const partB = typeof args.partB === 'string' ? args.partB : '';
+      if (!partA || !partB) throw new Error('partA and partB are required');
+
+      const resp = await stub.fetch(new Request(`${base}/run-result`));
+      if (resp.status === 404) {
+        return { content: [{ type: 'text', text: 'No run result yet. Open CadLad Studio and run the model.' }] };
+      }
+      if (!resp.ok) throw new Error(`Run-result fetch failed: ${resp.status}`);
+      const data = await resp.json() as { runResult: RunResult | null; revision?: number };
+      const stats = data.runResult?.stats;
+      if (!stats?.parts || stats.parts.length === 0) {
+        return { content: [{ type: 'text', text: 'No named part stats available yet.' }] };
+      }
+
+      const a = stats.parts.find((p) => p.name === partA);
+      const b = stats.parts.find((p) => p.name === partB);
+      if (!a || !b) {
+        return { content: [{ type: 'text', text: `Unknown part(s). Available parts: ${stats.parts.map((p) => p.name).join(', ')}` }] };
+      }
+
+      const pair = stats.pairwise?.find((r) =>
+        (r.partA === partA && r.partB === partB) || (r.partA === partB && r.partB === partA),
+      );
+
+      if (!pair) {
+        return { content: [{ type: 'text', text: `No relationship data available for ${partA} ↔ ${partB}.` }] };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: [
+            `Part A: ${partA}`,
+            `Part B: ${partB}`,
+            `Intersects: ${pair.intersects ? 'yes' : 'no'}`,
+            `Minimum distance: ${pair.minDistance.toFixed(3)} units`,
+          ].join('\n'),
+        }],
+      };
+    }
+
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -436,6 +532,19 @@ function formatStats(stats: ModelStats): string {
     stats.volume !== undefined ? `Volume: ${stats.volume.toFixed(2)} units³` : '',
     stats.surfaceArea !== undefined ? `Surface area: ${stats.surfaceArea.toFixed(2)} units²` : '',
   ].filter(Boolean).join('\n');
+}
+
+function formatPartStats(part: NonNullable<ModelStats['parts']>[number]): string {
+  const bb = part.boundingBox;
+  return [
+    `Part: ${part.name} (#${part.index})`,
+    `Triangles: ${part.triangles.toLocaleString()}`,
+    `Extents: X=${part.extents.x.toFixed(2)}  Y=${part.extents.y.toFixed(2)}  Z=${part.extents.z.toFixed(2)}`,
+    `Bounding box min: [${bb.min.map((v) => v.toFixed(2)).join(', ')}]`,
+    `Bounding box max: [${bb.max.map((v) => v.toFixed(2)).join(', ')}]`,
+    `Volume: ${part.volume.toFixed(2)} units³`,
+    `Surface area: ${part.surfaceArea.toFixed(2)} units²`,
+  ].join('\n');
 }
 
 function patchAppliedMsg(patch: Patch): string {

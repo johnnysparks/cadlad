@@ -207,6 +207,33 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: "get_part_stats",
+    description:
+      "Get named-part stats from the last run. Optionally pass partName for a single part.",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        partName: { type: "string" },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "query_part_relationship",
+    description:
+      "Query pairwise relationship between two part names: intersects and minimum distance.",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        partA: { type: "string" },
+        partB: { type: "string" },
+      },
+      required: ["partA", "partB"],
+    },
+  },
 ] as const;
 
 // ── Server setup ──────────────────────────────────────────────────────────────
@@ -442,6 +469,79 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case "get_part_stats": {
+        const data = await client.getRunResult();
+        const stats = data.runResult?.stats;
+        if (!stats?.parts || stats.parts.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: "No named part stats available yet.",
+              },
+            ],
+          };
+        }
+
+        const partName = (args as { partName?: string }).partName;
+        if (partName) {
+          const part = stats.parts.find((p) => p.name === partName);
+          if (!part) {
+            return {
+              content: [{ type: "text" as const, text: `Part not found: ${partName}. Available parts: ${stats.parts.map((p) => p.name).join(", ")}` }],
+            };
+          }
+          return { content: [{ type: "text" as const, text: formatPartStats(part) }] };
+        }
+
+        return {
+          content: [{ type: "text" as const, text: stats.parts.map(formatPartStats).join("\n\n") }],
+        };
+      }
+
+      case "query_part_relationship": {
+        const { partA, partB } = args as { partA?: string; partB?: string };
+        if (!partA || !partB) {
+          return errorContent("partA and partB are required");
+        }
+
+        const data = await client.getRunResult();
+        const stats = data.runResult?.stats;
+        if (!stats?.parts || stats.parts.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: "No named part stats available yet.",
+              },
+            ],
+          };
+        }
+
+        const pair = stats.pairwise?.find((r) =>
+          (r.partA === partA && r.partB === partB) || (r.partA === partB && r.partB === partA),
+        );
+        if (!pair) {
+          return {
+            content: [{ type: "text" as const, text: `No relationship data available for ${partA} ↔ ${partB}.` }],
+          };
+        }
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: [
+                `Part A: ${partA}`,
+                `Part B: ${partB}`,
+                `Intersects: ${pair.intersects ? "yes" : "no"}`,
+                `Minimum distance: ${pair.minDistance.toFixed(3)} units`,
+              ].join("\n"),
+            },
+          ],
+        };
+      }
+
       default:
         return errorContent(`Unknown tool: ${name}`);
     }
@@ -507,6 +607,19 @@ function formatStats(stats: NonNullable<import("./session-client.js").RunResult[
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function formatPartStats(part: NonNullable<import("./session-client.js").ModelStats["parts"]>[number]): string {
+  const bb = part.boundingBox;
+  return [
+    `Part: ${part.name} (#${part.index})`,
+    `Triangles: ${part.triangles.toLocaleString()}`,
+    `Extents: X=${part.extents.x.toFixed(2)}  Y=${part.extents.y.toFixed(2)}  Z=${part.extents.z.toFixed(2)}`,
+    `Bounding box min: [${bb.min.map((v) => v.toFixed(2)).join(", ")}]`,
+    `Bounding box max: [${bb.max.map((v) => v.toFixed(2)).join(", ")}]`,
+    `Volume: ${part.volume.toFixed(2)} units³`,
+    `Surface area: ${part.surfaceArea.toFixed(2)} units²`,
+  ].join("\n");
 }
 
 function errorContent(message: string) {

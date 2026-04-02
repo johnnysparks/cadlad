@@ -45,6 +45,26 @@ export interface ModelStats {
   volume?: number;
   /** Approximate surface area in model units² (sum of all bodies) */
   surfaceArea?: number;
+  /** Per-body stats keyed by body name (or generated part-N fallback) */
+  parts?: Array<{
+    index: number;
+    name: string;
+    triangles: number;
+    boundingBox: {
+      min: [number, number, number];
+      max: [number, number, number];
+    };
+    extents: { x: number; y: number; z: number };
+    volume: number;
+    surfaceArea: number;
+  }>;
+  /** Pairwise part relations based on per-part AABB proximity */
+  pairwise?: Array<{
+    partA: string;
+    partB: string;
+    intersects: boolean;
+    minDistance: number;
+  }>;
 }
 
 export interface RunResult {
