@@ -1,125 +1,124 @@
 # Live-Session Deployment (Pages + Worker)
 
-## What was broken
+## Architecture overview
 
-Before this wiring, CI only deployed static frontend assets to Cloudflare Pages previews. The live-session backend (`worker/`) was not deployed from GitHub Actions, so preview studio builds had no guaranteed reachable Worker + Durable Object API.
+CadLad deploys two independent artifacts:
 
-## Current deployment model
+1. **Cloudflare Worker** (Durable Objects backend) — `worker/wrangler.toml`
+2. **Cloudflare Pages** (static frontend + Functions proxy) — `wrangler.toml`
 
-CadLad now deploys two independent artifacts in preview CI:
+Everything runs on Cloudflare. GitHub Pages is not used.
 
-1. **Cloudflare Worker (with Durable Objects)** from `worker/wrangler.toml`.
-2. **Cloudflare Pages preview** from `dist/`.
+## How requests flow
 
-Workflow: `.github/workflows/preview-deploy.yml`
+```
+Browser → Cloudflare Pages (static HTML/JS)
+              ↓ /api/live/* and /health requests
+         Pages Functions (functions/)
+              ↓ HTTP proxy via LIVE_SESSION_WORKER_URL
+         Cloudflare Worker (Durable Objects)
+```
 
-### Why this shape
+The Worker URLs are hardcoded in `wrangler.toml`:
 
-- It preserves the existing Pages preview flow.
-- It keeps live sessions on standalone Workers + Durable Objects (not Pages Functions).
-- It uses a pragmatic **shared preview Worker environment** (`env.preview`) instead of per-branch Workers.
+| Environment | Worker URL |
+|---|---|
+| Preview (non-main branches) | `https://cadlad-live-sessions-preview.johnnymsparks.workers.dev` |
+| Production (main) | `https://cadlad-live-sessions.johnnymsparks.workers.dev` |
 
-## Shared preview Worker vs per-branch Worker
-
-This repo uses a **shared preview Worker** (`cadlad-live-sessions-preview`) for all preview branches.
-
-### Tradeoff
-
-- ✅ Simple and robust: one Worker URL to wire into frontend previews.
-- ✅ Durable Object migrations remain straightforward (`wrangler deploy` handles them).
-- ⚠️ Preview branches share one backend service namespace. Sessions are still isolated by random session IDs + tokens, but all previews hit the same Worker deployment target.
-
-Per-branch Workers are possible, but they add naming, cleanup, and migration/version management complexity. For now, shared preview is the smallest safe setup.
+No secrets needed for Worker URL wiring — it's all in code.
 
 ## Required GitHub secrets
 
-Set these repository secrets:
+Only two secrets are needed:
 
-- `CLOUDFLARE_API_TOKEN` — token with permissions to deploy Pages and Workers.
-- `CLOUDFLARE_ACCOUNT_ID` — Cloudflare account ID.
-- `CLOUDFLARE_WORKER_PREVIEW_URL` — full preview Worker base URL, e.g. `https://cadlad-live-sessions-preview.<subdomain>.workers.dev`.
-- `CLOUDFLARE_WORKER_PRODUCTION_URL` *(optional fallback)* — production Worker URL used only if preview URL secret is absent.
+- `CLOUDFLARE_API_TOKEN` — token with Workers and Pages deploy permissions
+- `CLOUDFLARE_ACCOUNT_ID` — Cloudflare account ID
+
+That's it. No `CLOUDFLARE_WORKER_PREVIEW_URL` or `CLOUDFLARE_WORKER_PRODUCTION_URL`.
+
+## CI workflows
+
+| Workflow | Trigger | What it deploys |
+|---|---|---|
+| `deploy-pages.yml` | Push to `main` | Frontend → Cloudflare Pages (production) |
+| `deploy-worker.yml` | Push to `main` with `worker/**` changes | Worker → production |
+| `preview-deploy.yml` | Push to any non-main branch / PR | Worker (preview env) + Pages (preview branch) |
+
+### Production deploy (main branch)
+
+1. `deploy-worker.yml` fires if `worker/` changed → deploys `cadlad-live-sessions`
+2. `deploy-pages.yml` fires always → builds frontend, deploys to Cloudflare Pages `main` branch
+
+### Preview deploy (feature branches / PRs)
+
+1. `preview-deploy.yml` runs two sequential jobs:
+   - **deploy-worker-preview**: deploys `cadlad-live-sessions-preview` (shared across all preview branches)
+   - **deploy-pages-preview**: builds frontend, deploys to Cloudflare Pages with branch name
+2. PR gets a comment with the preview URL
 
 ## Required Cloudflare setup
 
-1. Ensure Workers + Durable Objects are enabled on the account.
-2. Ensure `worker/wrangler.toml` script names are available:
-   - production: `cadlad-live-sessions`
-   - preview: `cadlad-live-sessions-preview`
-3. Deploy once manually if needed to bootstrap the script.
-4. (Optional) In production, set `STUDIO_ORIGIN` to your canonical studio origin (for strict CORS and live URL generation).
+1. Workers + Durable Objects enabled on the account
+2. Two Workers exist (created on first deploy):
+   - `cadlad-live-sessions` (production)
+   - `cadlad-live-sessions-preview` (shared preview)
+3. One Cloudflare Pages project: `cadlad`
+4. Pages project has the `functions/` directory wired in (auto-detected from repo)
 
-### Durable Object migrations
+### Bootstrap (first time only)
 
-Durable Object class/migrations are declared in `worker/wrangler.toml`.
+If Workers don't exist yet, deploy them manually once:
 
-`wrangler deploy` in CI applies migrations automatically according to migration tags.
-
+```bash
+npm run worker:deploy          # production Worker
+cd worker && npx wrangler deploy --env preview  # preview Worker
+```
 
 ## Environment matrix
 
 | Surface | Local | Preview | Production |
 |---|---|---|---|
-| Studio page | `http://localhost:5173` | `https://<branch>.cadlad.pages.dev` | your Pages production domain |
-| Live-session API | `http://localhost:8787` | `https://cadlad-live-sessions-preview.<subdomain>.workers.dev` | `https://cadlad-live-sessions.<subdomain>.workers.dev` |
-| Durable Objects namespace | local dev storage | shared `env.preview` namespace | production namespace |
+| Studio URL | `http://localhost:5173` | `https://<branch>.cadlad.pages.dev` | `https://cadlad.pages.dev` |
+| Live-session API | `http://localhost:8787` | `https://cadlad-live-sessions-preview.johnnymsparks.workers.dev` | `https://cadlad-live-sessions.johnnymsparks.workers.dev` |
+| DO namespace | local dev storage | shared `env.preview` | production |
 
-Because preview uses a shared Worker, prefer short-lived sessions in PR reviews and avoid storing sensitive prompts/source.
-
-## Frontend worker base URL discovery
-
-Studio resolves live-session API base in this order:
-
-1. `VITE_LIVE_SESSION_API_BASE` (set in preview CI from worker URL secret),
-2. local fallback `http://localhost:8787` when running on localhost,
-3. otherwise same-origin fallback (non-local safety default).
-
-This removes the previous hard dependency on `:8787` for non-local deployments.
-
-## Local dev vs deployed preview
-
-### Local dev
-
-- Run studio: `npm run dev` (localhost:5173)
-- Run worker: `npm run worker:dev` (localhost:8787)
-- No special env needed; studio falls back to `localhost:8787`.
-
-### Deployed preview
-
-- GitHub Actions deploys preview Worker first.
-- Preview frontend build injects `VITE_LIVE_SESSION_API_BASE` from `CLOUDFLARE_WORKER_PREVIEW_URL`.
-- Pages deploy publishes static preview that can reach the Worker API.
-
-## Smoke test checklist (preview)
-
-1. Open the PR preview site URL.
-2. Click 🤖☁️ to create a live session.
-3. Confirm API create-session works:
-   - UI shows `Live: connected`, and capability link is copied.
-4. Confirm session/event endpoints are live:
-   - Studio receives snapshot/patch events (`/api/live/session/:id/events`) without connection errors.
-
-Optional terminal checks (replace `<worker-url>`):
+## Local dev
 
 ```bash
-curl -s "<worker-url>/health"
-curl -s -X POST "<worker-url>/api/live/session" \
+npm run dev          # Studio at localhost:5173
+npm run worker:dev   # Worker at localhost:8787
+```
+
+No env vars needed — studio auto-detects `localhost:8787` when running on localhost.
+
+## Frontend API base resolution
+
+The live-session client (`src/studio/live-session-client.ts`) resolves the Worker URL in order:
+
+1. `VITE_LIVE_SESSION_API_BASE` env var (not set in CI — we rely on the proxy instead)
+2. `http://localhost:8787` when running on localhost
+3. `location.origin` otherwise → same-origin → Pages Functions proxy → Worker
+
+## Smoke tests
+
+```bash
+# Production Worker
+curl -s "https://cadlad-live-sessions.johnnymsparks.workers.dev/health"
+curl -s -X POST "https://cadlad-live-sessions.johnnymsparks.workers.dev/api/live/session" \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"return box(10,10,10)","params":{}}'
+
+# Via Pages proxy (production)
+curl -s "https://cadlad.pages.dev/health"
+curl -s -X POST "https://cadlad.pages.dev/api/live/session" \
   -H 'Content-Type: application/json' \
   -d '{"source":"return box(10,10,10)","params":{}}'
 ```
 
-## Production note
-
-This change wires preview deployment end-to-end. For production rollout, mirror the same pattern with a main-branch Worker deploy workflow and set a production frontend env (`VITE_LIVE_SESSION_API_BASE`) in Pages project settings.
-
-
 ## Integration tests
 
-Run both the frontend and Worker suites before shipping deployment changes:
-
 ```bash
-npm test
-npm --prefix worker test
+npm test                    # frontend suite
+npm --prefix worker test    # Worker suite
 ```
-
-The Worker tests exercise session creation, patch/revert flows, SSE, and run-result telemetry using the Cloudflare Vitest pool.
