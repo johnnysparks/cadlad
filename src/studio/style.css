@@ -81,6 +81,61 @@ html, body, #app {
   border-color: var(--accent);
 }
 
+/* ── Toolbar menu (⋯ dropdown) ───────────────────── */
+
+#toolbar-menu {
+  position: relative;
+}
+
+#btn-menu {
+  font-size: 16px;
+  padding: 4px 10px;
+  letter-spacing: 2px;
+}
+
+#toolbar-menu-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 100;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  min-width: 180px;
+  overflow: hidden;
+  flex-direction: column;
+}
+
+#toolbar-menu.open #toolbar-menu-dropdown {
+  display: flex;
+}
+
+#toolbar-menu-dropdown button,
+#toolbar-menu-dropdown a {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.1s;
+}
+
+#toolbar-menu-dropdown button:hover,
+#toolbar-menu-dropdown a:hover {
+  background: color-mix(in srgb, var(--accent) 15%, var(--bg-elevated));
+  color: var(--accent);
+}
+
 #btn-live-session {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }

@@ -11,11 +11,16 @@
     <header id="toolbar">
       <h1>CadLad</h1>
       <div id="toolbar-actions">
-        <button id="btn-live-session" title="Create live assistant session">🤖☁️ Live</button>
         <button id="btn-run" title="Run model (Ctrl+Enter)">▶ Run</button>
-        <button id="btn-export-stl" title="Export STL">STL</button>
         <button id="btn-toggle-params" title="Toggle parameters" aria-controls="param-panel" aria-expanded="false">Params</button>
-        <a href="./gallery/" id="btn-gallery" title="Example Gallery" style="color:inherit;text-decoration:none;padding:4px 8px;font-size:13px;opacity:0.7">Gallery</a>
+        <div id="toolbar-menu">
+          <button id="btn-menu" title="More actions" aria-label="More actions" aria-haspopup="true" aria-expanded="false">⋯</button>
+          <div id="toolbar-menu-dropdown" role="menu">
+            <button id="btn-live-session" role="menuitem" title="Create live assistant session">🤖☁️ Live session</button>
+            <button id="btn-export-stl" role="menuitem" title="Export STL">↓ Export STL</button>
+            <a href="./gallery/" id="btn-gallery" role="menuitem" title="Example Gallery">◈ Gallery</a>
+          </div>
+        </div>
       </div>
     </header>
     <div id="live-session-strip" aria-live="polite">

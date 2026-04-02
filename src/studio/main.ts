@@ -113,6 +113,21 @@ async function boot() {
   const copyClaudePromptBtn = document.getElementById("btn-copy-claude-prompt") as HTMLButtonElement;
   const copyLiveErrorBtn = document.getElementById("btn-copy-live-error") as HTMLButtonElement;
 
+  // ── Toolbar ⋯ menu ────────────────────────────────────────────────────────
+  const menuBtn = document.getElementById("btn-menu") as HTMLButtonElement;
+  const toolbarMenuEl = document.getElementById("toolbar-menu")!;
+  const toggleMenu = (open?: boolean) => {
+    const next = open ?? !toolbarMenuEl.classList.contains("open");
+    toolbarMenuEl.classList.toggle("open", next);
+    menuBtn.setAttribute("aria-expanded", String(next));
+  };
+  menuBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleMenu();
+  });
+  document.addEventListener("click", () => toggleMenu(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") toggleMenu(false); });
+
   copyClaudePromptBtn.addEventListener("click", async () => {
     if (!liveSessionId || !liveToken) return;
     const prompt = buildClaudePrompt(liveSessionId, liveToken);
