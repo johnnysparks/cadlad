@@ -458,7 +458,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 function formatSession(session: Awaited<ReturnType<SessionClient["getSession"]>>): string {
   const lines = [
-    `Session: ${session.id}`,
     `Revision: ${session.revision} (last successful: ${session.lastSuccessfulRevision})`,
     `Params: ${Object.keys(session.params).length > 0 ? JSON.stringify(session.params) : "none"}`,
     `Patches: ${session.patches.length}`,

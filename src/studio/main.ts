@@ -39,62 +39,22 @@ function toPatchEvent(serverPatch: NonNullable<PatchEventPayload["patch"]>): Pat
 }
 
 /**
- * Short prompt snippet for pasting into a Claude conversation.
- * The MCP connector URL is set up once in Claude settings; this gives
- * Claude the session credentials it needs to call the tools.
+ * Build a connect prompt for Claude Desktop / Claude Code (stdio MCP).
+ * These clients configure the session via CADLAD_SESSION_URL env var, not OAuth.
  */
 function buildClaudePrompt(sessionId: string, token: string): string {
-  return `CadLad session: session="${sessionId}" token="${token}". Call get_session_state to start.`;
+  return `CadLad session ready. CADLAD_SESSION_URL="?session=${sessionId}&token=${token}". Call get_session_state to start.`;
 }
 
 /**
- * Build a copy-paste AI prompt for any chatbot.
- * Includes MCP setup instructions and the raw HTTP API for non-MCP clients.
+ * Build an MCP server URL snippet for ChatGPT / OpenAI Apps SDK.
+ * No credentials in the URL — auth goes through the OAuth flow.
  */
-function buildAiPrompt(
-  liveUrl: string,
-  mcpBase: string,
-  apiBase: string,
-  sessionId: string,
-  token: string,
-): string {
-  return `CadLad live 3D modeling session — you can view and edit this parametric model in real time.
+function buildChatGptPrompt(mcpBase: string): string {
+  return `Add this as an MCP server in ChatGPT:
+  ${mcpBase}/mcp
 
-Studio URL: ${liveUrl}
-
-━━━ MCP connection (Claude.ai / Claude Desktop / MCP-capable clients) ━━━
-1. Add this as a remote MCP server in your client settings (one-time setup):
-     ${mcpBase}/mcp
-
-2. Then paste this into your Claude conversation to connect:
-     ${buildClaudePrompt(sessionId, token)}
-
-Tools: get_session_state · list_patch_history · replace_source · update_params
-       apply_patch · revert_patch · get_latest_screenshot · get_model_stats
-
-━━━ HTTP API (any assistant with tool-use / function-calling) ━━━
-Read model:
-  GET ${apiBase}/api/live/session/${sessionId}
-
-Apply code change:
-  POST ${apiBase}/api/live/session/${sessionId}/patch
-  Authorization: Bearer ${token}
-  {"type":"source_replace","source":"<full .forge.js code>","summary":"<what changed>"}
-
-Update sliders:
-  POST ${apiBase}/api/live/session/${sessionId}/patch
-  Authorization: Bearer ${token}
-  {"type":"param_update","params":{"<ParamName>":<value>},"summary":"<what changed>"}
-
-Get latest render (screenshot + stats):
-  GET ${apiBase}/api/live/session/${sessionId}/run-result
-
-━━━ Instructions ━━━
-1. Read the current model first (get_session_state or GET the session URL).
-2. Make changes with replace_source or update_params.
-3. Wait ~1s then call get_latest_screenshot to see the render.
-4. If a change breaks the model, use list_patch_history then revert_patch.
-The browser studio rerenders automatically after every patch.`;
+Then click "Connect ChatGPT" in the studio to generate a link code for authorization.`;
 }
 
 async function boot() {
@@ -111,6 +71,7 @@ async function boot() {
   const liveStatus = document.getElementById("live-session-status") as HTMLElement;
   const liveFeedback = document.getElementById("live-session-feedback") as HTMLElement;
   const copyClaudePromptBtn = document.getElementById("btn-copy-claude-prompt") as HTMLButtonElement;
+  const connectChatGptBtn = document.getElementById("btn-connect-chatgpt") as HTMLButtonElement;
   const copyLiveErrorBtn = document.getElementById("btn-copy-live-error") as HTMLButtonElement;
 
   // ── Toolbar ⋯ menu ────────────────────────────────────────────────────────
@@ -130,6 +91,8 @@ async function boot() {
 
   copyClaudePromptBtn.addEventListener("click", async () => {
     if (!liveSessionId || !liveToken) return;
+    // For Claude Desktop / Claude Code (stdio MCP), copy the session URL with credentials.
+    // For ChatGPT, use the "Connect ChatGPT" button instead.
     const prompt = buildClaudePrompt(liveSessionId, liveToken);
     try {
       await navigator.clipboard.writeText(prompt);
@@ -138,6 +101,35 @@ async function boot() {
       setTimeout(() => { copyClaudePromptBtn.textContent = prev; }, 1500);
     } catch {
       /* clipboard denied */
+    }
+  });
+
+  // Connect ChatGPT via OAuth: generate a link code and show the MCP server URL.
+  // The user adds the MCP URL to ChatGPT, then enters the link code in the consent form.
+  connectChatGptBtn.addEventListener("click", async () => {
+    if (!liveSessionId || !liveToken) return;
+    connectChatGptBtn.disabled = true;
+    const prev = connectChatGptBtn.textContent;
+    connectChatGptBtn.textContent = "…";
+    try {
+      const { linkCode, expiresIn } = await liveClient.createLinkCode(liveSessionId, liveToken);
+      const mcpUrl = `${liveClient.apiBase}/mcp`;
+      const instructions = [
+        buildChatGptPrompt(liveClient.apiBase),
+        `Link code: ${linkCode}  (expires in ${expiresIn}s — enter this in the ChatGPT authorization form)`,
+      ].join("\n\n");
+      await copyText(instructions);
+      setLiveUi("connected", `Link code: ${linkCode} (${expiresIn}s) — MCP: ${mcpUrl}`);
+      connectChatGptBtn.textContent = "✓ Copied";
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setLiveUi("failed", `Link code failed: ${msg}`);
+      connectChatGptBtn.textContent = prev;
+    } finally {
+      setTimeout(() => {
+        connectChatGptBtn.disabled = false;
+        connectChatGptBtn.textContent = prev;
+      }, 12000);
     }
   });
 
@@ -527,12 +519,13 @@ async function boot() {
 
     liveSource = liveClient.subscribe(
       sessionId,
-      token,
       handleLiveEvent,
       () => setLiveUi("failed", "connection lost; retrying"),
     );
 
     setLiveUi("connected", "listening for patches");
+    // Show the ChatGPT connect button once a live session is active
+    connectChatGptBtn.style.display = "";
   };
 
   const copyText = async (text: string): Promise<boolean> => {
@@ -555,13 +548,9 @@ async function boot() {
         params: paramPanel.getValueObject(),
       });
 
-      const aiPrompt = buildAiPrompt(created.liveUrl, liveClient.apiBase, liveClient.apiBase, created.sessionId, created.writeToken);
-      const copied = await copyText(aiPrompt);
-      setLiveUi(
-        "connected",
-        copied ? "AI prompt copied — paste into Claude, Gemini, or ChatGPT" : "session ready (clipboard copy failed)",
-      );
+      setLiveUi("connected", "session ready");
 
+      // Keep session + token in URL for page reload resilience (local to user's browser)
       const nextUrl = new URL(window.location.href);
       nextUrl.searchParams.set("session", created.sessionId);
       nextUrl.searchParams.set("token", created.writeToken);

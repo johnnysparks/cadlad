@@ -2,6 +2,13 @@
 
 import { LiveSession } from './live-session.js';
 import { handleMcp } from './mcp-handler.js';
+import {
+  handleProtectedResourceMetadata,
+  handleAuthServerMetadata,
+  handleRegister,
+  handleAuthorize,
+  handleToken,
+} from './oauth-handler.js';
 import type { Env, CreateSessionResponse, InitPayload, SessionState } from './types.js';
 
 // Re-export DO class so wrangler can find it
@@ -24,6 +31,24 @@ export default {
       }
       return handleMcp(request, env, mcpOrigin);
     }
+
+    // ── OAuth 2.1 discovery and authorization endpoints ───────────────────────
+
+    // RFC 8707: Protected Resource Metadata (tells clients which AS to use)
+    if (url.pathname === '/.well-known/oauth-protected-resource') {
+      const resourceOrigin = `${url.protocol}//${url.host}`;
+      return handleProtectedResourceMetadata(resourceOrigin);
+    }
+
+    // RFC 8414: Authorization Server Metadata
+    if (url.pathname === '/.well-known/oauth-authorization-server') {
+      const resourceOrigin = `${url.protocol}//${url.host}`;
+      return handleAuthServerMetadata(resourceOrigin);
+    }
+
+    if (url.pathname === '/oauth/register') return handleRegister(request, env);
+    if (url.pathname === '/oauth/authorize') return handleAuthorize(request, env);
+    if (url.pathname === '/oauth/token') return handleToken(request, env);
 
     // CORS preflight for non-MCP routes
     if (request.method === 'OPTIONS') {
@@ -56,7 +81,20 @@ export default {
         service: 'cadlad-live-sessions',
         timestamp: new Date().toISOString(),
         studioOrigin: env.STUDIO_ORIGIN || '(dynamic — reflects request Origin)',
-        routes: ['POST /mcp', 'POST /api/live/session', 'GET /api/live/session/:id', 'GET /api/live/session/:id/events', 'POST /api/live/session/:id/patch', 'GET /health'],
+        auth: 'OAuth 2.1 — see /.well-known/oauth-protected-resource',
+        routes: [
+          'POST /mcp (OAuth Bearer required for tools/call)',
+          'GET  /.well-known/oauth-protected-resource',
+          'GET  /.well-known/oauth-authorization-server',
+          'POST /oauth/register',
+          'GET  /oauth/authorize',
+          'POST /oauth/token',
+          'POST /api/live/session',
+          'GET  /api/live/session/:id',
+          'POST /api/live/session/:id/patch',
+          'POST /api/live/session/:id/link',
+          'GET  /health',
+        ],
       }, 200, corsHeaders(origin));
     }
 

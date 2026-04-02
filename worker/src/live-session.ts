@@ -12,6 +12,7 @@ import type {
   PostRunResultRequest,
   RunResult,
 } from './types.js';
+import { createLinkCode, saveScreenshot } from './oauth-store.js';
 
 const MAX_PATCHES = 100;
 const HEARTBEAT_INTERVAL_MS = 25_000; // keep SSE connections alive
@@ -95,6 +96,8 @@ export class LiveSession implements DurableObject {
       if (request.method === 'POST' && sub === '/patch') return this.handlePatch(request);
       if (request.method === 'POST' && sub === '/revert') return this.handleRevert(request);
       if (request.method === 'POST' && sub === '/run-result') return this.handlePostRunResult(request);
+      // Studio calls this to generate a link code for OAuth authorization
+      if (request.method === 'POST' && sub === '/link') return this.handleCreateLink(request);
 
       return err('Not found', 'NOT_FOUND', 404);
     } catch (e) {
@@ -280,6 +283,11 @@ export class LiveSession implements DurableObject {
     this.lastRunResult = body.result;
     if (body.result.success) this.lastSuccessfulRevision = body.revision;
 
+    // Persist screenshot to KV so it survives DO eviction
+    if (body.result.screenshot && this.id) {
+      void saveScreenshot(this.env.KV, this.id, body.result.screenshot);
+    }
+
     this.updatedAt = Date.now();
     await this.persist();
 
@@ -287,6 +295,20 @@ export class LiveSession implements DurableObject {
     this.broadcast(event);
 
     return ok({ ok: true });
+  }
+
+  /**
+   * POST /api/live/session/:id/link — generate a short-lived link code.
+   * Requires write token auth. The code is shown to the user in the studio
+   * and entered into the OAuth consent form to authorize a client like ChatGPT.
+   */
+  private async handleCreateLink(request: Request): Promise<Response> {
+    const authErr = this.checkAuth(request);
+    if (authErr) return authErr;
+
+    const code = await createLinkCode(this.env.KV, this.id, this.writeToken);
+    const expiresAt = Date.now() + 600_000; // 10 min, matching LINK_CODE_TTL_S in oauth-store
+    return ok({ linkCode: code, expiresAt, expiresIn: 600 });
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────

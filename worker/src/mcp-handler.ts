@@ -1,82 +1,64 @@
 /**
- * mcp-handler.ts — Remote MCP endpoint for CadLad live sessions.
+ * mcp-handler.ts — Remote MCP endpoint (Streamable HTTP transport, 2025-03-26).
  *
- * Implements the MCP Streamable HTTP transport (2024-11-05 protocol version)
- * directly in the Cloudflare Worker — no SDK required, no Node.js dependencies.
+ * Auth: OAuth 2.1 Bearer token. Every request (except initialize/ping/tools/list)
+ * requires Authorization: Bearer <access_token>. The token is resolved server-side
+ * to a session + write token; nothing sensitive appears in tool inputs or outputs.
  *
- * Endpoint: POST /mcp?session=<id>&token=<writeToken>
+ * Endpoint: POST /mcp
  *
- * Supports:
- *   initialize         — capabilities handshake
- *   ping               — keepalive
- *   tools/list         — enumerate available tools
- *   tools/call         — invoke a tool
- *   notifications/*    — client notifications (acknowledged, no response)
- *
- * Tools exposed:
- *   get_session_state, list_patch_history, replace_source, apply_patch,
- *   update_params, revert_patch, get_latest_screenshot, get_model_stats
+ * Tools: get_session_state · list_patch_history · replace_source · apply_patch ·
+ *        update_params · revert_patch · get_latest_screenshot · get_model_stats
  */
 
 import type { Env, SessionState, Patch, RunResult, ModelStats } from './types.js';
+import { resolveAccessToken } from './oauth-store.js';
+import { loadScreenshot } from './oauth-store.js';
 
-// ── MCP tool definitions ──────────────────────────────────────────────────────
-
-// session/token are required on all tools so Claude can use a single prompt
-// snippet ("session=… token=…") for every call. The connector URL is fixed;
-// credentials are passed as tool arguments, not URL params.
-const SESSION_PROPS = {
-  session: { type: 'string' as const, description: 'CadLad session ID (from the studio Connect prompt)' },
-  token: { type: 'string' as const, description: 'CadLad write token (from the studio Connect prompt)' },
-};
+// ── Tool definitions (no session/token in schemas) ────────────────────────────
 
 const TOOLS = [
   {
     name: 'get_session_state',
-    description:
-      'Read the current CadLad session: source code, parameter values, revision number, and last-successful revision. Always call this first to understand what you\'re working with.',
-    annotations: { readOnlyHint: true },
-    inputSchema: { type: 'object', properties: { ...SESSION_PROPS }, required: ['session', 'token'] },
+    description: 'Read the current model: source code, parameter values, revision, and last-successful revision. Call this first to understand what you\'re working with.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {
     name: 'list_patch_history',
-    description:
-      'List the patch history for this session. Each entry shows what changed, the intent, and whether the run succeeded.',
-    annotations: { readOnlyHint: true },
+    description: 'Use this when you need to review prior changes or find a patch to revert. Returns each patch with its summary, intent, run status, and ID.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: {
       type: 'object',
       properties: {
-        ...SESSION_PROPS,
         limit: { type: 'number', description: 'Max patches to return (default 20, max 50)' },
         offset: { type: 'number', description: 'Skip first N patches for pagination' },
       },
-      required: ['session', 'token'],
+      required: [],
     },
   },
   {
     name: 'replace_source',
-    description:
-      'Replace the entire model source with new .forge.js code. The studio rerenders automatically after this call.',
+    description: 'Use this to replace the entire .forge.js model source. The studio rerenders automatically. Always provide a clear summary and intent.',
+    annotations: { readOnlyHint: false, destructiveHint: false },
     inputSchema: {
       type: 'object',
       properties: {
-        ...SESSION_PROPS,
         source: { type: 'string', description: 'Complete new .forge.js model source code' },
         summary: { type: 'string', description: 'One-line description of what changed' },
         intent: { type: 'string', description: 'Why this change was made' },
         approach: { type: 'string', description: 'Technical approach used' },
       },
-      required: ['session', 'token', 'source', 'summary'],
+      required: ['source', 'summary'],
     },
   },
   {
     name: 'apply_patch',
-    description:
-      'Apply a patch atomically. type=source_replace for full code update, type=param_update for slider changes.',
+    description: 'Use this to apply a source or parameter change atomically. type=source_replace for full code update, type=param_update for slider changes.',
+    annotations: { readOnlyHint: false, destructiveHint: false },
     inputSchema: {
       type: 'object',
       properties: {
-        ...SESSION_PROPS,
         type: { type: 'string', enum: ['source_replace', 'param_update'] },
         source: { type: 'string', description: 'Required for source_replace' },
         params: { type: 'object', additionalProperties: { type: 'number' }, description: 'Required for param_update' },
@@ -84,86 +66,67 @@ const TOOLS = [
         intent: { type: 'string' },
         approach: { type: 'string' },
       },
-      required: ['session', 'token', 'type', 'summary'],
+      required: ['type', 'summary'],
     },
   },
   {
     name: 'update_params',
-    description:
-      'Change one or more param() values without touching the source code. Good for exploring parameter space.',
+    description: 'Use this to change param() slider values without rewriting source. Good for exploring parameter space.',
+    annotations: { readOnlyHint: false, destructiveHint: false },
     inputSchema: {
       type: 'object',
       properties: {
-        ...SESSION_PROPS,
         params: { type: 'object', additionalProperties: { type: 'number' } },
         summary: { type: 'string' },
         intent: { type: 'string' },
       },
-      required: ['session', 'token', 'params', 'summary'],
+      required: ['params', 'summary'],
     },
   },
   {
     name: 'revert_patch',
-    description:
-      'Undo a specific patch by its ID. Creates a new patch that restores prior state — history is never rewritten.',
+    description: 'Use this to undo a specific patch by its ID. Creates a new patch that restores prior state — history is never rewritten.',
+    annotations: { readOnlyHint: false, destructiveHint: false },
     inputSchema: {
       type: 'object',
       properties: {
-        ...SESSION_PROPS,
         patchId: { type: 'string', description: 'ID of the patch to revert (from list_patch_history)' },
         summary: { type: 'string' },
       },
-      required: ['session', 'token', 'patchId'],
+      required: ['patchId'],
     },
   },
   {
     name: 'get_latest_screenshot',
-    description:
-      'Get the most recent render screenshot posted by the connected CadLad Studio. Returns a PNG image, or model stats text if no screenshot is available.',
-    annotations: { readOnlyHint: true },
-    inputSchema: { type: 'object', properties: { ...SESSION_PROPS }, required: ['session', 'token'] },
+    description: 'Use this to see the current render. Returns a PNG image of the most recent model render from the connected CadLad Studio.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {
     name: 'get_model_stats',
-    description:
-      'Get geometry statistics from the last run: triangle count, body count, bounding box, volume, surface area.',
-    annotations: { readOnlyHint: true },
-    inputSchema: { type: 'object', properties: { ...SESSION_PROPS }, required: ['session', 'token'] },
+    description: 'Use this to check geometry metrics: triangle count, body count, bounding box, volume, surface area.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: { type: 'object', properties: {}, required: [] },
   },
 ];
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 export async function handleMcp(request: Request, env: Env, origin: string): Promise<Response> {
-  const url = new URL(request.url);
-  // URL params are kept for backward compatibility but tool args take precedence.
-  const sessionIdFromUrl = url.searchParams.get('session');
-  const tokenFromUrl = url.searchParams.get('token');
-
   const cors = corsHeaders(origin);
 
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: cors });
   }
 
-  // GET — Claude.ai probes the endpoint before connecting.
-  // Return a minimal SSE stream with a 200 so the client sees the server as alive.
-  // Per MCP Streamable HTTP spec, GET is used for server→client SSE notifications
-  // (optional). We don't push notifications, so we open the stream and keep it
-  // alive briefly then close.
+  // GET — SSE keepalive probe (MCP Streamable HTTP optional server→client channel)
   if (request.method === 'GET') {
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
-    const enc = new TextEncoder();
-    // Send one comment to confirm the stream is open, then close
-    writer.write(enc.encode(': cadlad-mcp-ready\n\n')).then(() => writer.close()).catch(() => {});
+    writer.write(new TextEncoder().encode(': cadlad-mcp-ready\n\n')).then(() => writer.close()).catch(() => {});
     return new Response(readable, {
       status: 200,
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        ...cors,
-      },
+      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', ...cors },
     });
   }
 
@@ -180,33 +143,51 @@ export async function handleMcp(request: Request, env: Env, origin: string): Pro
 
   const { id = null, method = '', params } = msg;
 
-  // Client notifications — acknowledge with 202, no JSON body
   if (typeof method === 'string' && method.startsWith('notifications/')) {
     return new Response(null, { status: 202, headers: cors });
   }
 
   try {
     switch (method) {
-      // initialize and ping don't require a session — they handle the connection handshake.
-      // Session/token are validated per tool call below.
+      // initialize and ping do not require auth — they are protocol-level handshakes.
       case 'initialize':
         return rpcResult(id, {
-          protocolVersion: '2024-11-05',
+          protocolVersion: '2025-03-26',
           capabilities: { tools: {} },
-          serverInfo: { name: 'cadlad-live-session', version: '0.1.0' },
+          serverInfo: { name: 'cadlad', version: '1.0.0' },
         }, cors);
 
       case 'ping':
         return rpcResult(id, {}, cors);
 
+      // tools/list is intentionally public — no secrets in the schema.
       case 'tools/list':
         return rpcResult(id, { tools: TOOLS }, cors);
 
       case 'tools/call': {
+        // All tool calls require a valid OAuth Bearer token.
+        const authContext = await resolveAuth(request, env);
+        if (!authContext) {
+          // Signal the MCP client to initiate OAuth flow.
+          const resourceMeta = `${origin}/.well-known/oauth-protected-resource`;
+          return new Response(
+            JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32001, message: 'Unauthorized: obtain an access token via OAuth' } }),
+            {
+              status: 401,
+              headers: {
+                'Content-Type': 'application/json',
+                // WWW-Authenticate per MCP 2025-03-26 OAuth spec
+                'WWW-Authenticate': `Bearer realm="cadlad", resource_metadata="${resourceMeta}"`,
+                ...cors,
+              },
+            },
+          );
+        }
+
         const p = params as { name?: string; arguments?: Record<string, unknown> } | undefined;
         const toolName = p?.name ?? '';
         const args = p?.arguments ?? {};
-        const result = await callTool(toolName, args, sessionIdFromUrl, tokenFromUrl, env);
+        const result = await callTool(toolName, args, authContext.sessionId, authContext.writeToken, env);
         return rpcResult(id, result, cors);
       }
 
@@ -219,23 +200,30 @@ export async function handleMcp(request: Request, env: Env, origin: string): Pro
   }
 }
 
+// ── Auth resolution ───────────────────────────────────────────────────────────
+
+async function resolveAuth(
+  request: Request,
+  env: Env,
+): Promise<{ sessionId: string; writeToken: string } | null> {
+  const header = request.headers.get('Authorization') ?? '';
+  if (!header.startsWith('Bearer ')) return null;
+  const token = header.slice(7).trim();
+  if (!token) return null;
+  const resolved = await resolveAccessToken(env.KV, token);
+  if (!resolved) return null;
+  return { sessionId: resolved.sessionId, writeToken: resolved.writeToken };
+}
+
 // ── Tool implementations ──────────────────────────────────────────────────────
 
 async function callTool(
   name: string,
   args: Record<string, unknown>,
-  sessionIdFromUrl: string | null,
-  tokenFromUrl: string | null,
+  sessionId: string,
+  writeToken: string,
   env: Env,
 ): Promise<{ content: Array<{ type: string; text?: string; data?: string; mimeType?: string }> }> {
-  // Tool args take precedence over URL params (URL params kept for backward compat).
-  const sessionId = (args.session as string | undefined) ?? sessionIdFromUrl;
-  const token = (args.token as string | undefined) ?? tokenFromUrl;
-
-  if (!sessionId) {
-    throw new Error('session is required. Pass it as a tool argument or in the MCP URL (?session=<id>).');
-  }
-
   const stub = env.LIVE_SESSION.get(env.LIVE_SESSION.idFromName(sessionId));
   const base = `http://do/api/live/session/${sessionId}`;
 
@@ -257,12 +245,11 @@ async function callTool(
     }
 
     case 'replace_source': {
-      if (!token) throw new Error('token is required for replace_source. Pass it as a tool argument.');
       const { source, summary, intent, approach } = args as {
         source?: string; summary?: string; intent?: string; approach?: string;
       };
       if (!source || !summary) throw new Error('source and summary are required');
-      const resp = await doPost(stub, `${base}/patch`, token, {
+      const resp = await doPost(stub, `${base}/patch`, writeToken, {
         type: 'source_replace', source, summary, intent, approach,
       });
       const result = await resp.json() as { patch: Patch };
@@ -270,7 +257,6 @@ async function callTool(
     }
 
     case 'apply_patch': {
-      if (!token) throw new Error('token is required for apply_patch. Pass it as a tool argument.');
       const { type, source, params, summary, intent, approach } = args as {
         type?: string; source?: string; params?: Record<string, number>;
         summary?: string; intent?: string; approach?: string;
@@ -279,7 +265,7 @@ async function callTool(
       if (type === 'source_replace' && !source) throw new Error('source is required for source_replace');
       if (type === 'param_update' && (!params || Object.keys(params).length === 0))
         throw new Error('params is required for param_update');
-      const resp = await doPost(stub, `${base}/patch`, token, {
+      const resp = await doPost(stub, `${base}/patch`, writeToken, {
         type, source, params, summary, intent, approach,
       });
       const result = await resp.json() as { patch: Patch };
@@ -287,12 +273,11 @@ async function callTool(
     }
 
     case 'update_params': {
-      if (!token) throw new Error('token is required for update_params. Pass it as a tool argument.');
       const { params, summary, intent } = args as {
         params?: Record<string, number>; summary?: string; intent?: string;
       };
       if (!params || !summary) throw new Error('params and summary are required');
-      const resp = await doPost(stub, `${base}/patch`, token, {
+      const resp = await doPost(stub, `${base}/patch`, writeToken, {
         type: 'param_update', params, summary, intent,
       });
       const result = await resp.json() as { patch: Patch };
@@ -306,10 +291,9 @@ async function callTool(
     }
 
     case 'revert_patch': {
-      if (!token) throw new Error('token is required for revert_patch. Pass it as a tool argument.');
       const { patchId, summary } = args as { patchId?: string; summary?: string };
       if (!patchId) throw new Error('patchId is required');
-      const resp = await doPost(stub, `${base}/revert`, token, { patchId, summary });
+      const resp = await doPost(stub, `${base}/revert`, writeToken, { patchId, summary });
       const result = await resp.json() as { patch: Patch };
       return {
         content: [{
@@ -322,16 +306,16 @@ async function callTool(
     case 'get_latest_screenshot': {
       const resp = await stub.fetch(new Request(`${base}/run-result`));
       if (resp.status === 404) {
-        return { content: [{ type: 'text', text: 'No run result yet. Open CadLad Studio with the session URL and run the model.' }] };
+        return { content: [{ type: 'text', text: 'No run result yet. Open CadLad Studio and run the model.' }] };
       }
       if (!resp.ok) throw new Error(`Run-result fetch failed: ${resp.status}`);
       const data = await resp.json() as { runResult: RunResult | null; revision?: number };
-      if (!data.runResult) {
-        return { content: [{ type: 'text', text: 'No run result posted yet.' }] };
-      }
-      const rr = data.runResult;
-      if (rr.screenshot) {
-        const match = rr.screenshot.match(/^data:([^;]+);base64,(.+)$/);
+
+      // Try DO memory first, then fall back to KV for post-eviction persistence
+      const screenshot = data.runResult?.screenshot ?? await loadScreenshot(env.KV, sessionId);
+
+      if (screenshot) {
+        const match = screenshot.match(/^data:([^;]+);base64,(.+)$/);
         if (match) {
           const [, mimeType, base64Data] = match;
           return {
@@ -339,24 +323,25 @@ async function callTool(
               { type: 'image', data: base64Data, mimeType },
               {
                 type: 'text',
-                text: `Revision ${data.revision} render. Success: ${rr.success}.${rr.errors.length ? `\nErrors: ${rr.errors.join('; ')}` : ''}`,
+                text: `Render at revision ${data.revision ?? '?'}. Success: ${data.runResult?.success ?? true}.${data.runResult?.errors?.length ? `\nErrors: ${data.runResult.errors.join('; ')}` : ''}`,
               },
             ],
           };
         }
       }
-      if (rr.stats) {
-        return { content: [{ type: 'text', text: `No screenshot available. Stats:\n${formatStats(rr.stats)}` }] };
+
+      if (data.runResult?.stats) {
+        return { content: [{ type: 'text', text: `No screenshot yet. Stats:\n${formatStats(data.runResult.stats)}` }] };
       }
-      return { content: [{ type: 'text', text: `Run result exists (revision ${data.revision}), success: ${rr.success}. No screenshot or stats yet.` }] };
+
+      return { content: [{ type: 'text', text: 'No screenshot available. Open CadLad Studio and run the model to generate one.' }] };
     }
 
     case 'get_model_stats': {
       const resp = await stub.fetch(new Request(`${base}/run-result`));
-      if (resp.status === 404) {
+      if (resp.status === 404 || !resp.ok) {
         return { content: [{ type: 'text', text: 'No run result yet. Open CadLad Studio and run the model.' }] };
       }
-      if (!resp.ok) throw new Error(`Run-result fetch failed: ${resp.status}`);
       const data = await resp.json() as { runResult: RunResult | null; revision?: number };
       if (!data.runResult?.stats) {
         return { content: [{ type: 'text', text: 'No geometry stats available yet.' }] };
@@ -374,12 +359,12 @@ async function callTool(
 async function doPost(
   stub: DurableObjectStub,
   url: string,
-  token: string,
+  writeToken: string,
   body: unknown,
 ): Promise<Response> {
   const resp = await stub.fetch(new Request(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${writeToken}` },
     body: JSON.stringify(body),
   }));
   if (!resp.ok) {
@@ -393,7 +378,6 @@ async function doPost(
 
 function formatSession(s: SessionState): string {
   return [
-    `Session: ${s.id}`,
     `Revision: ${s.revision} (last successful: ${s.lastSuccessfulRevision})`,
     `Params: ${Object.keys(s.params).length > 0 ? JSON.stringify(s.params) : 'none'}`,
     `Patches: ${s.patches.length}`,
@@ -446,7 +430,7 @@ function patchAppliedMsg(patch: Patch): string {
     patch.approach ? `Approach: ${patch.approach}` : '',
     '',
     'The studio will rerender automatically. Call get_latest_screenshot after a moment to see the result.',
-  ].filter(line => line !== undefined).join('\n').replace(/\n\n\n+/g, '\n\n');
+  ].filter(l => l !== undefined).join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
 // ── JSON-RPC helpers ──────────────────────────────────────────────────────────
@@ -465,7 +449,7 @@ function rpcError(
   cors: Record<string, string> = {},
 ): Response {
   return new Response(JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } }), {
-    status: 200, // MCP errors are still HTTP 200 with error in body
+    status: 200,
     headers: { 'Content-Type': 'application/json', ...cors },
   });
 }
