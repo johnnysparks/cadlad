@@ -59,7 +59,7 @@ export class PatchHistoryPanel {
     const failingPatch = [...patches].reverse().find((p) => p.runResult?.state === "failed");
 
     this.statusEl.textContent = [
-      `Last patch: ${lastPatch.summary.title}`,
+      `Last patch: ${truncate(lastPatch.summary.title, 72)}`,
       lastSuccess ? `Last success: r${lastSuccess.revision}` : "Last success: none",
       failingPatch ? `Current failing: r${failingPatch.revision}` : "Current failing: none",
     ].join(" • ");
@@ -73,11 +73,14 @@ export class PatchHistoryPanel {
 
       const runState = patch.runResult?.state ?? "running";
       const date = new Date(patch.timestamp);
+      const details = patch.summary.details?.trim();
+      const shouldShowDetails = Boolean(details) && details !== patch.summary.title;
+      const detailsHtml = shouldShowDetails ? `<div class="patch-details">${escapeHtml(details!)}</div>` : "";
       row.innerHTML = `
         <div class="patch-entry-main">
           <div class="patch-title">${escapeHtml(patch.summary.title)}</div>
           <div class="patch-meta">${escapeHtml(patch.patchId)} • r${patch.revision} • ${date.toLocaleTimeString()}</div>
-          <div class="patch-details">${escapeHtml(patch.summary.details ?? "No details")}</div>
+          ${detailsHtml}
         </div>
         <div class="patch-entry-actions">
           <span class="patch-run-state ${runState}">${runState}</span>
@@ -110,4 +113,9 @@ function escapeHtml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function truncate(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 1)}…`;
 }

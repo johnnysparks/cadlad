@@ -1,32 +1,36 @@
-# CadLad Live-Session API
+# CadLad Live-Session API (OAuth refactor)
 
-A **Cloudflare Worker + Durable Object** service that turns a CadLad model into a
-shared, writable session with real-time patch streaming.
+## Auth
 
-One Durable Object per session stores source text, params, and patch history,
-and fans out Server-Sent Events to all connected browsers and assistants.
+All session and MCP routes are OAuth-protected.
 
----
+Discovery endpoints:
 
-## Base URLs
+- `/.well-known/oauth-protected-resource`
+- `/.well-known/oauth-authorization-server`
 
-| Environment | URL |
-|---|---|
-| Local dev | `http://localhost:8787` |
-| Preview Worker | `https://cadlad-live-sessions-preview.johnnymsparks.workers.dev` |
-| Production Worker | `https://cadlad-live-sessions.johnnymsparks.workers.dev` |
-| Via Pages proxy | `https://cadlad.pages.dev` (routes `/api/live/*` and `/health` to the Worker) |
+OAuth endpoints:
 
----
+- `GET /oauth/authorize` (authorization code + PKCE S256)
+- `POST /oauth/token`
+- `POST /oauth/register`
 
-## Authentication
+Use `Authorization: Bearer <access_token>` for API calls. For browser SSE, `?access_token=` is also accepted.
 
-Write endpoints (`POST /patch`, `POST /revert`, `POST /run-result`) require the session's write token:
+## Session endpoints
 
-- `Authorization: Bearer <writeToken>` header, or
-- `?token=<writeToken>` query param
+- `POST /api/live/session`
+- `GET /api/live/session/:id`
+- `GET /api/live/session/:id/history`
+- `GET /api/live/session/:id/events`
+- `POST /api/live/session/:id/patch`
+- `POST /api/live/session/:id/revert`
+- `POST /api/live/session/:id/run-result`
+- `GET /api/live/session/:id/run-result`
+- `GET /api/live/session/:id/render/latest`
+- `POST /api/live/session/:id/render/refresh`
 
-Read endpoints (`GET /session`, `GET /history`, `GET /events`, `GET /run-result`) are public.
+## Screenshot pipeline
 
 ---
 
@@ -297,3 +301,7 @@ For deployment details, see `docs/live-session-deploy.md`.
 - **In-memory fan-out.** SSE connections live in a `Map` on the DO instance. If the DO hibernates, clients reconnect and receive a `session_snapshot`.
 - **No user accounts.** Auth is write-token only. Anyone with the `liveUrl` can write. Multi-user ACL is future work.
 - **CORS.** `Access-Control-Allow-Origin: *` in v1. Set `STUDIO_ORIGIN` in `worker/wrangler.toml` (or as a Cloudflare secret) to pin to a specific domain in production.
+- Studio posts `run-result` payloads.
+- Server stores latest render artifact with stable `artifactRef`.
+- Retrieval endpoint `render/latest` returns `status`, `artifactRef`, `hasImage` and image payload when available.
+- MCP `get_latest_screenshot` maps this to model-safe structured output + widget `_meta` image data.

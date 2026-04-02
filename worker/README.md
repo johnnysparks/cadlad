@@ -1,6 +1,6 @@
 # CadLad Live-Session Worker
 
-Cloudflare Worker + Durable Object backend for CadLad live sessions.
+Cloudflare Worker + Durable Object backend for CadLad live sessions with OAuth-protected MCP access.
 
 ## Quick start
 
@@ -10,7 +10,23 @@ npm install
 npm run dev
 ```
 
-Local API at `http://localhost:8787`. Run the studio separately (`npm run dev` from the root) — it auto-connects to `localhost:8787`.
+Local API at `http://localhost:8787`.
+
+## OAuth + MCP endpoints
+
+- Protected resource metadata: `/.well-known/oauth-protected-resource`
+- Authorization server metadata: `/.well-known/oauth-authorization-server`
+- OAuth endpoints:
+  - `GET /oauth/authorize`
+  - `POST /oauth/token`
+  - `POST /oauth/register`
+- MCP endpoint: `POST /mcp` (requires bearer access token)
+
+## Environment
+
+- `STUDIO_ORIGIN`
+- `OAUTH_SIGNING_SECRET`
+- `DEFAULT_USER_SUB`
 
 ## Test
 
@@ -18,23 +34,8 @@ Local API at `http://localhost:8787`. Run the studio separately (`npm run dev` f
 npm --prefix worker test
 ```
 
-Integration tests cover session creation, patch/revert, SSE, and run-result telemetry using the Cloudflare Vitest pool.
-
 ## Deploy
 
-CI handles production and preview deploys automatically (see `.github/workflows/`). To deploy manually:
-
 ```bash
-npm run worker:deploy          # production
-cd worker && npx wrangler deploy --env preview  # preview
-npm run worker:deploy:dry      # dry run (typecheck + bundle, no publish)
+npm run worker:deploy
 ```
-
-## Smoke test
-
-```bash
-curl -s https://cadlad-live-sessions.johnnymsparks.workers.dev/health | jq
-# → { "status": "ok", "service": "cadlad-live-sessions" }
-```
-
-For the full API reference, see `docs/live-session-api.md`.
