@@ -190,6 +190,7 @@ async function boot() {
   const liveClient = new LiveSessionClient();
   let liveSessionId: string | null = null;
   let liveToken: string | null = null;
+  let liveRevision = 0;
   let liveSource: EventSource | null = null;
   let remoteRunTimer: number | null = null;
 
@@ -349,11 +350,59 @@ async function boot() {
       if (liveSessionId) {
         setLiveUi("connected", "ready");
       }
+
+      // Post run result (screenshot + stats) to worker so MCP get_latest_screenshot works
+      if (liveSessionId && liveToken) {
+        try {
+          const screenshot = viewport.captureFrame();
+          // Compute basic stats from mesh data
+          let triangles = 0;
+          let minX = Infinity, minY = Infinity, minZ = Infinity;
+          let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+          for (const body of result.bodies) {
+            triangles += body.mesh.indices.length / 3;
+            const pos = body.mesh.positions;
+            for (let i = 0; i < pos.length; i += 3) {
+              if (pos[i] < minX) minX = pos[i];
+              if (pos[i + 1] < minY) minY = pos[i + 1];
+              if (pos[i + 2] < minZ) minZ = pos[i + 2];
+              if (pos[i] > maxX) maxX = pos[i];
+              if (pos[i + 1] > maxY) maxY = pos[i + 1];
+              if (pos[i + 2] > maxZ) maxZ = pos[i + 2];
+            }
+          }
+          void liveClient.postRunResult(liveSessionId, liveToken, liveRevision, {
+            success: result.errors.length === 0,
+            errors: result.errors,
+            warnings: [],
+            timestamp: Date.now(),
+            screenshot,
+            stats: result.bodies.length > 0 ? {
+              triangles: Math.floor(triangles),
+              bodies: result.bodies.length,
+              boundingBox: {
+                min: [minX, minY, minZ],
+                max: [maxX, maxY, maxZ],
+              },
+            } : undefined,
+          });
+        } catch {
+          // Best-effort — don't break the run on screenshot/post failure
+        }
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       errorBarText.textContent = msg;
       errorBar.classList.add("visible");
-      if (liveSessionId) {
+      if (liveSessionId && liveToken) {
+        setLiveUi("failed", msg);
+        void liveClient.postRunResult(liveSessionId, liveToken, liveRevision, {
+          success: false,
+          errors: [msg],
+          warnings: [],
+          timestamp: Date.now(),
+        });
+      } else if (liveSessionId) {
         setLiveUi("failed", msg);
       }
     }
@@ -398,6 +447,10 @@ async function boot() {
 
     if (session.id) {
       liveSessionId = session.id;
+    }
+
+    if (typeof session.revision === "number") {
+      liveRevision = session.revision;
     }
 
     if (session.patches) {

@@ -52,6 +52,25 @@ export interface PatchEventPayload {
   };
 }
 
+export interface RunResultPayload {
+  success: boolean;
+  errors: string[];
+  warnings: string[];
+  timestamp: number;
+  stats?: {
+    triangles: number;
+    bodies: number;
+    boundingBox: {
+      min: [number, number, number];
+      max: [number, number, number];
+    };
+    volume?: number;
+    surfaceArea?: number;
+  };
+  /** Base64 PNG data URL of the viewport render */
+  screenshot?: string;
+}
+
 export interface LiveSessionClientOptions {
   apiBase?: string;
 }
@@ -132,6 +151,21 @@ export class LiveSessionClient {
       throw new Error(`Live session load failed (${res.status})\nGET ${this.apiBase}/api/live/session/${encodeURIComponent(sessionId)}`);
     }
     return res.json() as Promise<LiveSessionState>;
+  }
+
+  async postRunResult(sessionId: string, token: string, revision: number, result: RunResultPayload): Promise<void> {
+    const url = `${this.apiBase}/api/live/session/${encodeURIComponent(sessionId)}/run-result`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ revision, result }),
+    });
+    if (!res.ok) {
+      console.warn(`[CadLad] postRunResult failed (${res.status})`);
+    }
   }
 
   subscribe(sessionId: string, token: string | null, onEvent: (event: PatchEventPayload) => void, onError: (err: Event) => void): EventSource {
