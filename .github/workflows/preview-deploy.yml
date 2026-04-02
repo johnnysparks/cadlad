@@ -28,6 +28,12 @@ jobs:
 
       - run: npm --prefix worker ci
 
+      - name: Provision KV namespace
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node worker/scripts/provision-kv.mjs
+
       - name: Deploy preview live-session Worker
         uses: cloudflare/wrangler-action@v3
         with:
