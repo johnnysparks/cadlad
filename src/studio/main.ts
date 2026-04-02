@@ -71,6 +71,7 @@ Studio URL: ${liveUrl}
 
 Tools: get_session_state · list_patch_history · replace_source · update_params
        apply_patch · revert_patch · get_latest_screenshot · get_model_stats
+       get_part_stats · query_part_relationship
 
 ━━━ HTTP API (any assistant with tool-use / function-calling) ━━━
 Read model:
@@ -355,23 +356,6 @@ async function boot() {
         try {
           const screenshot = viewport.captureFrame();
           const stats = computeModelStats(result.bodies);
-          void liveClient.postRunResult(liveSessionId, liveToken, liveRevision, {
-          // Compute basic stats from mesh data
-          let triangles = 0;
-          let minX = Infinity, minY = Infinity, minZ = Infinity;
-          let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-          for (const body of result.bodies) {
-            triangles += body.mesh.indices.length / 3;
-            const pos = body.mesh.positions;
-            for (let i = 0; i < pos.length; i += 3) {
-              if (pos[i] < minX) minX = pos[i];
-              if (pos[i + 1] < minY) minY = pos[i + 1];
-              if (pos[i + 2] < minZ) minZ = pos[i + 2];
-              if (pos[i] > maxX) maxX = pos[i];
-              if (pos[i + 1] > maxY) maxY = pos[i + 1];
-              if (pos[i + 2] > maxZ) maxZ = pos[i + 2];
-            }
-          }
           void liveClient.postRunResult(liveSessionId, liveRevision, {
             success: result.errors.length === 0,
             errors: result.errors,
