@@ -158,14 +158,19 @@ npm test             # run tests with Vitest
 npm run lint         # lint with ESLint
 ```
 
-### Live-session backend (Cloudflare Worker)
+## Live Sessions
+
+Share a model with an AI assistant or collaborator in real time.
+
+Tap **🤖☁️** in the studio to create a session — it copies a capability URL to the clipboard. Paste it into Claude (or any MCP-capable assistant) and it can read the model, make changes, and see renders while you watch the viewport update live.
+
+Sessions are backed by a Cloudflare Worker + Durable Object that stores source, params, and a full patch history. Every change is reversible.
 
 ```bash
-npm run worker:dev        # local worker at http://localhost:8787
-npm --prefix worker test  # worker integration tests
+npm run worker:dev   # live-session backend at http://localhost:8787
 ```
 
-For preview/prod deployment details (Pages + Worker), see `docs/live-session-deploy.md`.
+See `docs/assistant-live-modeling.md` for assistant setup and `docs/live-session-api.md` for the full API.
 
 ### Writing a Model
 

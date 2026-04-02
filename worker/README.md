@@ -10,54 +10,31 @@ npm install
 npm run dev
 ```
 
-Local API runs at `http://localhost:8787`.
+Local API at `http://localhost:8787`. Run the studio separately (`npm run dev` from the root) — it auto-connects to `localhost:8787`.
 
 ## Test
 
 ```bash
-cd worker
-npm install
-npm test
+npm --prefix worker test
 ```
 
-The suite runs integration tests against the Worker + Durable Object routes with Cloudflare's Vitest pool (session, patch/revert, SSE, run-result).
+Integration tests cover session creation, patch/revert, SSE, and run-result telemetry using the Cloudflare Vitest pool.
 
 ## Deploy
 
-```bash
-cd worker
-npm install
-npx wrangler login
-npx wrangler whoami
-npm run deploy
-# or from repo root: npm run worker:deploy
-```
-
-GitHub Actions deployment:
-
-- Preview branches/PRs: `.github/workflows/preview-deploy.yml` deploys `--env preview`.
-- Main branch: `.github/workflows/deploy-worker.yml` deploys production worker.
-
-For a no-publish validation build:
+CI handles production and preview deploys automatically (see `.github/workflows/`). To deploy manually:
 
 ```bash
-npm run deploy:dry
-# or from repo root: npm run worker:deploy:dry
+npm run worker:deploy          # production
+cd worker && npx wrangler deploy --env preview  # preview
+npm run worker:deploy:dry      # dry run (typecheck + bundle, no publish)
 ```
-
-Set `STUDIO_ORIGIN` in Cloudflare if you want strict CORS/live URL origin pinning
-(e.g. `https://cadlad.studio`). If unset, the worker reflects request `Origin`.
 
 ## Smoke test
 
 ```bash
-curl -s "https://<worker-name>.<workers-subdomain>.workers.dev/health" | jq
+curl -s https://cadlad-live-sessions.johnnymsparks.workers.dev/health | jq
+# → { "status": "ok", "service": "cadlad-live-sessions" }
 ```
 
-Expected:
-
-```json
-{ "status": "ok", "service": "cadlad-live-sessions" }
-```
-
-For full API details and curl flows (including `/run-result` telemetry endpoints), see `../docs/live-session-api.md`.
+For the full API reference, see `docs/live-session-api.md`.
