@@ -11,9 +11,8 @@
  *        update_params · revert_patch · get_latest_screenshot · get_model_stats
  */
 
-import type { Env, SessionState, Patch, RunResult, ModelStats } from './types.js';
-import { resolveAccessToken } from './oauth-store.js';
-import { loadScreenshot } from './oauth-store.js';
+import type { Env, SessionState, Patch, RunResult, ModelStats, RenderStatus } from './types.js';
+import { resolveAccessToken, loadScreenshot } from './oauth-store.js';
 
 // ── Tool definitions (no session/token in schemas) ────────────────────────────
 
@@ -311,8 +310,12 @@ async function callTool(
       if (!resp.ok) throw new Error(`Run-result fetch failed: ${resp.status}`);
       const data = await resp.json() as { runResult: RunResult | null; revision?: number };
 
+      if (!data.runResult) {
+        return { content: [{ type: 'text', text: 'No run result yet. Open CadLad Studio and run the model.' }] };
+      }
+
       // Try DO memory first, then fall back to KV for post-eviction persistence
-      const screenshot = data.runResult?.screenshot ?? await loadScreenshot(env.KV, sessionId);
+      const screenshot = data.runResult.screenshot ?? await loadScreenshot(env.KV, sessionId);
 
       if (screenshot) {
         const match = screenshot.match(/^data:([^;]+);base64,(.+)$/);
@@ -323,14 +326,14 @@ async function callTool(
               { type: 'image', data: base64Data, mimeType },
               {
                 type: 'text',
-                text: `Render at revision ${data.revision ?? '?'}. Success: ${data.runResult?.success ?? true}.${data.runResult?.errors?.length ? `\nErrors: ${data.runResult.errors.join('; ')}` : ''}`,
+                text: `Render at revision ${data.revision ?? '?'}. Success: ${data.runResult.success}.${data.runResult.errors?.length ? `\nErrors: ${data.runResult.errors.join('; ')}` : ''}`,
               },
             ],
           };
         }
       }
 
-      if (data.runResult?.stats) {
+      if (data.runResult.stats) {
         return { content: [{ type: 'text', text: `No screenshot yet. Stats:\n${formatStats(data.runResult.stats)}` }] };
       }
 
@@ -379,6 +382,7 @@ async function doPost(
 function formatSession(s: SessionState): string {
   return [
     `Revision: ${s.revision} (last successful: ${s.lastSuccessfulRevision})`,
+    `Latest render: ${formatRenderStatus(s.latestRender)}`,
     `Params: ${Object.keys(s.params).length > 0 ? JSON.stringify(s.params) : 'none'}`,
     `Patches: ${s.patches.length}`,
     `Updated: ${new Date(s.updatedAt).toISOString()}`,
@@ -420,6 +424,12 @@ function formatStats(stats: ModelStats): string {
     stats.volume !== undefined ? `Volume: ${stats.volume.toFixed(2)} units³` : '',
     stats.surfaceArea !== undefined ? `Surface area: ${stats.surfaceArea.toFixed(2)} units²` : '',
   ].filter(Boolean).join('\n');
+}
+
+function formatRenderStatus(status: RenderStatus): string {
+  const revision = status.revision !== undefined ? `rev ${status.revision}` : 'rev n/a';
+  const screenshotRef = status.screenshotRef ? `, screenshotRef=${status.screenshotRef}` : '';
+  return `${status.state} (${revision}${screenshotRef}) — ${status.message}`;
 }
 
 function patchAppliedMsg(patch: Patch): string {

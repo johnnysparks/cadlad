@@ -6,9 +6,25 @@ export interface SessionState {
   params: Record<string, number>;
   revision: number;
   lastSuccessfulRevision: number;
+  latestRender: RenderStatus;
   patches: Patch[];
   createdAt: number;
   updatedAt: number;
+}
+
+export type RenderState = 'no_render' | 'render_pending' | 'render_failed' | 'screenshot_blocked' | 'ready';
+
+export interface RenderStatus {
+  /** Most recent render lifecycle state for the current revision */
+  state: RenderState;
+  /** Revision that produced lastRunResult (if any) */
+  revision?: number;
+  /** Last run timestamp from studio telemetry (if any) */
+  timestamp?: number;
+  /** Stable, lightweight pointer for "latest screenshot" without embedding image data */
+  screenshotRef?: string;
+  /** Human-readable status detail */
+  message: string;
 }
 
 export interface Patch {
@@ -60,6 +76,10 @@ export interface RunResult {
    * Small thumbnail recommended (≤512px) to keep storage light.
    */
   screenshot?: string;
+  /** Optional explicit status from clients that could not capture a screenshot. */
+  screenshotStatus?: 'ok' | 'blocked' | 'unavailable';
+  /** Optional reason for screenshotStatus when not "ok". */
+  screenshotStatusReason?: string;
 }
 
 // ── SSE event types ───────────────────────────────────────────────────────────

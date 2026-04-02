@@ -369,7 +369,17 @@ async function boot() {
       // Post run result (screenshot + stats) to worker so MCP get_latest_screenshot works
       if (liveSessionId) {
         try {
-          const screenshot = viewport.captureFrame();
+          let screenshot: string | undefined;
+          let screenshotStatus: "ok" | "blocked" | "unavailable" = "unavailable";
+          let screenshotStatusReason: string | undefined;
+          try {
+            screenshot = viewport.captureFrame();
+            screenshotStatus = screenshot ? "ok" : "unavailable";
+            if (!screenshot) screenshotStatusReason = "Viewport capture returned no image data.";
+          } catch (captureErr) {
+            screenshotStatus = "blocked";
+            screenshotStatusReason = captureErr instanceof Error ? captureErr.message : String(captureErr);
+          }
           const stats = computeModelStats(result.bodies);
           void liveClient.postRunResult(liveSessionId, liveRevision, {
             success: result.errors.length === 0,
@@ -379,6 +389,8 @@ async function boot() {
               .map((diag) => formatValidationDiagnostic(diag)),
             timestamp: Date.now(),
             screenshot,
+            screenshotStatus,
+            screenshotStatusReason,
             stats,
           });
         } catch {
