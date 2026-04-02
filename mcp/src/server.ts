@@ -51,6 +51,7 @@ const TOOLS = [
     name: "get_session_state",
     description:
       "Read the current CadLad session: source code, parameter values, revision number, and last-successful revision. Always call this first to understand what you're working with.",
+    annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object" as const,
       properties: {},
@@ -61,6 +62,7 @@ const TOOLS = [
     name: "list_patch_history",
     description:
       "List the patch history for this session. Each entry shows what changed, who changed it, the intent, and whether the run succeeded. Useful for understanding prior work before making changes.",
+    annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -187,6 +189,7 @@ const TOOLS = [
     name: "get_latest_screenshot",
     description:
       "Get the most recent render screenshot posted by the connected CadLad Studio. Returns a PNG image if the studio is open and has rendered the model. Falls back to model stats text if no screenshot is available.",
+    annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object" as const,
       properties: {},
@@ -197,6 +200,7 @@ const TOOLS = [
     name: "get_model_stats",
     description:
       "Get geometry statistics from the last run: triangle count, body count, and bounding box. Useful for validation without needing a screenshot (e.g., check if a part is within size constraints).",
+    annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object" as const,
       properties: {},

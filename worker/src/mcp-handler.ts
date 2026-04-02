@@ -35,12 +35,14 @@ const TOOLS = [
     name: 'get_session_state',
     description:
       'Read the current CadLad session: source code, parameter values, revision number, and last-successful revision. Always call this first to understand what you\'re working with.',
+    annotations: { readOnlyHint: true },
     inputSchema: { type: 'object', properties: { ...SESSION_PROPS }, required: ['session', 'token'] },
   },
   {
     name: 'list_patch_history',
     description:
       'List the patch history for this session. Each entry shows what changed, the intent, and whether the run succeeded.',
+    annotations: { readOnlyHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -118,12 +120,14 @@ const TOOLS = [
     name: 'get_latest_screenshot',
     description:
       'Get the most recent render screenshot posted by the connected CadLad Studio. Returns a PNG image, or model stats text if no screenshot is available.',
+    annotations: { readOnlyHint: true },
     inputSchema: { type: 'object', properties: { ...SESSION_PROPS }, required: ['session', 'token'] },
   },
   {
     name: 'get_model_stats',
     description:
       'Get geometry statistics from the last run: triangle count, body count, bounding box, volume, surface area.',
+    annotations: { readOnlyHint: true },
     inputSchema: { type: 'object', properties: { ...SESSION_PROPS }, required: ['session', 'token'] },
   },
 ];
