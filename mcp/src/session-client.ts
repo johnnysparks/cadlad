@@ -42,6 +42,23 @@ export interface RunResult {
   screenshot?: string;
 }
 
+export type RenderStatus =
+  | 'ready'
+  | 'no_render'
+  | 'pending'
+  | 'failed'
+  | 'blocked'
+  | 'unknown';
+
+export interface RunResultEnvelope {
+  runResult: RunResult | null;
+  revision?: number;
+  message?: string;
+  status?: RenderStatus | string;
+  artifactRef?: string;
+  hasImage?: boolean;
+}
+
 export interface Patch {
   id: string;
   revision: number;
@@ -129,10 +146,10 @@ export class SessionClient {
     return res.json() as Promise<PatchHistory>;
   }
 
-  async getRunResult(): Promise<{ runResult: RunResult | null; revision?: number; message?: string }> {
+  async getRunResult(): Promise<RunResultEnvelope> {
     const res = await fetch(this.sessionUrl('/run-result'), { headers: this.headers(true) });
     if (!res.ok) throw new ApiError(res.status, await res.text());
-    return res.json() as Promise<{ runResult: RunResult | null; revision?: number; message?: string }>;
+    return res.json() as Promise<RunResultEnvelope>;
   }
 
   async applyPatch(req: ApplyPatchRequest): Promise<{ patch: Patch; session: SessionState }> {

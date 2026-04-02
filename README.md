@@ -237,5 +237,6 @@ MIT
 
 - Studio posts run results to `/api/live/session/:id/run-result`.
 - Server stores stable render artifacts (`artifactRef`) separately from model state.
+- MCP `get_session_state` includes latest render status plus `artifactRef` when available, so assistants can see screenshot linkage before requesting image bytes.
 - MCP `get_latest_screenshot` returns minimal structured state (`status`, `artifactRef`, `hasImage`) and puts widget-heavy image payload in `_meta`.
 - `request_render_refresh` explicitly requests a fresh render cycle when needed.

@@ -20,7 +20,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { SessionClient, clientFromUrl, ApiError } from "./session-client.js";
+import { SessionClient, clientFromUrl, ApiError, type RunResultEnvelope } from "./session-client.js";
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
@@ -50,7 +50,7 @@ const TOOLS = [
   {
     name: "get_session_state",
     description:
-      "Read the current CadLad session: source code, parameter values, revision number, and last-successful revision. Always call this first to understand what you're working with.",
+      "Read the current CadLad session: source code, parameter values, revision number, last-successful revision, and latest render/screenshot status (including artifact reference when available). Always call this first to understand what you're working with.",
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object" as const,
@@ -188,7 +188,7 @@ const TOOLS = [
   {
     name: "get_latest_screenshot",
     description:
-      "Get the most recent render screenshot posted by the connected CadLad Studio. Returns a PNG image if the studio is open and has rendered the model. Falls back to model stats text if no screenshot is available.",
+      "Get the most recent render screenshot posted by the connected CadLad Studio. Distinguishes between no render yet, pending render, failed render, and policy/tooling blocked screenshot. Returns a PNG image when available.",
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object" as const,
@@ -251,12 +251,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case "get_session_state": {
-        const session = await client.getSession();
+        const [session, run] = await Promise.all([client.getSession(), client.getRunResult()]);
         return {
           content: [
             {
               type: "text" as const,
-              text: formatSession(session),
+              text: formatSession(session, run),
             },
           ],
         };
@@ -383,12 +383,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "get_latest_screenshot": {
         const data = await client.getRunResult();
+        const renderState = deriveRenderState(data);
         if (!data.runResult) {
           return {
             content: [
               {
                 type: "text" as const,
-                text: data.message ?? "No screenshot available. Open CadLad Studio with the session URL and run the model to generate one.",
+                text: formatRenderStateSummary(renderState, data),
               },
             ],
           };
@@ -408,7 +409,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 },
                 {
                   type: "text" as const,
-                  text: `Revision ${data.revision} render. Run succeeded: ${data.runResult.success}.${data.runResult.errors.length ? `\nErrors: ${data.runResult.errors.join("; ")}` : ""}`,
+                  text: `${formatRenderStateSummary(renderState, data)}\nRun succeeded: ${data.runResult.success}.${data.runResult.errors.length ? `\nErrors: ${data.runResult.errors.join("; ")}` : ""}`,
                 },
               ],
             };
@@ -421,7 +422,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [
               {
                 type: "text" as const,
-                text: `No screenshot in latest run result (studio may be headless). Stats:\n${formatStats(data.runResult.stats)}`,
+                text: `${formatRenderStateSummary(renderState, data)}\nNo screenshot payload in latest run result. Stats:\n${formatStats(data.runResult.stats)}`,
               },
             ],
           };
@@ -431,7 +432,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [
             {
               type: "text" as const,
-              text: `Run result exists (revision ${data.revision}) but no screenshot or stats. Run succeeded: ${data.runResult.success}.`,
+              text: `${formatRenderStateSummary(renderState, data)}\nRun result exists but no screenshot or stats. Run succeeded: ${data.runResult.success}.`,
             },
           ],
         };
@@ -556,18 +557,53 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
-function formatSession(session: Awaited<ReturnType<SessionClient["getSession"]>>): string {
+function formatSession(
+  session: Awaited<ReturnType<SessionClient["getSession"]>>,
+  run: RunResultEnvelope,
+): string {
+  const renderState = deriveRenderState(run);
   const lines = [
     `Session: ${session.id}`,
     `Revision: ${session.revision} (last successful: ${session.lastSuccessfulRevision})`,
     `Params: ${Object.keys(session.params).length > 0 ? JSON.stringify(session.params) : "none"}`,
     `Patches: ${session.patches.length}`,
     `Updated: ${new Date(session.updatedAt).toISOString()}`,
+    `Latest render: ${renderState}`,
+    `Latest screenshot ref: ${run.artifactRef ?? "none"}`,
+    run.runResult?.timestamp ? `Latest render timestamp: ${new Date(run.runResult.timestamp).toISOString()}` : "",
     "",
     "=== Source ===",
     session.source,
   ];
   return lines.join("\n");
+}
+
+function deriveRenderState(run: RunResultEnvelope): "ready" | "no_render" | "pending" | "failed" | "blocked" | "unknown" {
+  const rawStatus = String(run.status ?? "").toLowerCase();
+  const message = (run.message ?? "").toLowerCase();
+
+  if (run.runResult?.screenshot || run.hasImage === true || rawStatus === "ready") return "ready";
+  if (!run.runResult && (rawStatus === "no_render" || message.includes("no run result posted yet"))) return "no_render";
+  if (rawStatus === "pending" || message.includes("pending")) return "pending";
+  if (rawStatus === "failed" || (!run.runResult?.success && !!run.runResult)) return "failed";
+  if (
+    rawStatus === "blocked" ||
+    message.includes("blocked") ||
+    message.includes("policy") ||
+    message.includes("safety")
+  ) {
+    return "blocked";
+  }
+
+  return run.runResult ? "unknown" : "no_render";
+}
+
+function formatRenderStateSummary(state: ReturnType<typeof deriveRenderState>, run: RunResultEnvelope): string {
+  const revision = run.revision !== undefined ? `revision ${run.revision}` : "unknown revision";
+  const artifact = run.artifactRef ? `artifactRef: ${run.artifactRef}` : "artifactRef: none";
+  const base = `Render status: ${state} (${revision}; ${artifact})`;
+  if (!run.message) return base;
+  return `${base}\nDetail: ${run.message}`;
 }
 
 function formatHistory(history: Awaited<ReturnType<SessionClient["getHistory"]>>): string {
