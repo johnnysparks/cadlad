@@ -1,0 +1,20 @@
+# Cloudflare Pages project configuration.
+# Sets environment variables for Pages Functions (/api/live/* and /health proxies).
+#
+# When VITE_LIVE_SESSION_API_BASE is not baked into the frontend build, the client
+# falls back to same-origin requests, which Pages Functions then proxy to the Worker.
+# LIVE_SESSION_WORKER_URL tells Pages Functions where to forward those requests.
+#
+# For zero-latency production deploys, add a LIVE_SESSION_API service binding in
+# the Cloudflare dashboard (Pages → Settings → Functions → Service bindings).
+
+name = "cadlad"
+pages_build_output_dir = "dist"
+
+# Preview environments (all non-main branches) → shared preview Worker.
+[vars]
+LIVE_SESSION_WORKER_URL = "https://cadlad-live-sessions-preview.johnnymsparks.workers.dev"
+
+# Production (main branch) → production Worker.
+[env.production.vars]
+LIVE_SESSION_WORKER_URL = "https://cadlad-live-sessions.johnnymsparks.workers.dev"
