@@ -128,8 +128,29 @@ export async function handleMcp(request: Request, env: Env, origin: string): Pro
     return new Response(null, { status: 204, headers: cors });
   }
 
+  // GET — Claude.ai probes the endpoint before connecting.
+  // Return a minimal SSE stream with a 200 so the client sees the server as alive.
+  // Per MCP Streamable HTTP spec, GET is used for server→client SSE notifications
+  // (optional). We don't push notifications, so we open the stream and keep it
+  // alive briefly then close.
+  if (request.method === 'GET') {
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+    const enc = new TextEncoder();
+    // Send one comment to confirm the stream is open, then close
+    writer.write(enc.encode(': cadlad-mcp-ready\n\n')).then(() => writer.close()).catch(() => {});
+    return new Response(readable, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        ...cors,
+      },
+    });
+  }
+
   if (request.method !== 'POST') {
-    return new Response('Use POST for MCP requests', { status: 405, headers: cors });
+    return new Response('Method Not Allowed', { status: 405, headers: cors });
   }
 
   if (!sessionId || !token) {
