@@ -159,6 +159,15 @@ Browsers limit to ~8-16 simultaneous WebGL contexts. The gallery uses disposable
 Puppeteer is NOT a project dependency — it's found from the environment (project node_modules, /tmp installs, global, npx cache).
 Before taking screenshots, **sniff the runtime first** (which browser binary exists, whether shared libs are present, and whether Puppeteer is resolvable). Do this before installing anything or skipping validation.
 
+### Important for agent/tooling environments
+
+`browser_container` is optional infrastructure and may not exist in some runtimes. In CadLad, that is **not** a valid reason to skip screenshots.
+
+- If `browser_container` is unavailable, immediately fall back to CadLad's headless workflow (`scripts/vibe-snap.mjs`, `scripts/snapshot-test.mjs`, `scripts/headless-doctor.mjs`).
+- Treat screenshotting + runtime sniffing as a required competency for visual/modeling work.
+- Do not stop at "screenshot tool unavailable" until you've attempted the local sniff-and-capture path.
+- If capture still fails after sniffing, report exactly what was checked (browser binary, Puppeteer resolution, shared libs) and the concrete blocking error.
+
 ```bash
 # Vibe-modeling: quick screenshot capture (4 angles by default)
 node scripts/vibe-snap.mjs projects/mymodel/mymodel.forge.js
