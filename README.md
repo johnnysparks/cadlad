@@ -198,3 +198,44 @@ The runtime injects all API functions (`param`, `box`, `cylinder`, `sphere`,
 ## License
 
 MIT
+
+## MCP OAuth + Screenshot Architecture (2026 refactor)
+
+### Auth architecture
+
+- CadLad MCP/resource endpoints now use OAuth 2.1-style bearer tokens instead of per-session write tokens in tool arguments.
+- The Worker exposes:
+  - `/.well-known/oauth-protected-resource`
+  - `/.well-known/oauth-authorization-server`
+  - `/oauth/authorize` (auth code + PKCE)
+  - `/oauth/token`
+  - `/oauth/register` (public client registration)
+- The authenticated OAuth subject (`sub`) is resolved server-side and mapped to owned sessions.
+- MCP tools no longer accept raw credentials in `inputSchema`.
+
+### ChatGPT linking/auth
+
+1. ChatGPT discovers protected resource metadata at `/.well-known/oauth-protected-resource`.
+2. ChatGPT follows authorization server metadata for OAuth endpoints.
+3. ChatGPT completes OAuth auth-code + PKCE and calls `/mcp` with `Authorization: Bearer <access_token>`.
+4. MCP tool calls use only safe identifiers (or no args); identity/session lookup is server-side.
+
+### Environment variables
+
+- `STUDIO_ORIGIN` — CORS + live URL origin.
+- `OAUTH_SIGNING_SECRET` — HMAC signing key for auth codes/access tokens.
+- `DEFAULT_USER_SUB` — default subject for local/dev authorize flow.
+- `VITE_LIVE_SESSION_API_BASE` — Studio API base override.
+
+### Local dev flow
+
+- Start Worker: `npm run worker:dev`
+- Start Studio: `npm run dev`
+- Obtain OAuth token through `/oauth/authorize` + `/oauth/token` (PKCE), then pass token to Studio as `?access_token=...` or store in localStorage key `cadlad_access_token`.
+
+### Screenshot generation/retrieval
+
+- Studio posts run results to `/api/live/session/:id/run-result`.
+- Server stores stable render artifacts (`artifactRef`) separately from model state.
+- MCP `get_latest_screenshot` returns minimal structured state (`status`, `artifactRef`, `hasImage`) and puts widget-heavy image payload in `_meta`.
+- `request_render_refresh` explicitly requests a fresh render cycle when needed.
