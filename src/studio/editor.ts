@@ -20,48 +20,142 @@ self.MonacoEnvironment = {
   },
 };
 
-const DEFAULT_CODE = `// CadLad — Parametric Trophy Cup
-// Drag the sliders to reshape it!
+const DEFAULT_CODE = `// CadLad — Trophy Cup Redux
+// Cleaner silhouette: revolved cup, stepped base, carved side handles.
 
-const baseR = param("Base Radius", 20, { min: 12, max: 35, unit: "mm" });
-const stemR = param("Stem Radius", 5, { min: 3, max: 12, unit: "mm" });
-const stemH = param("Stem Height", 25, { min: 10, max: 50, unit: "mm" });
-const bowlR = param("Bowl Radius", 22, { min: 14, max: 40, unit: "mm" });
-const bowlH = param("Bowl Height", 30, { min: 15, max: 50, unit: "mm" });
-const wall  = param("Wall Thickness", 3, { min: 1.5, max: 6, unit: "mm" });
+const baseR         = param("Base Radius", 24, { min: 14, max: 40, unit: "mm" });
+const baseH         = param("Base Height", 6, { min: 4, max: 12, unit: "mm" });
+const stemR         = param("Stem Radius", 4.8, { min: 3, max: 10, unit: "mm" });
+const stemH         = param("Stem Height", 26, { min: 12, max: 50, unit: "mm" });
 
-// Base — wide disc sitting on the ground
-const base = cylinder(6, baseR)
-  .translate(0, 0, 3)
-  .color("#c9a84c");
+const cupR          = param("Cup Radius", 23, { min: 14, max: 40, unit: "mm" });
+const cupH          = param("Cup Height", 28, { min: 16, max: 50, unit: "mm" });
+const throatR       = param("Throat Radius", 11, { min: 6, max: 20, unit: "mm" });
+const footR         = param("Cup Foot Radius", 8.5, { min: 4, max: 16, unit: "mm" });
+const wall          = param("Wall Thickness", 2.4, { min: 1.2, max: 5, unit: "mm" });
 
-// Stem — overlaps base by 1mm, extends 1mm into bowl
-const stem = cylinder(stemH + 2, stemR)
-  .translate(0, 0, 5 + stemH / 2)
-  .color("#c9a84c");
+const handleReach   = param("Handle Reach", 17, { min: 8, max: 30, unit: "mm" });
+const handleWidth   = param("Handle Width", 5.5, { min: 3, max: 12, unit: "mm" });
+const handleThick   = param("Handle Thickness", 3.2, { min: 1.5, max: 8, unit: "mm" });
+const handleLift    = param("Handle Lift", 8, { min: 2, max: 18, unit: "mm" });
 
-// Bowl — tapered hollow cup (wider at top)
-const bowlZ = 5 + stemH + bowlH / 2;
-const outer = cylinder(bowlH, stemR + 4, bowlR);
-const inner = cylinder(bowlH, stemR + 4 - wall, bowlR - wall)
-  .translate(0, 0, wall);
-const bowl = outer.subtract(inner)
-  .translate(0, 0, bowlZ)
-  .color("#dbb84c");
+const goldA = "#d8b24a";
+const goldB = "#c49b34";
+const goldC = "#a88224";
 
-// Handles — positioned to intersect the bowl wall
-const midR = (stemR + 4 + bowlR) / 2;
-const handle = box(midR, 4, bowlH * 0.4).color("#b89830");
-const lHandle = handle.translate(-midR / 2 - 1, 0, bowlZ);
-const rHandle = handle.translate( midR / 2 + 1, 0, bowlZ);
+// ── Base and stem ─────────────────────────────────────────────
 
-// Assemble with distinct colors per part
-return assembly("Trophy Cup")
-  .add("Base", base)
-  .add("Stem", stem)
-  .add("Bowl", bowl)
-  .add("Left Handle", lHandle)
-  .add("Right Handle", rHandle);
+const base = cylinder(baseH, baseR)
+  .translate(0, 0, baseH / 2)
+  .color(goldC);
+
+const plinth = cylinder(4, baseR * 0.72, baseR * 0.58)
+  .translate(0, 0, baseH + 2)
+  .color(goldB);
+
+const stem = cylinder(stemH, stemR * 1.12, stemR * 0.86)
+  .translate(0, 0, baseH + 4 + stemH / 2)
+  .color(goldA);
+
+const cupZ = baseH + 4 + stemH;
+
+const collar = cylinder(4, throatR * 0.9, throatR * 1.08)
+  .translate(0, 0, cupZ + 2)
+  .color(goldB);
+
+// ── Cup, revolved outer and inner profiles ───────────────────
+
+const outerProfile = Sketch.begin(0, 0)
+  .lineTo(footR, 0)
+  .lineTo(throatR, cupH * 0.18)
+  .lineTo(cupR * 0.84, cupH * 0.68)
+  .lineTo(cupR, cupH)
+  .lineTo(0, cupH)
+  .lineTo(0, 0)
+  .close();
+
+const outerCup = outerProfile
+  .revolve(64)
+  .translate(0, 0, cupZ)
+  .color(goldA);
+
+const innerFootR = Math.max(footR - wall, 1);
+const innerThroatR = Math.max(throatR - wall, innerFootR + 0.5);
+const innerTopR = Math.max(cupR - wall, innerThroatR + 1);
+const innerH = cupH - wall;
+
+const innerProfile = Sketch.begin(0, wall)
+  .lineTo(innerFootR, wall)
+  .lineTo(innerThroatR, wall + innerH * 0.18)
+  .lineTo(innerTopR * 0.84, wall + innerH * 0.68)
+  .lineTo(innerTopR, cupH + 2)
+  .lineTo(0, cupH + 2)
+  .lineTo(0, wall)
+  .close();
+
+const innerCup = innerProfile
+  .revolve(64)
+  .translate(0, 0, cupZ);
+
+const cup = outerCup
+  .subtract(innerCup)
+  .color(goldA);
+
+// ── Handles, side profile extruded through Y ─────────────────
+
+const outerX = cupR - 1.0;                 // overlap into the wall slightly
+const tipX = cupR + handleReach;
+const lowerAttachZ = cupZ + cupH * 0.34;
+const upperAttachZ = cupZ + cupH * 0.88;
+const topZ = cupZ + cupH + handleLift;
+const lowZ = cupZ + cupH * 0.16;
+
+const handleOuter2D = Sketch.begin(outerX, lowerAttachZ)
+  .lineTo(tipX, lowZ)
+  .lineTo(tipX, topZ)
+  .lineTo(outerX, upperAttachZ)
+  .close();
+
+const handleInner2D = Sketch.begin(outerX + handleThick, lowerAttachZ + handleThick * 1.2)
+  .lineTo(tipX - handleThick * 1.6, lowZ + handleThick)
+  .lineTo(tipX - handleThick * 1.6, topZ - handleThick)
+  .lineTo(outerX + handleThick, upperAttachZ - handleThick * 1.2)
+  .close();
+
+const handleOuter = handleOuter2D
+  .extrudeAlong([0, 1, 0], handleWidth)
+  .translate(0, -handleWidth / 2, 0);
+
+const handleInner = handleInner2D
+  .extrudeAlong([0, 1, 0], handleWidth + 2)
+  .translate(0, -handleWidth / 2 - 1, 0);
+
+// Carve away anything that would show through inside the cup
+const cupCarve = cylinder(cupH * 2, cupR - wall - 0.75)
+  .translate(0, 0, cupZ + cupH / 2);
+
+const rightHandle = handleOuter
+  .subtract(handleInner)
+  .subtract(cupCarve)
+  .color(goldB);
+
+const leftHandle = rightHandle
+  .mirror([1, 0, 0])
+  .color(goldB);
+
+// ── Assembly ──────────────────────────────────────────────────
+
+return {
+  model: assembly("Trophy Cup Redux")
+    .add("Base", base)
+    .add("Plinth", plinth)
+    .add("Stem", stem)
+    .add("Collar", collar)
+    .add("Cup", cup)
+    .add("Left Handle", leftHandle)
+    .add("Right Handle", rightHandle),
+  camera: [75, -55, 50]
+};
 `;
 
 /** CadLad API type declarations for IntelliSense */
@@ -105,6 +199,7 @@ declare class Sketch {
   close(): Sketch;
   validate(): Array<{ type: "error" | "warning"; message: string }>;
   extrude(height: number): Solid;
+  extrudeAlong(direction: [number, number, number], height: number): Solid;
   revolve(segments?: number): Solid;
   points(): [number, number][];
 }
