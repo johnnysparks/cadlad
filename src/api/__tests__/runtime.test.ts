@@ -54,6 +54,21 @@ describe("evaluateModel", () => {
     expect(result.camera).toEqual([100, 200, 300]);
   });
 
+  it("errors when model returns undefined geometry", async () => {
+    const result = await evaluateModel("const x = 1 + 1;");
+    expect(result.bodies).toHaveLength(0);
+    expect(result.errors).toContain(
+      "Model script must return geometry: Solid, Assembly, array of Solid/Assembly, or { model, camera }.",
+    );
+  });
+
+  it("errors on invalid array entry types with index diagnostics", async () => {
+    const result = await evaluateModel("return [box(10,10,10), 42, 'bad']");
+    expect(result.bodies).toHaveLength(1);
+    expect(result.errors).toContain("Model[1] must be a Solid or Assembly, got number.");
+    expect(result.errors).toContain("Model[2] must be a Solid or Assembly, got string.");
+  });
+
   it("captures syntax errors", async () => {
     const result = await evaluateModel("return box(");
     expect(result.errors.length).toBeGreaterThan(0);
