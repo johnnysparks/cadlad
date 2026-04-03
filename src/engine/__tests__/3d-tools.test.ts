@@ -448,6 +448,31 @@ describe("transforms", () => {
     expect(bb.max[0]).toBeCloseTo(-15);
   });
 
+  it("mirrorUnion creates symmetric pair", () => {
+    const bb = box(10, 10, 10).translate(20, 0, 0).mirrorUnion([1, 0, 0]).boundingBox();
+    expect(bb.min[0]).toBeCloseTo(-25);
+    expect(bb.max[0]).toBeCloseTo(25);
+  });
+
+  it("linearPattern repeats instances along axis", () => {
+    const patterned = box(10, 10, 10).linearPattern(3, 20, 0, 0);
+    const bb = patterned.boundingBox();
+    expect(bb.min[0]).toBeCloseTo(-5);
+    expect(bb.max[0]).toBeCloseTo(45);
+    expect(patterned.volume()).toBeCloseTo(3000, 0);
+  });
+
+  it("circularPattern creates copies around Z axis", () => {
+    const seed = box(10, 10, 10).translate(20, 0, 0);
+    const patterned = seed.circularPattern(4, "z", 360, [0, 0, 0]);
+    const bb = patterned.boundingBox();
+    expect(bb.min[0]).toBeCloseTo(-25, 0);
+    expect(bb.max[0]).toBeCloseTo(25, 0);
+    expect(bb.min[1]).toBeCloseTo(-25, 0);
+    expect(bb.max[1]).toBeCloseTo(25, 0);
+    expect(patterned.volume()).toBeCloseTo(seed.volume() * 4, 0);
+  });
+
   it("color survives all transforms", () => {
     const body = box(10, 10, 10)
       .color("#ff0000")
@@ -458,6 +483,11 @@ describe("transforms", () => {
       .toBody();
     expect(body.color![0]).toBeCloseTo(1, 1);
     expect(body.color![1]).toBeCloseTo(0, 1);
+  });
+
+  it("patterns validate count", () => {
+    expect(() => box(10, 10, 10).linearPattern(0, 10, 0, 0)).toThrow(">= 1");
+    expect(() => box(10, 10, 10).circularPattern(0, "z", 360)).toThrow(">= 1");
   });
 });
 

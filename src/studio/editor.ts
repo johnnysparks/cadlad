@@ -185,6 +185,14 @@ declare class Solid {
   rotate(x: number, y: number, z: number): Solid;
   scale(x: number, y?: number, z?: number): Solid;
   mirror(normal: [number, number, number]): Solid;
+  mirrorUnion(normal: [number, number, number]): Solid;
+  linearPattern(count: number, stepX?: number, stepY?: number, stepZ?: number): Solid;
+  circularPattern(
+    count: number,
+    axis?: "x" | "y" | "z",
+    totalAngleDeg?: number,
+    center?: [number, number, number]
+  ): Solid;
   color(c: string | [number, number, number, number]): Solid;
   named(name: string): Solid;
   smooth(subdivisions?: number, minSharpAngle?: number): Solid;

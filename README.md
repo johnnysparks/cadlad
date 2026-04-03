@@ -61,6 +61,9 @@ a.translate(x, y, z)
 a.rotate(rx, ry, rz)
 a.scale(s)
 a.mirror([nx, ny, nz])
+a.mirrorUnion([nx, ny, nz])                 // Union with mirrored copy
+a.linearPattern(count, stepX, stepY, stepZ) // Union repeated linear copies
+a.circularPattern(count, axis, angle, ctr)  // Union repeated angular copies
 a.color("#hex")
 a.named("Part Name")
 ```
