@@ -19,12 +19,11 @@ Browser → Cloudflare Pages (static HTML/JS)
          Cloudflare Worker (Durable Objects)
 ```
 
-The Worker URLs are hardcoded in `wrangler.toml`:
+The Worker URL is hardcoded in `wrangler.toml`:
 
 | Environment | Worker URL |
 |---|---|
-| Preview (non-main branches) | `https://cadlad-live-sessions-preview.johnnymsparks.workers.dev` |
-| Production (main) | `https://cadlad-live-sessions.johnnymsparks.workers.dev` |
+| Production | `https://cadlad-live-sessions.johnnymsparks.workers.dev` |
 
 No secrets needed for Worker URL wiring — it's all in code.
 
@@ -35,7 +34,7 @@ Only two secrets are needed:
 - `CLOUDFLARE_API_TOKEN` — token with Workers and Pages deploy permissions
 - `CLOUDFLARE_ACCOUNT_ID` — Cloudflare account ID
 
-That's it. No `CLOUDFLARE_WORKER_PREVIEW_URL` or `CLOUDFLARE_WORKER_PRODUCTION_URL`.
+That's it. No additional Worker URL secrets are required.
 
 ## CI workflows
 
@@ -43,26 +42,17 @@ That's it. No `CLOUDFLARE_WORKER_PREVIEW_URL` or `CLOUDFLARE_WORKER_PRODUCTION_U
 |---|---|---|
 | `deploy-pages.yml` | Push to `main` | Frontend → Cloudflare Pages (production) |
 | `deploy-worker.yml` | Push to `main` with `worker/**` changes | Worker → production |
-| `preview-deploy.yml` | Push to any non-main branch / PR | Worker (preview env) + Pages (preview branch) |
 
 ### Production deploy (main branch)
 
 1. `deploy-worker.yml` fires if `worker/` changed → deploys `cadlad-live-sessions`
 2. `deploy-pages.yml` fires always → builds frontend, deploys to Cloudflare Pages `main` branch
 
-### Preview deploy (feature branches / PRs)
-
-1. `preview-deploy.yml` runs two sequential jobs:
-   - **deploy-worker-preview**: deploys `cadlad-live-sessions-preview` (shared across all preview branches)
-   - **deploy-pages-preview**: builds frontend, deploys to Cloudflare Pages with branch name
-2. PR gets a comment with the preview URL
-
 ## Required Cloudflare setup
 
 1. Workers + Durable Objects enabled on the account
-2. Two Workers exist (created on first deploy):
-   - `cadlad-live-sessions` (production)
-   - `cadlad-live-sessions-preview` (shared preview)
+2. One Worker exists (created on first deploy):
+   - `cadlad-live-sessions`
 3. One Cloudflare Pages project: `cadlad`
 
 No manual binding configuration in the Cloudflare dashboard is needed. Service bindings and Worker URLs are declared in `wrangler.toml` and applied automatically by `wrangler pages deploy`.
@@ -73,16 +63,15 @@ If Workers don't exist yet, deploy them manually once:
 
 ```bash
 npm run worker:deploy          # production Worker
-cd worker && npx wrangler deploy --env preview  # preview Worker
 ```
 
 ## Environment matrix
 
-| Surface | Local | Preview | Production |
-|---|---|---|---|
-| Studio URL | `http://localhost:5173` | `https://<branch>.cadlad.pages.dev` | `https://cadlad.pages.dev` |
-| Live-session API | `http://localhost:8787` | `https://cadlad-live-sessions-preview.johnnymsparks.workers.dev` | `https://cadlad-live-sessions.johnnymsparks.workers.dev` |
-| DO namespace | local dev storage | shared `env.preview` | production |
+| Surface | Local | Production |
+|---|---|---|
+| Studio URL | `http://localhost:5173` | `https://cadlad.pages.dev` |
+| Live-session API | `http://localhost:8787` | `https://cadlad-live-sessions.johnnymsparks.workers.dev` |
+| DO namespace | local dev storage | production |
 
 ## Local dev
 
