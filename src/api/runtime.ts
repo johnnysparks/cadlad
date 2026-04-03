@@ -107,7 +107,13 @@ export async function evaluateModel(
       }));
       return { bodies, params: collectedParams, errors, hints, camera };
     }
-    if (result && typeof result === "object" && !(result instanceof Solid) && !(result instanceof Assembly) && !Array.isArray(result)) {
+    if (!normalized.scene
+      && result
+      && typeof result === "object"
+      && !(result instanceof Solid)
+      && !(result instanceof Assembly)
+      && !Array.isArray(result)
+    ) {
       // Metadata object: { model: Solid|Assembly, camera: [x,y,z] }
       if (result.model) model = result.model;
       if (Array.isArray(result.camera) && result.camera.length === 3) {
