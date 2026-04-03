@@ -178,6 +178,11 @@ npm run worker:dev   # live-session backend at http://localhost:8787
 
 See `docs/live-session-deploy.md` for deployment details.
 
+### North Star Planning Docs
+
+The long-form north star vision lives in `docs/cadlad_north_star_technical_vision.docx`.
+For implementation planning, use the composable purpose files in `docs/north-star/README.md`.
+
 ### Writing a Model
 
 Create a `.forge.ts` file that calls the CadLad API and returns a `Solid` or `Assembly`:
