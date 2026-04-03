@@ -68,9 +68,9 @@ The pieces exist (`Solid.volume()`, `Solid.surfaceArea()`, `Solid.boundingBox()`
 
 ### 0.3 Evaluation bundles
 
-- [ ] Define `EvaluationBundle`: typecheck, semantic validation, geometry validation, stats, tests — all structured, all machine-readable. Render is optional and last.
-- [ ] Every `evaluateModel()` call returns a bundle. The agent gets a complete structured report.
-- [ ] Make render truly optional. An agent iterating on geometry doesn't need pixels until it's ready for visual confirmation.
+- [x] Define `EvaluationBundle`: typecheck, semantic validation, geometry validation, stats, tests — all structured, all machine-readable. Render is optional and last.
+- [x] Every `evaluateModel()` call returns a bundle. The agent gets a complete structured report.
+- [x] Make render truly optional. An agent iterating on geometry doesn't need pixels until it's ready for visual confirmation.
 
 **Why this is Phase 0, not Phase 2:** For human users, screenshots are acceptable primary feedback. For agents, they're a crutch. Agents need numbers, booleans, and structured diagnostics — not pixel interpretation. This phase makes the tight loop (`code → evaluate → read stats → adjust`) fast and non-visual.
 

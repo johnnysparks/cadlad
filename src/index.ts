@@ -17,5 +17,5 @@ export { initManifold } from "./engine/manifold-backend.js";
 
 export type {
   Vec2, Vec3, Color,
-  ParamDef, Body, TriMesh, ModelResult, BBox,
+  ParamDef, Body, TriMesh, ModelResult, EvaluationBundle, BBox,
 } from "./engine/types.js";

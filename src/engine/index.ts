@@ -12,5 +12,6 @@ export type {
   TriMesh,
   Body,
   ModelResult,
+  EvaluationBundle,
   BBox,
 } from "./types.js";

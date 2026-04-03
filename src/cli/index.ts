@@ -57,7 +57,12 @@ async function cmdRun(args: string[], options: { watchMode: boolean }) {
 
       if (result.errors.length > 0) {
         if (printJson) {
-          console.log(JSON.stringify({ ok: false, errors: result.errors, diagnostics: result.diagnostics ?? [] }, null, 2));
+          console.log(JSON.stringify({
+            ok: false,
+            errors: result.errors,
+            diagnostics: result.diagnostics ?? [],
+            evaluation: result.evaluation,
+          }, null, 2));
         } else {
           console.error("Errors:");
           if (result.diagnostics && result.diagnostics.length > 0) {
@@ -73,7 +78,7 @@ async function cmdRun(args: string[], options: { watchMode: boolean }) {
 
       const report = buildRunReport(result);
       if (printJson) {
-        console.log(JSON.stringify({ ok: true, ...report }, null, 2));
+        console.log(JSON.stringify({ ok: true, ...report, evaluation: result.evaluation }, null, 2));
       } else {
         console.log(formatRunReportText(report));
       }

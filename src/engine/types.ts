@@ -145,6 +145,40 @@ export interface GeometryValidationConfig {
   expectedBoundingBox?: BoundingBoxExpectation;
 }
 
+export interface EvaluationStageSummary {
+  status: "pass" | "fail" | "skipped";
+  errorCount: number;
+  warningCount: number;
+  diagnostics: ValidationDiagnostic[];
+}
+
+export interface EvaluationTestsSummary {
+  status: "pass" | "fail" | "skipped";
+  total: number;
+  failures: number;
+  results: SceneValidationRuleResult[];
+}
+
+export interface EvaluationBundle {
+  haltedAt?: ValidationStage;
+  summary: {
+    errorCount: number;
+    warningCount: number;
+  };
+  typecheck: EvaluationStageSummary;
+  semanticValidation: EvaluationStageSummary;
+  geometryValidation: EvaluationStageSummary;
+  relationValidation: EvaluationStageSummary;
+  stats: {
+    available: boolean;
+    data?: GeometryStats;
+  };
+  tests: EvaluationTestsSummary;
+  render: {
+    requested: boolean;
+  };
+}
+
 /** Result of evaluating a model script */
 export interface ModelResult {
   bodies: Body[];
@@ -152,6 +186,7 @@ export interface ModelResult {
   errors: string[];
   geometryStats?: GeometryStats;
   diagnostics?: ValidationDiagnostic[];
+  evaluation: EvaluationBundle;
   sceneValidation?: SceneValidationReport;
   hints: Hint[];
   /** Optional camera position hint from the model [x, y, z] */
