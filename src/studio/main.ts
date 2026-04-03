@@ -380,8 +380,6 @@ async function boot() {
           warnings: [],
           timestamp: Date.now(),
         });
-      } else if (liveSessionId) {
-        setLiveUi("failed", msg);
       }
     }
   }
