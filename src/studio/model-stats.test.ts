@@ -14,13 +14,29 @@ describe("computeModelStats", () => {
 
     expect(stats).toBeDefined();
     expect(stats?.parts).toHaveLength(2);
+    expect(stats?.parts[0].id).toBe("handle");
     expect(stats?.parts[0].name).toBe("handle");
+    expect(stats?.parts[1].id).toBe("cup-wall");
     expect(stats?.parts[1].name).toBe("cup wall");
     expect(stats?.parts[0].extents.x).toBeCloseTo(10, 3);
 
     expect(stats?.pairwise).toHaveLength(1);
+    expect(stats?.pairwise[0].partAId).toBe("handle");
+    expect(stats?.pairwise[0].partBId).toBe("cup-wall");
     expect(stats?.pairwise[0].intersects).toBe(false);
     expect(stats?.pairwise[0].minDistance).toBeCloseTo(15, 3);
+  });
+
+  it("disambiguates duplicate part names with stable ids", () => {
+    const a = box(10, 10, 10).named("Panel").toBody();
+    const b = box(10, 10, 10).translate(25, 0, 0).named("Panel").toBody();
+    const stats = computeModelStats([a, b]);
+
+    expect(stats?.parts.map((part) => part.id)).toEqual(["panel", "panel-2"]);
+    expect(stats?.pairwise[0].partA).toBe("Panel");
+    expect(stats?.pairwise[0].partB).toBe("Panel");
+    expect(stats?.pairwise[0].partAId).toBe("panel");
+    expect(stats?.pairwise[0].partBId).toBe("panel-2");
   });
 
   it("marks touching/overlapping bboxes as intersecting", () => {

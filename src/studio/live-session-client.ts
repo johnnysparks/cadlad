@@ -67,6 +67,7 @@ export interface RunResultPayload {
     surfaceArea?: number;
     parts?: Array<{
       index: number;
+      id: string;
       name: string;
       triangles: number;
       boundingBox: {
@@ -79,7 +80,9 @@ export interface RunResultPayload {
     }>;
     pairwise?: Array<{
       partA: string;
+      partAId: string;
       partB: string;
+      partBId: string;
       intersects: boolean;
       minDistance: number;
     }>;

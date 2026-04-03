@@ -2,8 +2,14 @@
  * mcp-handler.ts — Remote MCP endpoint for CadLad live sessions.
  */
 
-import type { Env, SessionState, Patch, ModelStats } from './types.js';
+import type { Env, SessionState, Patch, ModelStats, RunResult } from './types.js';
 import type { OAuthPrincipal } from './oauth.js';
+
+const SESSION_PROPS = {
+  session: { type: 'string', description: 'Session id (optional when projectRef is set)' },
+  token: { type: 'string', description: 'Legacy token field; ignored when OAuth auth is used' },
+  projectRef: { type: 'string', description: 'Optional project reference. Defaults to your latest session.' },
+} as const;
 
 const TOOLS = [
   {
@@ -84,7 +90,8 @@ const TOOLS = [
       type: 'object',
       properties: {
         ...SESSION_PROPS,
-        partName: { type: 'string', description: 'Optional exact part name to return' },
+        partName: { type: 'string', description: 'Optional exact part name to return (errors if ambiguous)' },
+        partId: { type: 'string', description: 'Optional stable part id from get_part_stats output' },
       },
       required: ['session', 'token'],
     },
@@ -98,22 +105,17 @@ const TOOLS = [
       type: 'object',
       properties: {
         ...SESSION_PROPS,
-        partA: { type: 'string', description: 'First part name' },
-        partB: { type: 'string', description: 'Second part name' },
+        partA: { type: 'string', description: 'First part name (required when partAId is omitted)' },
+        partAId: { type: 'string', description: 'Stable id for first part (preferred)' },
+        partB: { type: 'string', description: 'Second part name (required when partBId is omitted)' },
+        partBId: { type: 'string', description: 'Stable id for second part (preferred)' },
       },
-      required: ['session', 'token', 'partA', 'partB'],
+      required: ['session', 'token'],
     },
   },
 ];
 
 // ── Main handler ──────────────────────────────────────────────────────────────
-
-export async function handleMcp(request: Request, env: Env, origin: string): Promise<Response> {
-  const url = new URL(request.url);
-  // URL params are kept for backward compatibility but tool args take precedence.
-  const sessionIdFromUrl = url.searchParams.get('session');
-  const tokenFromUrl = url.searchParams.get('token');
-] as const;
 
 export async function handleMcp(request: Request, env: Env, origin: string, principal: OAuthPrincipal): Promise<Response> {
   const cors = corsHeaders(origin);
@@ -289,10 +291,11 @@ async function callTool(
       }
 
       const partName = typeof args.partName === 'string' ? args.partName : undefined;
-      if (partName) {
-        const part = stats.parts.find((p) => p.name === partName);
+      const partId = typeof args.partId === 'string' ? args.partId : undefined;
+      if (partName || partId) {
+        const part = findPart(stats.parts, { name: partName, id: partId });
         if (!part) {
-          return { content: [{ type: 'text', text: `Part not found: ${partName}. Available parts: ${stats.parts.map((p) => p.name).join(', ')}` }] };
+          return { content: [{ type: 'text', text: `Part not found. Available parts: ${stats.parts.map((p) => `${p.name} (${p.id})`).join(', ')}` }] };
         }
         return { content: [{ type: 'text', text: formatPartStats(part) }] };
       }
@@ -301,9 +304,12 @@ async function callTool(
     }
 
     case 'query_part_relationship': {
-      const partA = typeof args.partA === 'string' ? args.partA : '';
-      const partB = typeof args.partB === 'string' ? args.partB : '';
-      if (!partA || !partB) throw new Error('partA and partB are required');
+      const partA = typeof args.partA === 'string' ? args.partA : undefined;
+      const partAId = typeof args.partAId === 'string' ? args.partAId : undefined;
+      const partB = typeof args.partB === 'string' ? args.partB : undefined;
+      const partBId = typeof args.partBId === 'string' ? args.partBId : undefined;
+      if (!partA && !partAId) throw new Error('partA or partAId is required');
+      if (!partB && !partBId) throw new Error('partB or partBId is required');
 
       const resp = await stub.fetch(new Request(`${base}/run-result`));
       if (resp.status === 404) {
@@ -316,26 +322,26 @@ async function callTool(
         return { content: [{ type: 'text', text: 'No named part stats available yet.' }] };
       }
 
-      const a = stats.parts.find((p) => p.name === partA);
-      const b = stats.parts.find((p) => p.name === partB);
+      const a = findPart(stats.parts, { name: partA, id: partAId });
+      const b = findPart(stats.parts, { name: partB, id: partBId });
       if (!a || !b) {
-        return { content: [{ type: 'text', text: `Unknown part(s). Available parts: ${stats.parts.map((p) => p.name).join(', ')}` }] };
+        return { content: [{ type: 'text', text: `Unknown part(s). Available parts: ${stats.parts.map((p) => `${p.name} (${p.id})`).join(', ')}` }] };
       }
 
       const pair = stats.pairwise?.find((r) =>
-        (r.partA === partA && r.partB === partB) || (r.partA === partB && r.partB === partA),
+        (r.partAId === a.id && r.partBId === b.id) || (r.partAId === b.id && r.partBId === a.id),
       );
 
       if (!pair) {
-        return { content: [{ type: 'text', text: `No relationship data available for ${partA} ↔ ${partB}.` }] };
+        return { content: [{ type: 'text', text: `No relationship data available for ${a.name} (${a.id}) ↔ ${b.name} (${b.id}).` }] };
       }
 
       return {
         content: [{
           type: 'text',
           text: [
-            `Part A: ${partA}`,
-            `Part B: ${partB}`,
+            `Part A: ${a.name} (${a.id})`,
+            `Part B: ${b.name} (${b.id})`,
             `Intersects: ${pair.intersects ? 'yes' : 'no'}`,
             `Minimum distance: ${pair.minDistance.toFixed(3)} units`,
           ].join('\n'),
@@ -361,6 +367,23 @@ async function resolveSessionId(projectRef: string | undefined, env: Env, sub: s
   return null;
 }
 
+
+
+function findPart(parts: NonNullable<ModelStats['parts']>, query: { name?: string; id?: string }): NonNullable<ModelStats['parts']>[number] | undefined {
+  if (query.id) {
+    return parts.find((part) => part.id === query.id);
+  }
+
+  if (!query.name) return undefined;
+
+  const matches = parts.filter((part) => part.name === query.name);
+  if (matches.length > 1) {
+    throw new Error(`Part name "${query.name}" is ambiguous. Use partId instead.`);
+  }
+
+  return matches[0];
+}
+
 async function doGet<T>(stub: DurableObjectStub, url: string, sub: string): Promise<T> {
   const resp = await stub.fetch(new Request(url, { headers: { 'X-Cadlad-Sub': sub } }));
   if (!resp.ok) throw new Error(`DO read failed (${resp.status})`);
@@ -370,7 +393,7 @@ async function doGet<T>(stub: DurableObjectStub, url: string, sub: string): Prom
 function formatPartStats(part: NonNullable<ModelStats['parts']>[number]): string {
   const bb = part.boundingBox;
   return [
-    `Part: ${part.name} (#${part.index})`,
+    `Part: ${part.name} (${part.id}) #${part.index}`,
     `Triangles: ${part.triangles.toLocaleString()}`,
     `Extents: X=${part.extents.x.toFixed(2)}  Y=${part.extents.y.toFixed(2)}  Z=${part.extents.z.toFixed(2)}`,
     `Bounding box min: [${bb.min.map((v) => v.toFixed(2)).join(', ')}]`,
@@ -389,6 +412,8 @@ function patchAppliedMsg(patch: Patch): string {
     '',
     'The studio will rerender automatically. Call get_latest_screenshot after a moment to see the result.',
   ].filter(line => line !== undefined).join('\n').replace(/\n\n\n+/g, '\n\n');
+}
+
 async function doPost<T>(stub: DurableObjectStub, url: string, sub: string, body: unknown): Promise<T> {
   const resp = await stub.fetch(new Request(url, {
     method: 'POST',

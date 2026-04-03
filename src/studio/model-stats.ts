@@ -7,6 +7,7 @@ export interface Bounds {
 
 export interface PartStats {
   index: number;
+  id: string;
   name: string;
   triangles: number;
   boundingBox: Bounds;
@@ -17,7 +18,9 @@ export interface PartStats {
 
 export interface PairwisePartStats {
   partA: string;
+  partAId: string;
   partB: string;
+  partBId: string;
   intersects: boolean;
   minDistance: number;
 }
@@ -36,6 +39,7 @@ export function computeModelStats(bodies: Body[]): ModelStats | undefined {
   if (bodies.length === 0) return undefined;
 
   const parts: PartStats[] = [];
+  const partIdCounts = new Map<string, number>();
   let minX = Infinity, minY = Infinity, minZ = Infinity;
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
   let totalTriangles = 0;
@@ -44,7 +48,7 @@ export function computeModelStats(bodies: Body[]): ModelStats | undefined {
 
   for (let i = 0; i < bodies.length; i += 1) {
     const body = bodies[i];
-    const part = computePartStats(body, i);
+    const part = computePartStats(body, i, partIdCounts);
     parts.push(part);
 
     totalTriangles += part.triangles;
@@ -67,7 +71,9 @@ export function computeModelStats(bodies: Body[]): ModelStats | undefined {
       const minDistance = bboxMinDistance(a.boundingBox, b.boundingBox);
       pairwise.push({
         partA: a.name,
+        partAId: a.id,
         partB: b.name,
+        partBId: b.id,
         intersects: minDistance === 0,
         minDistance,
       });
@@ -85,7 +91,7 @@ export function computeModelStats(bodies: Body[]): ModelStats | undefined {
   };
 }
 
-function computePartStats(body: Body, index: number): PartStats {
+function computePartStats(body: Body, index: number, partIdCounts: Map<string, number>): PartStats {
   const mesh = body.mesh;
   const positions = mesh.positions;
   const indices = mesh.indices;
@@ -135,8 +141,10 @@ function computePartStats(body: Body, index: number): PartStats {
   }
 
   const name = body.name?.trim() || `part-${index + 1}`;
+  const id = buildPartId(name, partIdCounts);
   return {
     index,
+    id,
     name,
     triangles: indices.length / 3,
     boundingBox: {
@@ -151,6 +159,23 @@ function computePartStats(body: Body, index: number): PartStats {
     volume: Math.abs(signedVolume),
     surfaceArea: area,
   };
+}
+
+function buildPartId(name: string, partIdCounts: Map<string, number>): string {
+  const slug = slugify(name);
+  const next = (partIdCounts.get(slug) ?? 0) + 1;
+  partIdCounts.set(slug, next);
+  return next === 1 ? slug : `${slug}-${next}`;
+}
+
+function slugify(value: string): string {
+  const normalized = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return normalized || "part";
 }
 
 function bboxMinDistance(a: Bounds, b: Bounds): number {
