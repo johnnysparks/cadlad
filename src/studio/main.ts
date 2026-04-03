@@ -13,6 +13,7 @@ import { computeModelStats } from "./model-stats.js";
 import { EditorDecorations } from "./editor-decorations.js";
 import { PatchHistoryPanel } from "./patch-history.js";
 import type { PatchEvent } from "./types/live-session.js";
+import type { CadladAutomationApi } from "./automation-types.js";
 
 const REMOTE_RUN_DEBOUNCE_MS = 150;
 
@@ -589,11 +590,11 @@ async function boot() {
   });
 
   // Expose for test automation (Puppeteer snapshot tests) and live-session bridge
-  (window as any).__cadlad = {
+  const cadladAutomation: CadladAutomationApi = {
     // ── Core ────────────────────────────────────────────────────────────────
     setCode(code: string) { editor.setValue(code); },
     /** Run the current editor source. Returns the ModelResult on completion. */
-    async run(): Promise<typeof lastResult> {
+    async run() {
       await runModel();
       return lastResult;
     },
@@ -612,20 +613,20 @@ async function boot() {
     },
 
     // ── Camera ──────────────────────────────────────────────────────────────
-    setView(view: string) { viewport.setView(view as any); },
+    setView(view) { viewport.setView(view); },
     /** Set camera to an arbitrary [x,y,z] position in Y-up Three.js space. */
-    setCameraPosition(pos: [number, number, number], target?: [number, number, number]) {
+    setCameraPosition(pos, target) {
       viewport.setCameraPosition(pos, target);
     },
-    getCameraPosition(): [number, number, number] { return viewport.getCameraPosition(); },
+    getCameraPosition() { return viewport.getCameraPosition(); },
 
     // ── Screenshot ──────────────────────────────────────────────────────────
     /**
      * Capture the current viewport as a base64 PNG data URL.
      * If a named view is provided, temporarily switches to that view for the capture.
      */
-    captureFrame(view?: string): string {
-      if (view) return viewport.captureView(view as any);
+    captureFrame(view) {
+      if (view) return viewport.captureView(view);
       return viewport.captureFrame();
     },
 
@@ -634,11 +635,12 @@ async function boot() {
      * Apply a cross-section cut along an axis at the given offset.
      * @example __cadlad.setCrossSection('z', 10)  // horizontal cut 10mm up
      */
-    setCrossSection(axis: "x" | "y" | "z", offset: number) {
+    setCrossSection(axis, offset) {
       viewport.setCrossSection(axis, offset);
     },
     clearCrossSection() { viewport.clearCrossSection(); },
   };
+  window.__cadlad = cadladAutomation;
 
   const sessionFromUrl = urlParams.get("session");
   if (sessionFromUrl) {
