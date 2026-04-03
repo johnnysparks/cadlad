@@ -14,6 +14,7 @@
 
 import type { Env, SessionState, Patch, RunResult, ModelStats, RenderStatus } from './types.js';
 import { resolveAccessToken, loadScreenshot } from './oauth-store.js';
+import { extractSceneFeatures } from './scene-features.js';
 
 // ── Tool definitions (no session/token in schemas) ────────────────────────────
 
@@ -57,6 +58,13 @@ const TOOLS = [
       },
       required: [],
     },
+  },
+
+  {
+    name: 'list_features',
+    description: 'List defineScene() features with stable ids, kinds, labels, and refs for feature-level agent workflows.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {
     name: 'get_session_state',
@@ -268,6 +276,25 @@ async function callTool(
   const base = `http://do/api/live/session/${sessionId}`;
 
   switch (name) {
+
+    case 'list_features': {
+      const sessionResp = await stub.fetch(new Request(base));
+      if (!sessionResp.ok) throw new Error(`Session read failed: ${sessionResp.status}`);
+      const session = await sessionResp.json() as SessionState;
+      const parsed = extractSceneFeatures(session.source);
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            revision: session.revision,
+            count: parsed.features.length,
+            features: parsed.features,
+            warnings: parsed.warnings,
+          }, null, 2),
+        }],
+      };
+    }
+
     case 'get_session_state': {
       const resp = await stub.fetch(new Request(base));
       if (!resp.ok) throw new Error(`Session read failed: ${resp.status}`);
