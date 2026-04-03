@@ -9,14 +9,14 @@ npm run dev                   # Vite at localhost:5173 (check if already running
 ls projects/                  # See existing projects
 ```
 
-New project? Create `projects/{name}/{name}.forge.js` + `README.md`.
+New project? Create `projects/{name}/{name}.forge.ts` + `README.md`.
 
 ## The Loop
 
 Repeat until satisfied:
 
-1. **WRITE** — Edit the `.forge.js` file
-2. **SNAP** — `node scripts/vibe-snap.mjs projects/{name}/{name}.forge.js`
+1. **WRITE** — Edit the `.forge.ts` file
+2. **SNAP** — `node scripts/vibe-snap.mjs projects/{name}/{name}.forge.ts`
 3. **LOOK** — Read the screenshot files (paths printed to stdout) to evaluate
 4. **SHOW** — Display the most relevant screenshot to the user (the angle that best reveals what changed, or iso for big-picture). If all angles were relevant, show iso.
 5. **DECIDE** — Fix issues, iterate, or move on to next feature
@@ -25,19 +25,19 @@ Repeat until satisfied:
 
 ```bash
 # Default: 4 angles (iso, front, right, top) — good balance
-node scripts/vibe-snap.mjs projects/foo/foo.forge.js
+node scripts/vibe-snap.mjs projects/foo/foo.forge.ts
 
 # Quick check: just iso (~4s)
-node scripts/vibe-snap.mjs projects/foo/foo.forge.js --angles 1
+node scripts/vibe-snap.mjs projects/foo/foo.forge.ts --angles 1
 
 # Full coverage: all 7 angles
-node scripts/vibe-snap.mjs projects/foo/foo.forge.js --angles 7
+node scripts/vibe-snap.mjs projects/foo/foo.forge.ts --angles 7
 
 # Specific angle
-node scripts/vibe-snap.mjs projects/foo/foo.forge.js --angle front
+node scripts/vibe-snap.mjs projects/foo/foo.forge.ts --angle front
 
 # Suppress info logs
-node scripts/vibe-snap.mjs projects/foo/foo.forge.js --quiet
+node scripts/vibe-snap.mjs projects/foo/foo.forge.ts --quiet
 ```
 
 Start with `--angles 1` for quick iteration. Escalate to 4 or 7 when issues aren't obvious.

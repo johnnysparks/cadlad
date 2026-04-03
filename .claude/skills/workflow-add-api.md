@@ -19,7 +19,7 @@ src/engine/
   types.ts         # Body, Mesh, param types
 
 src/api/
-  runtime.ts       # evaluateModel() — executes .forge.js code, injects API into scope
+  runtime.ts       # evaluateModel() — executes .forge.ts code, injects API into scope
   sketch.ts        # Sketch class (2D profiles → extrude/revolve)
   assembly.ts      # Assembly class (multi-part models)
   params.ts        # param() function
@@ -32,7 +32,7 @@ src/api/
    - Use `_derive()` to return a new Solid that preserves `_color` and `_name`.
    - All methods are immutable — return a new Solid, never mutate `this`.
 
-2. **No explicit export needed** — Solid instances are already in scope in .forge.js via the primitives.
+2. **No explicit export needed** — Solid instances are already in scope in .forge.ts via the primitives.
 
 3. **If it's a new standalone function** (not a Solid method), add it to `src/engine/primitives.ts` and expose it in `src/api/runtime.ts` in the `sandbox` object passed to `evaluateModel`.
 
@@ -41,7 +41,7 @@ src/api/
 1. Add the method in `src/api/sketch.ts`.
 2. It's already available — Sketch is exposed in the runtime sandbox.
 
-## Exposing to .forge.js runtime
+## Exposing to .forge.ts runtime
 
 Check `src/api/runtime.ts` — the `sandbox` object defines everything available in model code:
 

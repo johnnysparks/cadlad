@@ -5,14 +5,13 @@ import { tmpdir } from "node:os";
 import { loadModelSource } from "./source-loader.js";
 
 describe("loadModelSource", () => {
-  it("returns raw source for .forge.js files", async () => {
+  it("rejects legacy .forge.js files", async () => {
     const dir = mkdtempSync(join(tmpdir(), "cadlad-source-loader-"));
     try {
       const file = join(dir, "example.forge.js");
       writeFileSync(file, "return box(10, 10, 10);", "utf-8");
 
-      const source = await loadModelSource(file);
-      expect(source.trim()).toBe("return box(10, 10, 10);");
+      await expect(loadModelSource(file)).rejects.toThrow(/\.forge\.ts/i);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

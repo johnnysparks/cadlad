@@ -2,7 +2,7 @@
 
 Code-first parametric 3D CAD in TypeScript. Browser studio (Monaco + Three.js) and CLI. Geometry kernel: Manifold (WASM).
 
-**This is a prompt-based 3D modeling workflow.** The primary feedback loop is: write .forge.js code → render → screenshot → evaluate → iterate. Optimize for that.
+**This is a prompt-based 3D modeling workflow.** The primary feedback loop is: write .forge.ts code → render → screenshot → evaluate → iterate. Optimize for that.
 
 ## Commands
 
@@ -22,13 +22,13 @@ src/
   api/       Public modeling API: runtime, params, sketch, assembly, hints
   studio/    Browser IDE: Monaco editor, Three.js viewport, param panel
   cli/       Node CLI: run, export, studio launcher
-projects/    Folder-per-project: projects/{name}/{name}.forge.js + README.md + reference/
-gallery/     Gallery page (auto-reads from projects/*/*.forge.js via import.meta.glob)
+projects/    Folder-per-project: projects/{name}/{name}.forge.ts + README.md + reference/
+gallery/     Gallery page (auto-reads from projects/*/*.forge.ts via import.meta.glob)
 scripts/     CI checks, snapshot tests, hook installer
 snapshots/   Visual regression test references
 ```
 
-## Model files (.forge.js)
+## Model files (.forge.ts)
 
 - Use `param()` for slider-driven parameters with min/max/unit
 - Primitives: `box()`, `cylinder()`, `sphere()`, `roundedRect()`, `roundedBox()`, `taperedBox()`
@@ -101,7 +101,7 @@ snapshots/   Visual regression test references
 - Applied in: studio viewport, gallery static render, gallery interactive viewer
 - Applied via `src/rendering/scene-builder.ts` — one place, consistent everywhere
 
-**When writing .forge.js code:**
+**When writing .forge.ts code:**
 - Ground plane is Z=0. Build upward with `.translate(0, 0, height/2)`
 - `cylinder()` builds along Z (vertical by default)
 - `Sketch.begin()` draws in XY, `.extrude()` pushes along Z (up)
@@ -170,14 +170,14 @@ Before taking screenshots, **sniff the runtime first** (which browser binary exi
 
 ```bash
 # Vibe-modeling: quick screenshot capture (4 angles by default)
-node scripts/vibe-snap.mjs projects/mymodel/mymodel.forge.js
-node scripts/vibe-snap.mjs projects/mymodel/mymodel.forge.js --angles 1  # just iso
-node scripts/vibe-snap.mjs projects/mymodel/mymodel.forge.js --angles 7  # all 7
+node scripts/vibe-snap.mjs projects/mymodel/mymodel.forge.ts
+node scripts/vibe-snap.mjs projects/mymodel/mymodel.forge.ts --angles 1  # just iso
+node scripts/vibe-snap.mjs projects/mymodel/mymodel.forge.ts --angles 7  # all 7
 node scripts/headless-doctor.mjs                                          # diagnose Chromium shared libs (Linux)
 sudo node scripts/headless-doctor.mjs --install                           # install common Debian/Ubuntu runtime libs
 
 # Render a model from all 7 angles (legacy)
-node /tmp/cadlad_sniff/render.mjs projects/mymodel/mymodel.forge.js /tmp
+node /tmp/cadlad_sniff/render.mjs projects/mymodel/mymodel.forge.ts /tmp
 
 # Snapshot test all projects
 node scripts/snapshot-test.mjs --url http://localhost:5173
@@ -200,7 +200,7 @@ The studio exposes `window.__cadlad` for automation:
 - **High-contrast mode**: gallery toggle — light gray surfaces, dark edge strokes, white background. Best for evaluating geometry.
 - **Color survives transforms**: `_derive()` carries `_color` and `_name` through all Solid operations (translate, rotate, scale, union, subtract, etc.)
 - **Z-up → Y-up**: gallery rotates mesh group -90° on X. Studio viewport uses Manifold's Z-up directly.
-- Gallery auto-reads all .forge.js files from projects/*/ — add a folder and it appears
+- Gallery auto-reads all .forge.ts files from projects/*/ — add a folder and it appears
 - Models can return `{ model, camera: [x,y,z] }` to control their gallery viewing angle
 
 ## Git workflow
@@ -220,7 +220,7 @@ The studio exposes `window.__cadlad` for automation:
 Read the relevant workflow file at the start of a session to get oriented fast:
 
 - [.claude/skills/workflow-vibe-modeling.md](.claude/skills/workflow-vibe-modeling.md) — Interactive vibe-modeling session (WRITE → SNAP → LOOK → SHOW → DECIDE)
-- [.claude/skills/workflow-build-model.md](.claude/skills/workflow-build-model.md) — Build a new .forge.js project model
+- [.claude/skills/workflow-build-model.md](.claude/skills/workflow-build-model.md) — Build a new .forge.ts project model
 - [.claude/skills/workflow-evaluate-model.md](.claude/skills/workflow-evaluate-model.md) — Evaluate model quality from multiple angles
 - [.claude/skills/workflow-add-api.md](.claude/skills/workflow-add-api.md) — Add or extend a Solid/Sketch/primitive API method
 - [.claude/skills/workflow-fix-rendering.md](.claude/skills/workflow-fix-rendering.md) — Diagnose and fix a rendering or visual bug
