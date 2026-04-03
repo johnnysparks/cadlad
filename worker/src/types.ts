@@ -2,6 +2,7 @@
 
 export interface SessionState {
   id: string;
+  ownerSub: string;
   source: string;
   params: Record<string, number>;
   revision: number;
@@ -130,6 +131,7 @@ export interface ApiError {
 export interface InitPayload {
   sessionId: string;
   writeToken: string;
+  ownerSub?: string;
   source: string;
   params: Record<string, number>;
 }
@@ -149,6 +151,8 @@ export interface Env {
    * When unset, the worker reflects the incoming request Origin.
    */
   STUDIO_ORIGIN?: string;
+  OAUTH_SIGNING_SECRET?: string;
+  DEFAULT_USER_SUB?: string;
 }
 
 // ── OAuth types ───────────────────────────────────────────────────────────────

@@ -21,6 +21,7 @@ const HEARTBEAT_INTERVAL_MS = 25_000; // keep SSE connections alive
 
 interface StoredSession {
   id: string;
+  ownerSub: string;
   source: string;
   params: Record<string, number>;
   revision: number;
@@ -43,6 +44,7 @@ export class LiveSession implements DurableObject {
 
   // Session state (loaded from storage in blockConcurrencyWhile)
   private id = '';
+  private ownerSub = 'local-dev-user';
   private source = '';
   private params: Record<string, number> = {};
   private revision = 0;
@@ -62,6 +64,7 @@ export class LiveSession implements DurableObject {
       const stored = await this.state.storage.get<StoredSession>('session');
       if (stored) {
         this.id = stored.id;
+        this.ownerSub = stored.ownerSub;
         this.source = stored.source;
         this.params = stored.params;
         this.revision = stored.revision;
@@ -112,6 +115,7 @@ export class LiveSession implements DurableObject {
     const body = await request.json() as InitPayload;
 
     this.id = body.sessionId;
+    this.ownerSub = body.ownerSub ?? 'local-dev-user';
     this.source = body.source ?? '';
     this.params = body.params ?? {};
     this.revision = 1;
@@ -329,6 +333,7 @@ export class LiveSession implements DurableObject {
   private async persist(): Promise<void> {
     const stored: StoredSession = {
       id: this.id,
+      ownerSub: this.ownerSub,
       source: this.source,
       params: this.params,
       revision: this.revision,
@@ -357,6 +362,7 @@ export class LiveSession implements DurableObject {
   private fullState(): SessionState {
     return {
       id: this.id,
+      ownerSub: this.ownerSub,
       source: this.source,
       params: { ...this.params },
       revision: this.revision,

@@ -12,10 +12,41 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  lint:
+  ci-checks:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: pages
+            check: lint
+            command: npm run lint
+          - target: pages
+            check: typecheck
+            command: npm run typecheck
+          - target: pages
+            check: test
+            command: npm run test
+          - target: worker
+            check: lint
+            command: npm --prefix worker run lint
+          - target: worker
+            check: typecheck
+            command: npm --prefix worker run typecheck
+          - target: worker
+            check: test
+            command: npm --prefix worker run test:ci
+          - target: mcp
+            check: lint
+            command: npm --prefix mcp run lint
+          - target: mcp
+            check: typecheck
+            command: npm --prefix mcp run typecheck
+          - target: mcp
+            check: test
+            command: npm --prefix mcp run test
     concurrency:
-      group: ci-lint-${{ github.ref }}
+      group: ci-${{ matrix.target }}-${{ matrix.check }}-${{ github.ref }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v5
@@ -24,38 +55,14 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: ${{ matrix.target == 'pages' && 'package-lock.json' || format('{0}/package-lock.json', matrix.target) }}
 
-      - run: npm ci
-      - run: npm run lint
+      - name: Install dependencies (pages)
+        if: matrix.target == 'pages'
+        run: npm ci
+      - name: Install dependencies (worker/mcp)
+        if: matrix.target != 'pages'
+        run: npm --prefix ${{ matrix.target }} ci
 
-  typecheck:
-    runs-on: ubuntu-latest
-    concurrency:
-      group: ci-typecheck-${{ github.ref }}
-      cancel-in-progress: true
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-
-      - run: npm ci
-      - run: npm run typecheck
-
-  test:
-    runs-on: ubuntu-latest
-    concurrency:
-      group: ci-test-${{ github.ref }}
-      cancel-in-progress: true
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-
-      - run: npm ci
-      - run: npm run test
+      - name: Run check
+        run: ${{ matrix.command }}

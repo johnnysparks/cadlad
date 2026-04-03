@@ -123,6 +123,7 @@ async function handleCreateSession(request: Request, env: Env, origin: string): 
   const initPayload: InitPayload = {
     sessionId,
     writeToken,
+    ownerSub: env.DEFAULT_USER_SUB ?? 'local-dev-user',
     source: body.source,
     params: body.params ?? {},
   };
