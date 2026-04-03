@@ -237,10 +237,6 @@ export function isSceneEnvelope(value: unknown): value is SceneEnvelopeInternal 
   return isRecord(value) && (value as SceneEnvelopeInternal)[SCENE_MARKER] === true;
 }
 
-function looksLikeSceneEnvelope(value: unknown): value is SceneEnvelope {
-  return isRecord(value) && "model" in value && "features" in value;
-}
-
 export function normalizeScene(
   code: string,
   value: unknown,
@@ -249,7 +245,7 @@ export function normalizeScene(
   scene?: NormalizedScene;
   diagnostics: SceneDiagnostic[];
 } {
-  if (!isSceneEnvelope(value) && !looksLikeSceneEnvelope(value)) {
+  if (!isSceneEnvelope(value)) {
     return { diagnostics: [] };
   }
 
