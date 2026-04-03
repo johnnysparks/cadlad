@@ -40,21 +40,25 @@ export interface RunResult {
   timestamp: number;
   stats?: ModelStats;
   screenshot?: string;
+  screenshotStatus?: "ok" | "blocked" | "unavailable";
+  screenshotStatusReason?: string;
 }
 
-export type RenderStatus =
-  | 'ready'
-  | 'no_render'
-  | 'pending'
-  | 'failed'
-  | 'blocked'
-  | 'unknown';
+export type RenderState = 'ready' | 'no_render' | 'pending' | 'failed' | 'blocked' | 'unknown';
+
+export interface RenderStatus {
+  state: RenderState;
+  revision?: number;
+  timestamp?: number;
+  screenshotRef?: string;
+  message: string;
+}
 
 export interface RunResultEnvelope {
   runResult: RunResult | null;
   revision?: number;
   message?: string;
-  status?: RenderStatus | string;
+  status?: string;
   artifactRef?: string;
   hasImage?: boolean;
 }
@@ -82,6 +86,7 @@ export interface SessionState {
   params: Record<string, number>;
   revision: number;
   lastSuccessfulRevision: number;
+  latestRender: RenderStatus;
   patches: Patch[];
   createdAt: number;
   updatedAt: number;

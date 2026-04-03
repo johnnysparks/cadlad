@@ -175,6 +175,10 @@ export interface RunResultPayload {
   };
   /** Base64 PNG data URL of the viewport render */
   screenshot?: string;
+  /** Optional explicit status when screenshot capture is unavailable/blocked. */
+  screenshotStatus?: "ok" | "blocked" | "unavailable";
+  /** Optional reason for screenshotStatus when not "ok". */
+  screenshotStatusReason?: string;
 }
 
 export interface LiveSessionClientOptions {

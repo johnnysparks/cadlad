@@ -10,6 +10,7 @@ import type {
   ApplyPatchRequest,
   RevertRequest,
   PostRunResultRequest,
+  RenderStatus,
   RunResult,
 } from './types.js';
 import { createLinkCode, saveScreenshot } from './oauth-store.js';
@@ -30,6 +31,7 @@ interface StoredSession {
   createdAt: number;
   updatedAt: number;
   lastRunResult?: RunResult | null;
+  lastRunRevision?: number | null;
 }
 
 // ── Durable Object ────────────────────────────────────────────────────────────
@@ -53,6 +55,8 @@ export class LiveSession implements DurableObject {
   private updatedAt = 0;
   /** Latest run result posted by a connected studio */
   private lastRunResult: RunResult | null = null;
+  /** Revision associated with lastRunResult */
+  private lastRunRevision: number | null = null;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -71,6 +75,7 @@ export class LiveSession implements DurableObject {
         this.createdAt = stored.createdAt;
         this.updatedAt = stored.updatedAt;
         this.lastRunResult = stored.lastRunResult ?? null;
+        this.lastRunRevision = stored.lastRunRevision ?? null;
       }
     });
   }
@@ -266,9 +271,18 @@ export class LiveSession implements DurableObject {
 
   private handleGetRunResult(): Response {
     if (!this.lastRunResult) {
-      return ok({ runResult: null, message: 'No run result posted yet. Connect CadLad Studio to the session and run the model.' });
+      return ok({
+        runResult: null,
+        revision: this.lastRunRevision ?? undefined,
+        renderStatus: this.computeRenderStatus(),
+        message: 'No run result posted yet. Connect CadLad Studio to the session and run the model.',
+      });
     }
-    return ok({ runResult: this.lastRunResult, revision: this.revision });
+    return ok({
+      runResult: this.lastRunResult,
+      revision: this.lastRunRevision ?? this.revision,
+      renderStatus: this.computeRenderStatus(),
+    });
   }
 
   private async handlePostRunResult(request: Request): Promise<Response> {
@@ -281,6 +295,7 @@ export class LiveSession implements DurableObject {
     }
 
     this.lastRunResult = body.result;
+    this.lastRunRevision = body.revision;
     if (body.result.success) this.lastSuccessfulRevision = body.revision;
 
     // Persist screenshot to KV so it survives DO eviction
@@ -341,6 +356,7 @@ export class LiveSession implements DurableObject {
       lastRunResult: this.lastRunResult
         ? { ...this.lastRunResult, screenshot: undefined }
         : null,
+      lastRunRevision: this.lastRunRevision,
     };
     await this.state.storage.put('session', stored);
   }
@@ -361,6 +377,7 @@ export class LiveSession implements DurableObject {
       params: { ...this.params },
       revision: this.revision,
       lastSuccessfulRevision: this.lastSuccessfulRevision,
+      latestRender: this.computeRenderStatus(),
       patches: [...this.patches],
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
@@ -370,6 +387,59 @@ export class LiveSession implements DurableObject {
   private summary(): SessionSummary {
     const { patches: _p, ...rest } = this.fullState();
     return rest;
+  }
+
+  private computeRenderStatus(): RenderStatus {
+    if (!this.lastRunResult || this.lastRunRevision === null) {
+      return {
+        state: 'no_render',
+        message: 'No render exists yet for this session.',
+      };
+    }
+
+    const base: RenderStatus = {
+      state: 'ready',
+      revision: this.lastRunRevision,
+      timestamp: this.lastRunResult.timestamp,
+      screenshotRef: this.lastRunResult.screenshot ? `session:${this.id}:rev:${this.lastRunRevision}` : undefined,
+      message: 'Latest render is available.',
+    };
+
+    if (this.lastRunRevision < this.revision) {
+      return {
+        ...base,
+        state: 'render_pending',
+        message: `Render pending for revision ${this.revision}. Latest completed render is revision ${this.lastRunRevision}.`,
+      };
+    }
+
+    if (!this.lastRunResult.success) {
+      return {
+        ...base,
+        state: 'render_failed',
+        message: this.lastRunResult.errors[0]
+          ? `Latest render failed: ${this.lastRunResult.errors[0]}`
+          : 'Latest render failed.',
+      };
+    }
+
+    if (!this.lastRunResult.screenshot && this.lastRunResult.screenshotStatus === 'blocked') {
+      return {
+        ...base,
+        state: 'screenshot_blocked',
+        message: this.lastRunResult.screenshotStatusReason ?? 'Render succeeded, but screenshot retrieval was blocked by policy/tooling.',
+      };
+    }
+
+    if (!this.lastRunResult.screenshot) {
+      return {
+        ...base,
+        state: 'screenshot_blocked',
+        message: this.lastRunResult.screenshotStatusReason ?? 'Render succeeded, but no screenshot was attached.',
+      };
+    }
+
+    return base;
   }
 }
 

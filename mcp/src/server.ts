@@ -20,7 +20,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { SessionClient, clientFromUrl, ApiError, type RunResultEnvelope } from "./session-client.js";
+import { SessionClient, clientFromUrl, ApiError, type RunResultEnvelope, type RenderStatus } from "./session-client.js";
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
@@ -564,6 +564,7 @@ function formatSession(
   const renderState = deriveRenderState(run);
   const lines = [
     `Revision: ${session.revision} (last successful: ${session.lastSuccessfulRevision})`,
+    `Latest render: ${formatRenderStatus(session.latestRender)}`,
     `Params: ${Object.keys(session.params).length > 0 ? JSON.stringify(session.params) : "none"}`,
     `Patches: ${session.patches.length}`,
     `Updated: ${new Date(session.updatedAt).toISOString()}`,
@@ -603,6 +604,12 @@ function formatRenderStateSummary(state: ReturnType<typeof deriveRenderState>, r
   const base = `Render status: ${state} (${revision}; ${artifact})`;
   if (!run.message) return base;
   return `${base}\nDetail: ${run.message}`;
+}
+
+function formatRenderStatus(status: RenderStatus): string {
+  const revision = status.revision !== undefined ? `rev ${status.revision}` : "rev n/a";
+  const screenshotRef = status.screenshotRef ? `, screenshotRef=${status.screenshotRef}` : "";
+  return `${status.state} (${revision}${screenshotRef}) — ${status.message}`;
 }
 
 function formatHistory(history: Awaited<ReturnType<SessionClient["getHistory"]>>): string {
