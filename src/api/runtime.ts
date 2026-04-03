@@ -11,6 +11,7 @@ import { Assembly } from "./assembly.js";
 import { _setParamValues, _resetParams, _getParamDefs } from "./params.js";
 import { collectHints } from "./hints.js";
 import type { ModelResult, Body, ParamDef, Hint } from "../engine/types.js";
+import { normalizeScene, defineScene } from "./scene-contract.js";
 
 // All API symbols that get injected into model scope
 import { param } from "./params.js";
@@ -59,12 +60,14 @@ export async function evaluateModel(
       "box", "cylinder", "sphere", "roundedRect", "roundedBox", "taperedBox",
       "sweep", "loft",
       "assembly", "Solid", "Assembly",
+      "defineScene",
     ];
     const apiValues = [
       param, Sketch, rect, circle,
       box, cylinder, sphere, roundedRect, roundedBox, taperedBox,
       sweep, loft,
       assembly, Solid, Assembly,
+      defineScene,
     ];
 
     // Wrap user code so it can use top-level return
@@ -79,6 +82,20 @@ export async function evaluateModel(
     // Process return value
     // Supports: Solid, Assembly, Array, or { model, camera } metadata object
     let model = result;
+    const normalized = normalizeScene(code, result);
+    if (normalized.scene) {
+      model = normalized.scene.model;
+    }
+    if (normalized.diagnostics.length > 0) {
+      errors.push(...normalized.diagnostics.map((diag) => {
+        const location = diag.range
+          ? ` [L${diag.range.startLine}:C${diag.range.startColumn}-L${diag.range.endLine}:C${diag.range.endColumn}]`
+          : "";
+        const feature = diag.featureId ? ` [feature:${diag.featureId}]` : "";
+        return `[${diag.code}]${feature}${location} ${diag.message}`;
+      }));
+      return { bodies, params: collectedParams, errors, hints, camera };
+    }
     if (result && typeof result === "object" && !(result instanceof Solid) && !(result instanceof Assembly) && !Array.isArray(result)) {
       // Metadata object: { model: Solid|Assembly, camera: [x,y,z] }
       if (result.model) model = result.model;
