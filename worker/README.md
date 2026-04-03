@@ -15,10 +15,12 @@ Local API at `http://localhost:8787`. Run the studio separately (`npm run dev` f
 ## Test
 
 ```bash
-npm --prefix worker test
+npm --prefix worker test           # smoke test (CI-safe)
+npm --prefix worker run test:full # full MCP Phase 1.1 suite (excludes legacy OAuth/session tests)
+npm --prefix worker run test:oauth # legacy OAuth/session coverage (currently failing)
 ```
 
-Integration tests cover session creation, patch/revert, SSE, and run-result telemetry using the Cloudflare Vitest pool.
+Integration tests use the Cloudflare Vitest pool. The OAuth/session suite is kept as a separate command while MCP Phase 1.1 work is in progress.
 
 ## Deploy
 
