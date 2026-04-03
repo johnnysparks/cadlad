@@ -3,15 +3,16 @@
  * CadLad CLI.
  *
  * Usage:
- *   cadlad run <file.forge.js>     — validate & evaluate a model
+ *   cadlad run <file.forge.js|file.forge.ts> — validate & evaluate a model
  *   cadlad export <file> -o out.stl — export to STL
  *   cadlad studio                   — launch browser studio (dev server)
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { initManifold } from "../engine/manifold-backend.js";
 import { evaluateModel } from "../api/runtime.js";
+import { loadModelSource } from "./source-loader.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -35,12 +36,12 @@ async function main() {
 async function cmdRun(args: string[]) {
   const file = args[0];
   if (!file) {
-    console.error("Usage: cadlad run <file.forge.js>");
+    console.error("Usage: cadlad run <file.forge.js|file.forge.ts>");
     process.exit(1);
   }
 
   await initManifold();
-  const code = readFileSync(resolve(file), "utf-8");
+  const code = await loadModelSource(file);
   const result = await evaluateModel(code);
 
   if (result.errors.length > 0) {
@@ -65,12 +66,12 @@ async function cmdExport(args: string[]) {
   const outFile = outIdx >= 0 ? args[outIdx + 1] : undefined;
 
   if (!file) {
-    console.error("Usage: cadlad export <file.forge.js> -o output.stl");
+    console.error("Usage: cadlad export <file.forge.js|file.forge.ts> -o output.stl");
     process.exit(1);
   }
 
   await initManifold();
-  const code = readFileSync(resolve(file), "utf-8");
+  const code = await loadModelSource(file);
   const result = await evaluateModel(code);
 
   if (result.errors.length > 0) {
@@ -135,7 +136,7 @@ function printUsage() {
 CadLad — Code-first parametric CAD
 
 Usage:
-  cadlad run <file.forge.js>            Validate and evaluate a model
+  cadlad run <file.forge.js|file.forge.ts> Validate and evaluate a model
   cadlad export <file> -o output.stl    Export model to STL
   cadlad studio                         Launch browser studio
 `);
