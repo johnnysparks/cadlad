@@ -11,7 +11,7 @@ import { Assembly } from "./assembly.js";
 import { _setParamValues, _resetParams, _getParamDefs } from "./params.js";
 import { collectHints } from "./hints.js";
 import type { ModelResult, Body, ParamDef, Hint } from "../engine/types.js";
-import { normalizeScene, defineScene, mm } from "./scene-contract.js";
+import { normalizeScene, defineScene, mm, runScenePostModelValidation } from "./scene-contract.js";
 
 // All API symbols that get injected into model scope
 import { param } from "./params.js";
@@ -42,6 +42,7 @@ export async function evaluateModel(
   const collectedParams: ParamDef[] = [];
   let hints: Hint[] = [];
   let camera: [number, number, number] | undefined;
+  let sceneValidation: ModelResult["sceneValidation"];
 
   const collectSolid = (solid: Solid, context: string): void => {
     const nComp = solid.numComponents();
@@ -97,17 +98,21 @@ export async function evaluateModel(
         });
       }
     }
-    if (normalized.diagnostics.length > 0) {
-      errors.push(...normalized.diagnostics.map((diag) => {
+    const blockingSceneDiagnostics = normalized.diagnostics.filter((diag) =>
+      diag.stage === "type-level" || diag.code === "scene.feature-ref.invalid"
+    );
+    if (blockingSceneDiagnostics.length > 0) {
+      sceneValidation = normalized.scene?.validation;
+      errors.push(...blockingSceneDiagnostics.map((diag) => {
         const location = diag.range
           ? ` [L${diag.range.startLine}:C${diag.range.startColumn}-L${diag.range.endLine}:C${diag.range.endColumn}]`
           : "";
         const feature = diag.featureId ? ` [feature:${diag.featureId}]` : "";
         return `[${diag.code}]${feature}${location} ${diag.message}`;
       }));
-      return { bodies, params: collectedParams, errors, hints, camera };
+      return { bodies, params: collectedParams, errors, hints, camera, sceneValidation };
     }
-    if (result && typeof result === "object" && !(result instanceof Solid) && !(result instanceof Assembly) && !Array.isArray(result)) {
+    if (!normalized.scene && result && typeof result === "object" && !(result instanceof Solid) && !(result instanceof Assembly) && !Array.isArray(result)) {
       // Metadata object: { model: Solid|Assembly, camera: [x,y,z] }
       if (result.model) model = result.model;
       if (Array.isArray(result.camera) && result.camera.length === 3) {
@@ -146,6 +151,22 @@ export async function evaluateModel(
         );
       }
     }
+
+    if (normalized.scene) {
+      sceneValidation = runScenePostModelValidation({
+        scene: normalized.scene,
+        validators: normalized.rawHooks?.validators,
+        tests: normalized.rawHooks?.tests,
+        bodies,
+      });
+      if (sceneValidation.summary.errorCount > 0) {
+        errors.push(...sceneValidation.diagnostics.map((diag) => {
+          const feature = diag.featureId ? ` [feature:${diag.featureId}]` : "";
+          const hook = diag.validatorId ? ` [validator:${diag.validatorId}]` : diag.testId ? ` [test:${diag.testId}]` : "";
+          return `[${diag.code}]${feature}${hook} ${diag.message}`;
+        }));
+      }
+    }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     runtimeErrors.push(msg);
@@ -162,5 +183,6 @@ export async function evaluateModel(
     runtimeErrors: [...errors, ...runtimeErrors],
     hints,
     camera,
+    sceneValidation,
   });
 }

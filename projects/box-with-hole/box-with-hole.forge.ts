@@ -15,18 +15,37 @@ return defineScene({
   features: [
     { id: "base.box", kind: "primitive.box", label: "Main body" },
     { id: "hole.cylinder", kind: "primitive.cylinder", label: "Through hole cutter" },
+    { id: "base.with-hole", kind: "boolean.subtract", refs: ["base.box", "hole.cylinder"], label: "Final body" },
   ],
   validators: [
-    ({ params }) =>
-      params.holeRadius * 2 >= params.width
-        ? "Hole diameter must be smaller than width."
-        : undefined,
+    {
+      id: "hole.fits-width",
+      stage: "semantic",
+      run: ({ params }) =>
+        params.holeRadius * 2 >= params.width
+          ? "Hole diameter must be smaller than width."
+          : undefined,
+    },
+    {
+      id: "scene.single-body",
+      stage: "geometry",
+      run: ({ bodies }) =>
+        bodies.length !== 1
+          ? "Box with hole should emit exactly one body."
+          : undefined,
+    },
   ],
   tests: [
     {
-      id: "hole-through",
-      run: ({ params }) =>
-        params.height <= 0 ? "Height must be positive." : undefined,
+      id: "base-height-positive",
+      run: ({ params }) => (params.height <= 0 ? "Height must be positive." : undefined),
+    },
+    {
+      id: "final-mesh-has-triangles",
+      run: ({ bodies }) =>
+        bodies[0] && bodies[0].mesh.indices.length > 0
+          ? undefined
+          : "Expected non-empty triangle mesh for final body.",
     },
   ],
   model: ({ params }) => {

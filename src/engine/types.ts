@@ -54,12 +54,44 @@ export interface ValidationDiagnostic {
   featureId?: string;
 }
 
+export interface SceneValidationRuleResult {
+  id: string;
+  stage: "semantic" | "geometry" | "tests";
+  status: "pass" | "fail";
+  message?: string;
+}
+
+export interface SceneValidationDiagnostic {
+  code: string;
+  stage: "type-level" | "semantic" | "geometry" | "tests";
+  severity: "error" | "warning";
+  message: string;
+  featureId?: string;
+  validatorId?: string;
+  testId?: string;
+}
+
+export interface SceneValidationSummary {
+  errorCount: number;
+  warningCount: number;
+  validatorFailures: number;
+  testFailures: number;
+}
+
+export interface SceneValidationReport {
+  diagnostics: SceneValidationDiagnostic[];
+  validators: SceneValidationRuleResult[];
+  tests: SceneValidationRuleResult[];
+  summary: SceneValidationSummary;
+}
+
 /** Result of evaluating a model script */
 export interface ModelResult {
   bodies: Body[];
   params: ParamDef[];
   errors: string[];
   diagnostics?: ValidationDiagnostic[];
+  sceneValidation?: SceneValidationReport;
   hints: Hint[];
   /** Optional camera position hint from the model [x, y, z] */
   camera?: Vec3;
