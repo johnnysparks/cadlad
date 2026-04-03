@@ -115,6 +115,9 @@ Paste any example into the studio editor or run via CLI.
 # Validate a model (.forge.ts)
 cadlad run projects/box-with-hole.forge.ts
 
+# Validate and emit machine-readable stats JSON (good for automation/agents)
+cadlad run projects/box-with-hole.forge.ts --json
+
 # Export to STL
 cadlad export projects/box-with-hole.forge.ts -o output.stl
 ```
