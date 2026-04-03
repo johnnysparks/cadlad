@@ -1,12 +1,14 @@
 # CadLad Roadmap
 
 > Derived from the [north star vision](./cadlad_north_star.md), grounded in the current state of the codebase as of April 2026.
+>
+> **Key assumption: agents are the primary users.** Humans use the studio for review, visualization, and final approval. Agents do the modeling. Every priority decision flows from this.
 
 ---
 
 ## Where we are today
 
-CadLad is a working code-first parametric 3D CAD system. The core loop — write `.forge.ts` → evaluate → render → iterate — is solid:
+CadLad is a working code-first parametric 3D CAD system. The core loop — write `.forge.ts` → evaluate → render → iterate — works:
 
 - **Engine**: Manifold WASM kernel with 11 primitives, booleans, transforms, edge treatments, shell, draft, patterns. ~30 methods on `Solid`.
 - **API**: `param()`, `Sketch`, `assembly()`, `defineScene()` with 5-stage layered validation (types → semantic → geometry → stats → tests).
@@ -17,237 +19,276 @@ CadLad is a working code-first parametric 3D CAD system. The core loop — write
 - **24 example projects** using `defineScene()` strict envelope.
 - **12 test suites**, ~1700 lines of tests.
 
-What's missing is everything above the single-session level: history, branching, collaboration, and the infrastructure to support agent-driven iteration without depending on screenshots for every feedback cycle.
+### The agent bottleneck
+
+Today an agent modeling in CadLad hits these walls, in order of pain:
+
+1. **Feedback is visual.** The agent must render and screenshot to know if geometry is correct. That's slow, expensive, and lossy — a screenshot doesn't tell you wall thickness is 0.3mm or that two parts overlap by 2mm.
+2. **No structured evaluation results.** `evaluateModel()` returns bodies and errors, but not a machine-readable quality report. The agent has to infer correctness from absence of errors.
+3. **No memory across sessions.** Each agent session starts cold. There's no revision history, no "what did I try last time," no branch-and-compare.
+4. **MCP tools are thin.** The current MCP surface is get-state / submit-patch / get-screenshot. Agents write raw `.forge.ts` code for everything — no semantic operations.
+5. **No domain knowledge in the loop.** Printability, moldability, structural soundness, clearance checks — the agent has to know these rules. The system doesn't enforce or even check them.
+
+The roadmap is ordered to eliminate these bottlenecks top-down.
 
 ---
 
-## Phase 0 — Foundations (current → near-term)
+## Phase 0 — Machine-readable geometry feedback
 
-Stabilize what exists. Reduce friction in the modeling-and-evaluation loop before adding architectural complexity.
+**Goal: An agent can evaluate a model and get a structured quality report without rendering a single pixel.**
 
-### 0.1 Tighten the geometry feedback loop
+This is the highest-leverage change. Every later phase compounds on it.
 
-The north star correctly identifies over-reliance on screenshots. Today, an agent must render and screenshot to know if a model is broken. That's expensive and slow.
+### 0.1 Structured GeometryStats in every evaluation
 
-**Do now:**
-- [ ] Expose `numComponents()`, `volume()`, `surfaceArea()`, `boundingBox()` as first-class validation checks in `defineScene()` validators (they exist on `Solid` but aren't wired into the standard validation pipeline).
-- [ ] Add geometry sanity checks to layered validation: empty result, degenerate bbox (any dimension < epsilon), disconnected components (when unintended), volume sanity (non-negative, within expected range).
-- [ ] Return structured `GeometryStats` from every evaluation, not just when a studio panel requests it. Make it part of `ModelResult`.
+- [ ] Compute and return `GeometryStats` as part of every `ModelResult`: volume, surface area, bounding box, component count, per-body stats.
+- [ ] Include derived checks: is volume zero? Is any bbox dimension degenerate? Are there disconnected components?
+- [ ] Return these from CLI (`cadlad run --json`) and MCP (`validate` tool) in a stable JSON schema.
 
-**Why first:** Every later phase benefits from fast, non-visual feedback. Agents iterate faster. Tests become more meaningful. Validation catches real problems before render.
+The pieces exist (`Solid.volume()`, `Solid.surfaceArea()`, `Solid.boundingBox()`, `Solid.numComponents()`, `model-stats.ts`). They just aren't wired into the standard evaluation output.
 
-### 0.2 Export format coverage
+### 0.2 Geometry validators in the standard pipeline
 
-STL export exists but is the bare minimum for a CAD tool.
+- [ ] Add built-in geometry validators to layered validation that run automatically:
+  - Empty body detection (volume < epsilon)
+  - Degenerate bbox (any dimension < epsilon)
+  - Unexpected disconnected components
+  - Volume sanity (configurable expected range)
+  - Bbox sanity (configurable expected envelope)
+- [ ] Let `defineScene()` authors add project-specific geometry validators with access to the built `Solid`:
+  ```ts
+  validators: [{
+    id: "min-wall",
+    stage: "geometry",
+    run: (ctx) => ctx.model.shell(2).volume() > 0 
+      ? null 
+      : { severity: "error", message: "Wall thickness < 2mm" }
+  }]
+  ```
 
-- [ ] STEP export (via Manifold or post-processing) — industry standard for CNC/3D printing services.
-- [ ] 3MF export — modern replacement for STL, supports color/material metadata.
-- [ ] OBJ export — useful for rendering pipelines and game engines.
-- [ ] glTF/GLB export — web-native 3D format, preserves color and assembly structure.
+### 0.3 Evaluation bundles
 
-**Pragmatic note:** STEP is hard because Manifold works in mesh space, not BREP. This may require an external library or a "best-effort tessellated STEP" approach. Don't let perfect block useful — 3MF and glTF are achievable now and cover most real workflows.
+- [ ] Define `EvaluationBundle`: typecheck, semantic validation, geometry validation, stats, tests — all structured, all machine-readable. Render is optional and last.
+- [ ] Every `evaluateModel()` call returns a bundle. The agent gets a complete structured report.
+- [ ] Make render truly optional. An agent iterating on geometry doesn't need pixels until it's ready for visual confirmation.
 
-### 0.3 CLI ergonomics
-
-- [ ] `cadlad init <name>` — scaffold a new project directory with boilerplate `defineScene()`.
-- [ ] `cadlad gallery` — generate a static gallery HTML from `projects/` (no dev server needed).
-- [ ] `cadlad diff <file> --rev <hash>` — visual diff between model revisions (geometry stats comparison, even without full render).
-
----
-
-## Phase 1 — Event store & revision model
-
-This is the north star's "smallest viable architecture shift." The goal: decouple session state from history, make modeling steps addressable and replayable.
-
-### 1.1 Event envelope & store abstraction
-
-- [ ] Define `EventEnvelope<T>` type (as specified in north star: id, projectId, branchId, actor, type, payload, ts, causation/correlation IDs).
-- [ ] Implement `EventStore` interface: `append()`, `readStream()`.
-- [ ] Start with an in-memory implementation for local dev and a SQLite implementation for CLI/desktop persistence.
-- [ ] Migrate current live-session patch writes to emit events. The existing `live-session-client.ts` WebSocket messages become the transport for events, not the events themselves.
-
-**What the north star gets right:** The event taxonomy is well-considered. Authoring events (`source.replaced`, `scene.feature_added`, `scene.param_set`), workflow events (`session.created`, `branch.created`), and evaluation events (`geometry.built`, `validation.completed`) are the right categories.
-
-**Where to be cautious:** Don't over-engineer the event taxonomy before you have real usage patterns. Start with `source.replaced` and `scene.param_set` — those cover 90% of current activity. Add structural events (`scene.feature_added` etc.) only when the scene-contract layer is mature enough to produce them reliably.
-
-### 1.2 Revisions & checkpoints
-
-- [ ] Define `Revision` type (as specified: id, parentRevisionIds, eventIds, summary, materialized hashes).
-- [ ] Implement revision creation: collapse a batch of events into a named checkpoint.
-- [ ] Store source snapshot hash at each revision. This is the "authored artifact at checkpoint."
-- [ ] Wire into CLI: `cadlad commit "added gable roof"` creates a revision.
-
-### 1.3 Separate session from history
-
-- [ ] `Session` becomes a live cursor over a branch head, not an owner of state.
-- [ ] Session accrues uncommitted events; explicit "checkpoint" promotes them to a revision.
-- [ ] Multiple sessions can attach to the same branch (read model; write requires coordination, but that's Phase 3).
-
-**Hard truth the north star doesn't fully address:** For local single-user dev (which is the primary use case today), this is over-engineering unless it provides a tangible UX benefit. The benefit is **undo/redo at the modeling-step level** and **branch-and-compare for design exploration.** Lead with those UX features; the event architecture is the implementation, not the product.
+**Why this is Phase 0, not Phase 2:** For human users, screenshots are acceptable primary feedback. For agents, they're a crutch. Agents need numbers, booleans, and structured diagnostics — not pixel interpretation. This phase makes the tight loop (`code → evaluate → read stats → adjust`) fast and non-visual.
 
 ---
 
-## Phase 2 — Evaluation bundles & artifact pipeline
+## Phase 1 — Semantic MCP surface
 
-### 2.1 First-class evaluation bundles
+**Goal: Agents operate on models through semantic tools, not raw code injection.**
 
-- [ ] Define `EvaluationBundle` (as in north star: typecheck, semantic validation, geometry validation, stats, tests, render — all optional).
-- [ ] Every model evaluation produces a bundle. Store it as an artifact linked to the triggering event/revision.
-- [ ] Make render the *last* and *optional* stage. An agent or CI pipeline can stop at geometry validation if that's sufficient.
+### 1.1 Rich evaluation MCP tools
 
-### 2.2 Artifact store abstraction
+- [ ] `evaluate(code?, paramOverrides?)` → full `EvaluationBundle` (not just errors).
+- [ ] `get_stats()` → structured geometry stats for current model.
+- [ ] `get_validation()` → all diagnostics, validators, tests, with pass/fail and messages.
+- [ ] `compare(codeA, codeB)` → diff of geometry stats, validation results, param values.
 
-- [ ] Define `ArtifactStore` interface: store/retrieve blobs by kind and revision.
-- [ ] Local implementation: filesystem (already partially exists in snapshot workflow).
-- [ ] Cloud implementation: R2/S3 behind the same interface.
-- [ ] Artifact kinds: screenshot, mesh, stats, validation-report, test-report, reference-image, STL, 3MF.
+These let an agent reason about model quality without vision.
 
-### 2.3 Reference-image-driven validation
+### 1.2 Feature-level MCP tools
 
-Today, reference images exist in `projects/*/reference/` but aren't used programmatically.
+- [ ] `add_feature(kind, params)` — add a hole, fillet, chamfer, shell, etc. by semantic kind. The system generates correct `.forge.ts` code.
+- [ ] `modify_feature(id, params)` — change a feature's parameters by ID. Requires `defineScene()` with stable feature IDs.
+- [ ] `remove_feature(id)` — remove a feature.
+- [ ] `list_features()` → current feature tree with IDs, kinds, params.
 
-- [ ] Define a "reference match" validator: compare rendered output against reference image (perceptual hash or SSIM).
-- [ ] Wire into `defineScene()` tests: `referenceMatch("./reference/front.png", { tolerance: 0.95 })`.
-- [ ] This replaces manual screenshot comparison for regression testing.
+**Why semantic operations matter for agents:** Raw code generation works but is fragile. An agent writing `solid.subtract(cylinder(12, 3).translate(5, 0, 6))` has to know the exact API, coordinate system, and sizing rules. An agent calling `add_feature("through_hole", { diameter: 6, position: [5, 0, 6] })` expresses intent. The system handles the implementation, including oversize-cutter rules, coordinate transforms, and validation.
 
-**Note on screenshots vs. geometry:** The north star wants less screenshot dependence — agreed. But for aesthetic evaluation (does this look like a coffee mug?), vision is irreplaceable. The right move is: use geometry validators for structural correctness, use render comparison for aesthetic regression, use agent vision for open-ended design evaluation. Don't eliminate screenshots; demote them from "primary feedback" to "confirmation and aesthetics."
+### 1.3 Domain-aware suggestion tools
 
----
+- [ ] `check_printability(opts?)` — analyze for 3D printing: wall thickness, overhang angles, support requirements, bed adhesion area.
+- [ ] `check_moldability(opts?)` — analyze for injection molding: draft angles, undercuts, wall uniformity, gate placement hints.
+- [ ] `suggest_improvements()` → list of actionable suggestions with severity and auto-fix capability.
 
-## Phase 3 — Branching, collaboration & merge
-
-### 3.1 Local branching
-
-- [ ] `Branch` type: pointer to a head revision on a project.
-- [ ] `cadlad branch <name>` — create branch from current revision.
-- [ ] `cadlad switch <branch>` — move session to branch head.
-- [ ] `cadlad compare <branch-a> <branch-b>` — diff geometry stats, param values, validation results.
-- [ ] Studio UI: branch picker, side-by-side comparison view.
-
-### 3.2 Merge
-
-The north star recommends a 3-tier merge hierarchy: event merge → scene merge → source merge. This is intellectually elegant but practically complex.
-
-**Pragmatic approach:**
-- [ ] Start with **source-level merge** (text diff/patch on `forge.ts`). It's what developers understand, it's debuggable, and it works today.
-- [ ] Add **scene-level merge** only for `defineScene()` projects where features have stable IDs. Merge by feature ID: if two branches modify different features, auto-merge. If same feature, conflict.
-- [ ] Defer event-level merge indefinitely. The complexity-to-benefit ratio is poor until the event model is battle-tested.
-
-### 3.3 Multi-user collaboration
-
-- [ ] Real-time presence: see who's looking at what branch/revision.
-- [ ] Async collaboration: review a revision, leave comments (linked to features or geometry regions).
-- [ ] Live co-editing: shared session with OT/CRDT on source text. This is the hardest part and should come last.
-
-**The north star's transport recommendation is sound:** keep it thin (WebSocket/SSE), use an `EventBus` abstraction, avoid Cloudflare coupling. The existing Worker is a reasonable starting implementation, but the `EventBus`/`EventStore` interfaces should be defined such that the Worker is an adapter, not the architecture.
+These encode the domain knowledge that's currently in CLAUDE.md's "hard-won lessons" section. The agent shouldn't need to read prose to avoid coplanar boolean artifacts — the system should catch it.
 
 ---
 
-## Phase 4 — Agent-native modeling
+## Phase 2 — Agent memory: events, revisions, branches
 
-This is where CadLad differentiates from traditional CAD. The system should be as natural for an AI agent to operate as for a human.
+**Goal: An agent can pick up where it (or another agent) left off, explore alternatives, and compare approaches.**
 
-### 4.1 Semantic MCP tools
+This is the north star's core architecture, but motivated by agent workflows rather than abstract event-sourcing elegance.
 
-Current MCP server supports basic operations. Expand to:
+### 2.1 Event store (minimal)
 
-- [ ] `add_feature(kind, params)` — add a feature by semantic kind (hole, fillet, shell, etc.) rather than raw code injection.
-- [ ] `modify_feature(id, params)` — modify an existing feature's parameters.
-- [ ] `validate()` — run full evaluation bundle, return structured results (not just screenshots).
-- [ ] `compare_revisions(a, b)` — structured diff of geometry, params, validation.
-- [ ] `suggest_improvements()` — run heuristic analysis (draft angles for molding, wall thickness for printability, etc.).
+- [ ] `EventEnvelope<T>` type with id, projectId, actor (human | agent), type, payload, timestamp.
+- [ ] `EventStore` interface: `append()`, `readStream()`.
+- [ ] In-memory implementation for dev. SQLite for persistence.
+- [ ] Start with 5 event types — no more:
+  - `source.replaced` — full source snapshot
+  - `scene.param_set` — parameter change
+  - `evaluation.completed` — evaluation bundle reference
+  - `agent.intent_declared` — what the agent was trying to do
+  - `agent.capability_gap` — what the agent couldn't do
 
-### 4.2 Agent learning events
+**On the actor field:** Every event records whether it came from a human or an agent, and which agent. This is the foundation for agent learning (Phase 4) and for humans reviewing what an agent did.
 
-The north star identifies these as "gold" — agreed.
+### 2.2 Revisions
 
-- [ ] `agent.intent_declared` — what the agent was trying to do.
-- [ ] `agent.capability_gap_reported` — what the agent couldn't do and why.
-- [ ] `agent.workaround_recorded` — how the agent worked around a limitation.
+- [ ] `Revision` type: checkpoint over a batch of events, with source hash and evaluation bundle reference.
+- [ ] Agent creates a revision after each meaningful modeling step (not every keystroke).
+- [ ] Revisions are addressable: an agent can retrieve the source, stats, and validation state at any revision.
 
-These events become the input for roadmap prioritization. If agents keep reporting the same capability gap, that's a signal to build it.
+### 2.3 Branches
 
-### 4.3 Design intent & constraint system
+- [ ] `Branch` type: named pointer to a head revision.
+- [ ] An agent can branch to explore an alternative approach without losing the current one.
+- [ ] `compare_branches(a, b)` → structured diff of geometry, params, validation at branch heads.
+- [ ] An agent (or human) can pick the better branch and continue from there.
 
-Beyond `defineScene()` validators (which are post-hoc checks), support **declarative constraints**:
+**Why branches matter for agents:** Agents naturally explore. "Try a thicker wall" and "try a different handle shape" are parallel explorations. Without branches, the agent has to remember (or reconstruct) the alternative. With branches, it forks, evaluates both, and picks the winner — or asks the human to choose.
 
-- [ ] `constraint("wall_thickness", { min: mm(2) })` — enforced during modeling, not just validated after.
-- [ ] `constraint("symmetry", { axis: "X" })` — flag asymmetry as a warning.
-- [ ] `constraint("clearance", { between: ["lid", "base"], min: mm(0.5) })` — inter-part constraints.
+### 2.4 Session as cursor
 
-This is hard to implement fully (constraint solvers are a deep rabbit hole), but even a "check constraints after every operation and warn" approach is valuable.
+- [ ] `Session` becomes a cursor over a branch. It accrues events and periodically checkpoints to revisions.
+- [ ] Multiple agents (or an agent + a human) can observe the same branch. Write coordination comes later.
+
+**Grounding the north star:** The north star's 3-layer model (events → revisions → sessions) is right, but the motivation here is concrete: agents need memory, agents need branching, agents need comparison. The event store is the implementation, not the product. If a simpler implementation (e.g., just saving source snapshots with metadata to SQLite) delivers the same agent UX, that's fine too.
 
 ---
 
-## Phase 5 — Platform & ecosystem
+## Phase 3 — Agent learning & self-improvement
 
-### 5.1 Decouple from Cloudflare
+**Goal: The system gets smarter by watching agents work.**
 
-The north star is explicit: Cloudflare is an adapter, not the architecture.
+The north star calls agent learning events "gold." Agreed — this is what makes CadLad a platform, not just a tool.
 
-- [ ] Define platform interfaces: `EventStore`, `ProjectionStore`, `ArtifactStore`, `EventBus`, `RevisionService`, `EvaluationService`.
-- [ ] Implement local backend (SQLite + filesystem) for desktop/CLI use.
-- [ ] Implement Cloudflare backend (Durable Objects + R2) for cloud use.
-- [ ] Implement Postgres backend for self-hosted server use.
-- [ ] All three share the same interfaces. Studio doesn't know which backend it's talking to.
+### 3.1 Structured agent telemetry
 
-### 5.2 Git as a projection
+- [ ] `agent.intent_declared` events record what the agent was trying to build and why.
+- [ ] `agent.capability_gap` events record what the agent couldn't do: missing primitives, API limitations, validation gaps.
+- [ ] `agent.workaround_recorded` events record hacks the agent used to work around limitations.
 
-- [ ] A `GitProjection` reducer that emits git commits from revisions.
-- [ ] `cadlad sync` — push current revision history to a git remote.
-- [ ] This preserves git's strengths (diff, review, collaboration) without making it the runtime database.
+### 3.2 Capability gap aggregation
+
+- [ ] A reducer that aggregates capability gaps across all agent sessions.
+- [ ] "Agents hit the shell-on-concave-shape problem 47 times this month" → prioritize explicit inner-void subtraction helper.
+- [ ] "Agents keep trying to create threads/gears and falling back to crude approximations" → prioritize thread primitive.
+
+### 3.3 Auto-generated API improvements
+
+- [ ] When a workaround pattern appears repeatedly, flag it for promotion to a first-class API method.
+- [ ] Example: if agents repeatedly do `box(...).subtract(box(...).translate(...))` to create slots, that suggests a `slot()` primitive.
+- [ ] The system proposes new primitives/helpers based on observed agent behavior.
+
+### 3.4 Model quality corpus
+
+- [ ] Successful models (human-approved, validation-passing) become training examples.
+- [ ] Failed attempts (with the failure reason) become negative examples.
+- [ ] This corpus improves future agent performance — not by fine-tuning, but by providing better few-shot examples and domain rules for the MCP context.
+
+---
+
+## Phase 4 — Constraint system & design rules
+
+**Goal: The system enforces design intent, so agents don't have to carry domain knowledge in their context window.**
+
+### 4.1 Declarative constraints
+
+- [ ] `constraint("wall_thickness", { min: mm(2) })` — checked after every geometry operation.
+- [ ] `constraint("symmetry", { axis: "X" })` — warn on asymmetry.
+- [ ] `constraint("clearance", { between: ["lid", "base"], min: mm(0.5) })` — inter-part spacing.
+- [ ] `constraint("max_overhang", { angle: 45 })` — 3D printing constraint.
+
+### 4.2 Manufacturing profiles
+
+- [ ] `profile("fdm_printing", { layerHeight: 0.2, nozzle: 0.4 })` — activates relevant constraints automatically.
+- [ ] `profile("injection_molding", { material: "ABS" })` — draft angles, wall thickness, gate placement.
+- [ ] `profile("cnc_milling", { tool: 3 })` — minimum radius, max depth, accessibility.
+
+An agent says "I'm designing for FDM printing" and gets automatic wall thickness, overhang, and bridging checks. No domain knowledge required in the prompt.
+
+### 4.3 Constraint-aware suggestions
+
+- [ ] When a constraint is violated, the system doesn't just report it — it suggests a fix.
+- [ ] "Wall thickness is 1.2mm at [x,y,z]. Minimum is 2mm. Suggested: increase shell thickness from 1.5 to 2.5."
+- [ ] These suggestions are returned as structured data, not prose, so agents can act on them programmatically.
+
+---
+
+## Phase 5 — Export, ecosystem & human UX
+
+This phase is last not because it's unimportant, but because agents don't export files — humans do, after approving the agent's work. The human-facing features become the "last mile" of an agent-driven workflow.
+
+### 5.1 Export formats
+
+- [ ] 3MF — color/material metadata, assembly structure. Primary output for 3D printing services.
+- [ ] glTF/GLB — web-native, preserves color. For sharing and embedding.
+- [ ] OBJ — rendering pipelines.
+- [ ] STEP — industry interchange. Hard (mesh → BREP), but important for CNC workflows. Investigate Manifold's STEP support or external post-processing.
+
+### 5.2 Studio as review tool
+
+Reposition the studio from "where you model" to "where you review what the agent built":
+
+- [ ] Revision timeline: scrub through the agent's modeling history, see what changed at each step.
+- [ ] Branch comparison view: side-by-side 3D views of alternative designs.
+- [ ] Validation dashboard: see all diagnostics, constraints, and test results at a glance.
+- [ ] Approval workflow: human reviews agent's work, approves or sends back with feedback.
 
 ### 5.3 Plugin / extension model
 
-- [ ] Custom primitives: register new geometry generators (e.g., gears, threads, bezier surfaces).
-- [ ] Custom validators: domain-specific checks (injection molding rules, 3D printing constraints).
-- [ ] Custom exporters: additional output formats without core changes.
-- [ ] Custom UI panels: extend studio with domain-specific tools.
+- [ ] Custom primitives: gears, threads, bezier surfaces, sheet metal bends.
+- [ ] Custom validators: domain-specific rules packaged as plugins.
+- [ ] Custom exporters: additional output formats.
+- [ ] This enables the community to extend CadLad without core changes.
 
 ### 5.4 Package registry
 
-- [ ] Publish and import reusable model components (`cadlad add @cadlad/fasteners`).
+- [ ] Publish and import reusable components (`cadlad add @cadlad/fasteners`).
+- [ ] Agents can discover and use community components via MCP tools.
 - [ ] Version-pinned dependencies in project config.
-- [ ] This is a long-term play but critical for building an ecosystem.
+
+### 5.5 Platform decoupling
+
+- [ ] Define platform interfaces: `EventStore`, `ArtifactStore`, `EventBus`.
+- [ ] Local backend (SQLite + filesystem) for desktop/CLI.
+- [ ] Cloudflare backend (Durable Objects + R2) for cloud.
+- [ ] Git projection: a reducer that emits git commits from revisions, for teams that want git-based review workflows.
 
 ---
 
 ## What the north star gets right
 
-1. **The big separation** (transport / persistence / source / artifacts / evaluation) is the correct decomposition. The current codebase braids several of these together in the studio's live evaluation path.
+1. **The big separation** (transport / persistence / source / artifacts / evaluation) is the correct decomposition. The current codebase braids these together in the studio's live evaluation path.
 
-2. **Event-sourced, revision-checkpointed, source-materialized** is the right data model for a tool where both humans and agents need to understand, replay, and branch history.
+2. **Event-sourced, revision-checkpointed, source-materialized** is the right data model — and it's even more right when agents are primary users, because agents need addressable history to resume work, compare alternatives, and learn from past attempts.
 
-3. **Git as projection, not substrate** avoids the trap of forcing real-time collaboration through a tool designed for async text snapshots.
+3. **Agent learning events are gold.** Most tools treat agents as consumers. CadLad can treat them as participants whose struggles drive the roadmap. This is a genuine competitive advantage.
 
-4. **Agent learning events** are genuinely novel. Most developer tools treat agents as consumers; CadLad can treat them as participants whose struggles inform the roadmap.
+4. **Evaluation bundles with render as optional/late.** For agents, this isn't a nice-to-have — it's the difference between a 200ms feedback loop (geometry stats) and a 5-second feedback loop (render + screenshot + vision).
 
-5. **Evaluation bundles with render as optional/late** correctly identifies that screenshots are expensive confirmation, not cheap feedback.
+5. **Git as projection, not substrate.** Agents produce events at high frequency. Git can't keep up as a runtime store. But humans reviewing agent work want git-like diffs and history. Projection is the right answer.
 
 ## Where the north star needs grounding
 
-1. **Premature abstraction risk.** The 3-layer event model (events → revisions → sessions) is architecturally sound but heavy for a project with 24 example models and zero real multi-user sessions. Ship the UX benefits (undo, branching, comparison) first; refactor toward the clean architecture as usage patterns emerge.
+1. **Event taxonomy before usage is still risky.** Even with agents as primary users, start with 5 event types and expand. The agent learning events (`intent_declared`, `capability_gap`, `workaround_recorded`) are worth including from day one because they're the unique value — but don't define `scene.feature_added` until the feature-level MCP tools actually emit it.
 
-2. **Event taxonomy before usage.** Defining 20+ event types before you have real event flow is speculative. Start with 3-5 events (`source.replaced`, `scene.param_set`, `revision.created`, `geometry.built`, `validation.completed`) and expand as actual needs arise.
+2. **Semantic merge is still years away.** Agents branch and compare, but merging two agent-generated `.forge.ts` files at the scene-graph level requires rock-solid feature identity that `defineScene()` doesn't yet provide. Source-level merge (text diff) first. It's honest and debuggable.
 
-3. **Semantic merge is years away.** The 3-tier merge hierarchy (event → scene → source) is elegant in theory. In practice, text-level merge on `.forge.ts` files handles 95% of cases. Scene-level merge requires rock-solid feature identity, which `defineScene()` is only beginning to provide. Event-level merge requires a mature, stable event schema. Do source merge first, and well.
+3. **The collaboration model assumes humans collaborate with humans.** The more interesting collaboration is agent-agent and human-agent. An agent proposes a design; a human reviews and redirects; the agent iterates. That's not traditional multi-user collaboration — it's a review/approval loop. Design for that interaction pattern first.
 
-4. **Cloudflare decoupling is urgent but the replacement isn't.** The Worker currently bundles routing, identity, state, and fanout. Defining interfaces is the right first step — but don't build three backend implementations in parallel. Build the local SQLite backend (it's the one that enables offline desktop use) and keep Cloudflare as the cloud option. Postgres can wait until there's a self-hosting demand signal.
+4. **No mention of performance or cost.** Agents will evaluate models hundreds of times per session. Manifold WASM evaluation needs to be fast, which it is for simple models — but complex assemblies with many booleans will slow down. Geometry caching (by source hash), incremental evaluation (only rebuild changed features), and evaluation budgets (agent can't burn infinite compute) are practical concerns.
 
-5. **The geometry feedback gap is the real bottleneck.** The north star talks about reducing screenshot dependence, but the actual missing piece is structured geometry analysis: is this model printable? Are clearances sufficient? Is the wall thickness uniform? These domain-specific checks are what let agents iterate fast. They matter more than event architecture.
-
-6. **No mention of performance.** As models grow in complexity (more features, more booleans, larger meshes), evaluation time will become a bottleneck. Incremental evaluation (only rebuild what changed), geometry caching (by source hash), and worker-thread parallelism for multi-part assemblies are practical concerns the north star doesn't address.
+5. **The Cloudflare decoupling matters more with agents.** If agents are the primary users, they're hitting the backend constantly. The local SQLite backend isn't just "nice for offline" — it's "necessary for fast, cheap agent iteration." An agent shouldn't need a network round-trip to evaluate a model.
 
 ---
 
 ## Sequencing principles
 
-1. **Make the current loop faster before adding layers.** Geometry feedback, export formats, CLI ergonomics — these benefit every user and every agent today.
+1. **Feedback speed is everything.** An agent that gets structured geometry stats in 200ms will outperform one that waits 5 seconds for a screenshot. Phase 0 is the highest-leverage investment.
 
-2. **Ship UX, not architecture.** Users want undo, branching, and comparison. They don't care that it's backed by an event store. Build the features; let the architecture emerge to support them.
+2. **Semantic operations over raw code.** Every MCP tool that lets an agent express intent instead of writing implementation reduces error rate and speeds iteration. Phase 1 is the agent's primary interface improvement.
 
-3. **Agents are the forcing function.** Every improvement to structured feedback (geometry validators, evaluation bundles, semantic MCP tools) disproportionately benefits agent-driven workflows, which is CadLad's differentiator.
+3. **Memory enables learning.** An agent with revision history and branching explores design space more effectively than one that starts fresh each session. Phase 2 is the agent's long-term memory.
 
-4. **Local-first, cloud-optional.** The desktop/CLI experience should be fully capable without a network connection. Cloud features (collaboration, shared sessions) layer on top.
+4. **The system should encode domain knowledge, not the agent's prompt.** Manufacturing constraints, printability rules, and structural checks belong in the platform. The agent's context window should be spent on the user's design intent, not on "remember to oversize boolean cutters by 2mm." Phase 4 moves knowledge from CLAUDE.md into the runtime.
 
-5. **Don't break the 24 projects.** Every architectural change must keep the existing `defineScene()` models working. They are the test suite, the gallery, and the proof that the system works.
+5. **Human UX is the review layer, not the modeling layer.** The studio's job shifts from "where you model" to "where you approve." Design the human experience around reviewing, comparing, and redirecting agent work — not around manual modeling.
+
+6. **Don't break the 24 projects.** They're the test suite, the gallery, the proof, and (increasingly) the training corpus for agents. Every change must keep them working.
