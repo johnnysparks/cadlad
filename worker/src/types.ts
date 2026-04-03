@@ -149,6 +149,10 @@ export interface Env {
    * When unset, the worker reflects the incoming request Origin.
    */
   STUDIO_ORIGIN?: string;
+  /** Optional HMAC signing secret for OAuth JWT-style tokens. */
+  OAUTH_SIGNING_SECRET?: string;
+  /** Optional default user subject used in local/dev OAuth flows. */
+  DEFAULT_USER_SUB?: string;
 }
 
 // ── OAuth types ───────────────────────────────────────────────────────────────
