@@ -50,8 +50,13 @@ function toPatchEvent(serverPatch: SessionPatchPayload): PatchEvent {
  * Build a connect prompt for Claude Desktop / Claude Code (stdio MCP).
  * These clients configure the session via CADLAD_SESSION_URL env var, not OAuth.
  */
-function buildClaudePrompt(sessionId: string, token: string): string {
-  return `CadLad session ready. CADLAD_SESSION_URL="?session=${sessionId}&token=${token}". Call get_session_state to start.`;
+function buildClaudePrompt(sessionUrl: string): string {
+  return `CadLad session ready. CADLAD_SESSION_URL="${sessionUrl}". Call get_session_state to start.`;
+}
+
+function getWriteTokenFromLiveUrl(liveUrl: string): string | null {
+  const parsed = new URL(liveUrl, window.location.origin);
+  return parsed.searchParams.get("token");
 }
 
 /**
@@ -98,10 +103,10 @@ async function boot() {
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") toggleMenu(false); });
 
   copyClaudePromptBtn.addEventListener("click", async () => {
-    if (!liveSessionId || !liveToken) return;
+    if (!liveSessionUrl) return;
     // For Claude Desktop / Claude Code (stdio MCP), copy the session URL with credentials.
     // For ChatGPT, use the "Connect ChatGPT" button instead.
-    const prompt = buildClaudePrompt(liveSessionId, liveToken);
+    const prompt = buildClaudePrompt(liveSessionUrl);
     try {
       await navigator.clipboard.writeText(prompt);
       const prev = copyClaudePromptBtn.textContent;
@@ -189,7 +194,9 @@ async function boot() {
 
   const liveClient = new LiveSessionClient();
   let liveSessionId: string | null = null;
-    let liveRevision = 0;
+  let liveSessionUrl: string | null = null;
+  let liveToken: string | null = null;
+  let liveRevision = 0;
   let liveSource: EventSource | null = null;
   let remoteRunTimer: number | null = null;
 
@@ -212,6 +219,10 @@ async function boot() {
   // Load code from URL if provided (?code=base64)
   const urlParams = new URLSearchParams(window.location.search);
   const codeParam = urlParams.get("code");
+  const sessionTokenFromUrl = urlParams.get("token");
+  if (sessionTokenFromUrl) {
+    liveToken = sessionTokenFromUrl;
+  }
   if (codeParam) {
     try {
       editor.setValue(decodeURIComponent(escape(atob(codeParam))));
@@ -534,6 +545,8 @@ async function boot() {
         source: editor.getValue(),
         params: paramPanel.getValueObject(),
       });
+      liveSessionUrl = created.liveUrl;
+      liveToken = getWriteTokenFromLiveUrl(created.liveUrl);
 
       setLiveUi("connected", "session ready");
 
@@ -645,6 +658,9 @@ async function boot() {
 
   const sessionFromUrl = urlParams.get("session");
   if (sessionFromUrl) {
+    if (sessionTokenFromUrl) {
+      liveSessionUrl = `?session=${sessionFromUrl}&token=${sessionTokenFromUrl}`;
+    }
     try {
       await attachLiveSession(sessionFromUrl);
     } catch (err: unknown) {

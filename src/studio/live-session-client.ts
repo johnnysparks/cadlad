@@ -208,6 +208,7 @@ export function resolveLiveSessionApiBase({ optionBase, envBase, location }: Res
 
 export class LiveSessionClient {
   readonly apiBase: string;
+  private static readonly ACCESS_TOKEN_STORAGE_KEY = "cadlad_access_token";
 
   constructor(options: LiveSessionClientOptions = {}) {
     const envBase = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_LIVE_SESSION_API_BASE;
@@ -222,11 +223,34 @@ export class LiveSessionClient {
   private getAccessToken(): string | null {
     const url = new URL(window.location.href);
     const fromQuery = url.searchParams.get("access_token");
-    if (fromQuery) {
-      window.localStorage.setItem("cadlad_access_token", fromQuery);
-      return fromQuery;
+    const fromHash = new URLSearchParams(url.hash.replace(/^#/, "")).get("access_token");
+    const transientToken = (fromQuery ?? fromHash)?.trim();
+
+    if (transientToken) {
+      window.localStorage.setItem(LiveSessionClient.ACCESS_TOKEN_STORAGE_KEY, transientToken);
+      this.scrubAccessTokenFromUrl(url);
+      return transientToken;
     }
-    return window.localStorage.getItem("cadlad_access_token");
+    return window.localStorage.getItem(LiveSessionClient.ACCESS_TOKEN_STORAGE_KEY);
+  }
+
+  private scrubAccessTokenFromUrl(url: URL): void {
+    const hadQueryToken = url.searchParams.has("access_token");
+    if (hadQueryToken) {
+      url.searchParams.delete("access_token");
+    }
+
+    const hashParams = new URLSearchParams(url.hash.replace(/^#/, ""));
+    const hadHashToken = hashParams.has("access_token");
+    if (hadHashToken) {
+      hashParams.delete("access_token");
+      const nextHash = hashParams.toString();
+      url.hash = nextHash ? `#${nextHash}` : "";
+    }
+
+    if ((hadQueryToken || hadHashToken) && typeof window.history?.replaceState === "function") {
+      window.history.replaceState(window.history.state, "", url.toString());
+    }
   }
 
   private authHeaders(): Record<string, string> {
@@ -309,7 +333,7 @@ export class LiveSessionClient {
     return res.json() as Promise<{ linkCode: string; expiresIn: number }>;
   }
 
-  subscribe(sessionId: string, onEvent: (event: PatchEventPayload) => void, onError: (err: Event) => void): EventSource {
+  subscribe(sessionId: string, onEvent: (event: LiveSessionEvent) => void, onError: (err: Event) => void): EventSource {
     // SSE is read-only — no token needed. The write token is never sent in URLs.
     const url = `${this.apiBase}/api/live/session/${encodeURIComponent(sessionId)}/events`;
     const source = new EventSource(url);
