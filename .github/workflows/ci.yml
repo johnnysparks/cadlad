@@ -12,11 +12,64 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  lint:
+  checks:
+    name: ${{ matrix.scope }} / ${{ matrix.check }}
     runs-on: ubuntu-latest
     concurrency:
-      group: ci-lint-${{ github.ref }}
+      group: ci-${{ matrix.scope }}-${{ matrix.check }}-${{ github.ref }}
       cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scope: pages
+            check: lint
+            install_root: true
+            install_scope: false
+            command: npm run lint
+          - scope: pages
+            check: typecheck
+            install_root: true
+            install_scope: false
+            command: npm run typecheck
+          - scope: pages
+            check: test
+            install_root: true
+            install_scope: false
+            command: npm run test
+
+          - scope: worker
+            check: lint
+            install_root: true
+            install_scope: false
+            command: npm --prefix worker run lint
+          - scope: worker
+            check: typecheck
+            install_root: false
+            install_scope: true
+            command: npm --prefix worker run typecheck
+          - scope: worker
+            check: test
+            install_root: false
+            install_scope: true
+            command: npm --prefix worker run test
+
+          - scope: mcp
+            check: lint
+            install_root: true
+            install_scope: false
+            command: npm --prefix mcp run lint
+          - scope: mcp
+            check: typecheck
+            install_root: false
+            install_scope: true
+            command: npm --prefix mcp run typecheck
+          - scope: mcp
+            check: test
+            install_root: false
+            install_scope: true
+            command: npm --prefix mcp run test
+
     steps:
       - uses: actions/checkout@v5
 
@@ -24,38 +77,17 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            worker/package-lock.json
+            mcp/package-lock.json
 
-      - run: npm ci
-      - run: npm run lint
+      - name: Install root dependencies
+        if: matrix.install_root
+        run: npm ci
 
-  typecheck:
-    runs-on: ubuntu-latest
-    concurrency:
-      group: ci-typecheck-${{ github.ref }}
-      cancel-in-progress: true
-    steps:
-      - uses: actions/checkout@v5
+      - name: Install scoped dependencies
+        if: matrix.install_scope
+        run: npm --prefix ${{ matrix.scope }} ci
 
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-
-      - run: npm ci
-      - run: npm run typecheck
-
-  test:
-    runs-on: ubuntu-latest
-    concurrency:
-      group: ci-test-${{ github.ref }}
-      cancel-in-progress: true
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-
-      - run: npm ci
-      - run: npm run test
+      - run: ${{ matrix.command }}

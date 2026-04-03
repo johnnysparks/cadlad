@@ -130,7 +130,7 @@ async function handleAuthorizeGet(request: Request, env: Env): Promise<Response>
 }
 
 async function handleAuthorizePost(request: Request, env: Env): Promise<Response> {
-  let body: Record<string, string> = {};
+  const body: Record<string, string> = {};
   try {
     const text = await request.text();
     for (const [k, v] of new URLSearchParams(text)) body[k] = v;

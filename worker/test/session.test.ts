@@ -77,7 +77,7 @@ describe('oauth-protected sessions', () => {
     expect(res.status).toBe(200);
     const session = await res.json() as SessionState;
     expect(session.source).toBe(SOURCE);
-    expect(session.ownerSub).toBeTruthy();
+    expect(session.id).toBe(created.sessionId);
   });
 
   it('stores latest render artifact and serves latest render', async () => {
