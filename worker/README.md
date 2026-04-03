@@ -22,11 +22,10 @@ Integration tests cover session creation, patch/revert, SSE, and run-result tele
 
 ## Deploy
 
-CI handles production and preview deploys automatically (see `.github/workflows/`). To deploy manually:
+CI handles production deploys automatically (see `.github/workflows/`). To deploy manually:
 
 ```bash
 npm run worker:deploy          # production
-cd worker && npx wrangler deploy --env preview  # preview
 npm run worker:deploy:dry      # dry run (typecheck + bundle, no publish)
 ```
 
@@ -79,8 +78,6 @@ The worker is both the **MCP Resource Server** (`/mcp`) and the **OAuth 2.1 Auth
 cd worker
 # Create production namespace
 npx wrangler kv:namespace create "KV"
-# Create preview namespace
-npx wrangler kv:namespace create "KV" --preview
 # Update wrangler.toml with the returned IDs
 ```
 
