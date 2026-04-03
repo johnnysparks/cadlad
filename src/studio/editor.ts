@@ -169,6 +169,10 @@ declare function cylinder(height: number, radiusBottom: number, radiusTop?: numb
 declare function sphere(radius: number, segments?: number): Solid;
 declare function roundedRect(width: number, depth: number, radius: number, height?: number): Solid;
 declare function assembly(name: string): Assembly;
+type CameraView = "front" | "back" | "top" | "bottom" | "left" | "right" | "iso";
+type CrossSectionAxis = "x" | "y" | "z";
+type Vec3 = [number, number, number];
+type Body = { mesh: { positions: Float32Array; indices: Uint32Array } };
 
 declare function rect(width: number, height: number): Sketch;
 declare function circle(radius: number, segments?: number): Sketch;
@@ -207,7 +211,7 @@ declare class Sketch {
 declare class Assembly {
   add(name: string, solid: Solid, position?: [number, number, number]): Assembly;
   toSolid(): Solid;
-  toBodies(): any[];
+  toBodies(): Body[];
 }
 `;
 

@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { createLighting, createGrid, buildBodyGroup } from "../rendering/scene-builder.js";
 import type { Body } from "../engine/types.js";
+import type { CameraView, CrossSectionAxis } from "./automation-types.js";
 
 export class Viewport {
   private renderer: THREE.WebGLRenderer;
@@ -105,7 +106,7 @@ export class Viewport {
   }
 
   /** Set camera to a named view (for screenshots and automation). */
-  setView(view: "front" | "back" | "top" | "bottom" | "left" | "right" | "iso"): void {
+  setView(view: CameraView): void {
     const bbox = new THREE.Box3().setFromObject(this.meshGroup);
     if (bbox.isEmpty()) return;
 
@@ -114,7 +115,7 @@ export class Viewport {
     const dist = Math.max(size.x, size.y, size.z) * 2.2;
 
     // Y-up (post coordinate transform). Front = +Z, Up = +Y.
-    const views: Record<string, [number, number, number]> = {
+    const views: Record<CameraView, [number, number, number]> = {
       front:  [0, 0, dist],
       back:   [0, 0, -dist],
       top:    [0, dist, 0.001],
@@ -124,7 +125,7 @@ export class Viewport {
       iso:    [dist * 0.6, dist * 0.45, dist * 0.6],
     };
 
-    const [dx, dy, dz] = views[view] ?? views.iso;
+    const [dx, dy, dz] = views[view];
     this.camera.position.set(center.x + dx, center.y + dy, center.z + dz);
     this.controls.target.copy(center);
     this.controls.update();
@@ -145,7 +146,7 @@ export class Viewport {
    * Capture a thumbnail at a specific named view.
    * Repositions the camera, renders once, then returns to the current view.
    */
-  captureView(view: "front" | "back" | "top" | "bottom" | "left" | "right" | "iso"): string {
+  captureView(view: CameraView): string {
     const prevPos = this.camera.position.clone();
     const prevTarget = this.controls.target.clone();
     this.setView(view);
@@ -184,8 +185,8 @@ export class Viewport {
    * @param axis   'x' | 'y' | 'z' — axis whose positive half is shown
    * @param offset Distance along the axis where the cut is made (model units)
    */
-  setCrossSection(axis: "x" | "y" | "z", offset: number): void {
-    const normals: Record<string, THREE.Vector3> = {
+  setCrossSection(axis: CrossSectionAxis, offset: number): void {
+    const normals: Record<CrossSectionAxis, THREE.Vector3> = {
       x: new THREE.Vector3(-1, 0, 0),
       y: new THREE.Vector3(0, -1, 0),
       z: new THREE.Vector3(0, 0, -1),
