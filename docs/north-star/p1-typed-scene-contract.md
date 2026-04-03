@@ -31,3 +31,9 @@ Define a strict, typed semantic scene model derived from `forge.ts` so every dow
 ## Done signal
 
 At least one model path can be parsed into a typed semantic scene where diagnostics refer to stable IDs instead of free-form runtime text.
+
+## Progress update (2026-04-03)
+
+- ✅ Added internal `defineScene()` envelope in runtime API.
+- ✅ Added normalization pass that validates feature IDs, normalizes semantic feature records, and emits source ranges.
+- ✅ Normalization diagnostics are now surfaced before geometry build when `defineScene()` is used.

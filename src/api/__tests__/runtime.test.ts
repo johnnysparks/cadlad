@@ -112,4 +112,47 @@ describe("evaluateModel", () => {
     expect(result.errors).toHaveLength(0);
     expect(result.bodies).toHaveLength(1);
   });
+
+  it("accepts defineScene envelopes and evaluates scene.model", async () => {
+    const code = `
+      return defineScene({
+        model: box(10, 10, 10),
+        features: [{ id: "base", kind: "primitive", label: "Base box" }],
+      });
+    `;
+    const result = await evaluateModel(code);
+    expect(result.errors).toHaveLength(0);
+    expect(result.bodies).toHaveLength(1);
+  });
+
+  it("reports missing scene feature ids before geometry build", async () => {
+    const code = `
+      return defineScene({
+        model: box(10, 10, 10),
+        features: [{ kind: "primitive", label: "Base box" }],
+      });
+    `;
+    const result = await evaluateModel(code);
+    expect(result.bodies).toHaveLength(0);
+    expect(result.errors).toContain(
+      '[scene.feature-id.missing] Feature kind "primitive" is missing a stable string id.',
+    );
+  });
+
+  it("reports duplicate scene feature ids with source range", async () => {
+    const code = `
+      return defineScene({
+        model: box(10, 10, 10),
+        features: [
+          { id: "base", kind: "primitive", label: "Base box A" },
+          { id: "base", kind: "primitive", label: "Base box B" },
+        ],
+      });
+    `;
+    const result = await evaluateModel(code);
+    expect(result.bodies).toHaveLength(0);
+    expect(result.errors[0]).toContain("[scene.feature-id.duplicate]");
+    expect(result.errors[0]).toContain("[feature:base]");
+    expect(result.errors[0]).toContain("[L");
+  });
 });
