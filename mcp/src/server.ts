@@ -273,6 +273,52 @@ const TOOLS = [
     },
   },
   {
+    name: "check_printability",
+    description:
+      "Analyze the latest model for FDM printability risks (thin walls, overhangs, disconnected regions, and bed adhesion footprint) using available geometry stats.",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        minWallThickness: { type: "number", description: "Minimum acceptable wall/feature thickness in model units (default 1.2)." },
+        maxOverhangRatio: { type: "number", description: "Max horizontal/vertical ratio before flagging overhang risk (default 1.0)." },
+        minBedAdhesionRatio: { type: "number", description: "Minimum contact area ratio vs XY footprint (default 0.15)." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "check_moldability",
+    description:
+      "Analyze the latest model for injection molding risks (draft, undercuts/part complexity proxy, and wall-thickness uniformity proxy).",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        minDraftDeg: { type: "number", description: "Target minimum draft angle (default 2°)." },
+        maxThicknessVarianceRatio: { type: "number", description: "Allowed wall-thickness proxy variance ratio (default 0.35)." },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "suggest_improvements",
+    description:
+      "Return actionable modeling suggestions based on latest stats/validation, including severity and whether each item is auto-fixable by parameter edits.",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        includeChecks: {
+          type: "array",
+          items: { type: "string", enum: ["printability", "moldability"] },
+          description: "Optional subset of suggestion analyzers to include (default: both).",
+        },
+      },
+      required: [],
+    },
+  },
+  {
     name: "get_part_stats",
     description:
       "Get named-part stats from the last run. Optionally pass partName for a single part.",
@@ -660,6 +706,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case "check_printability": {
+        const data = await client.getRunResult();
+        if (!data.runResult?.stats) {
+          return errorContent("No geometry stats available yet. Open CadLad Studio and run the model first.");
+        }
+        const report = analyzePrintability(data.runResult.stats, args as Record<string, unknown>);
+        return { content: [{ type: "text" as const, text: JSON.stringify(report, null, 2) }] };
+      }
+
+      case "check_moldability": {
+        const data = await client.getRunResult();
+        if (!data.runResult?.stats) {
+          return errorContent("No geometry stats available yet. Open CadLad Studio and run the model first.");
+        }
+        const report = analyzeMoldability(data.runResult.stats, args as Record<string, unknown>);
+        return { content: [{ type: "text" as const, text: JSON.stringify(report, null, 2) }] };
+      }
+
+      case "suggest_improvements": {
+        const data = await client.getRunResult();
+        if (!data.runResult?.stats) {
+          return errorContent("No geometry stats available yet. Open CadLad Studio and run the model first.");
+        }
+        const report = buildImprovementSuggestions(
+          data.runResult.stats,
+          data.runResult.diagnostics ?? [],
+          args as Record<string, unknown>,
+        );
+        return { content: [{ type: "text" as const, text: JSON.stringify(report, null, 2) }] };
+      }
+
       case "get_part_stats": {
         const data = await client.getRunResult();
         const stats = data.runResult?.stats;
@@ -875,6 +952,213 @@ function formatPartStats(part: NonNullable<import("./session-client.js").ModelSt
     `Volume: ${part.volume.toFixed(2)} units³`,
     `Surface area: ${part.surfaceArea.toFixed(2)} units²`,
   ].join("\n");
+}
+
+interface AnalysisIssue {
+  id: string;
+  severity: "info" | "warning" | "error";
+  message: string;
+  evidence?: Record<string, unknown>;
+}
+
+function analyzePrintability(
+  stats: NonNullable<import("./session-client.js").RunResult["stats"]>,
+  rawArgs: Record<string, unknown>,
+) {
+  const minWallThickness = asNumber(rawArgs.minWallThickness, 1.2);
+  const maxOverhangRatio = asNumber(rawArgs.maxOverhangRatio, 1.0);
+  const minBedAdhesionRatio = asNumber(rawArgs.minBedAdhesionRatio, 0.15);
+  const issues: AnalysisIssue[] = [];
+  const bb = stats.boundingBox;
+  const extX = bb.max[0] - bb.min[0];
+  const extY = bb.max[1] - bb.min[1];
+  const extZ = bb.max[2] - bb.min[2];
+  const minDim = Math.min(extX, extY, extZ);
+  if (minDim < minWallThickness) {
+    issues.push({
+      id: "thin-feature",
+      severity: "warning",
+      message: `Smallest overall model dimension (${minDim.toFixed(2)}) is below minWallThickness (${minWallThickness.toFixed(2)}).`,
+      evidence: { minDim, minWallThickness },
+    });
+  }
+  const overhangRatio = extZ > 0 ? Math.max(extX, extY) / extZ : Number.POSITIVE_INFINITY;
+  if (overhangRatio > maxOverhangRatio) {
+    issues.push({
+      id: "overhang-risk",
+      severity: "warning",
+      message: `Horizontal span to height ratio (${overhangRatio.toFixed(2)}) exceeds threshold (${maxOverhangRatio.toFixed(2)}); supports may be required.`,
+      evidence: { overhangRatio, maxOverhangRatio },
+    });
+  }
+  const bedContactArea = extX * extY;
+  const totalArea = stats.surfaceArea ?? 0;
+  const adhesionRatio = totalArea > 0 ? bedContactArea / totalArea : 0;
+  if (adhesionRatio < minBedAdhesionRatio) {
+    issues.push({
+      id: "bed-adhesion-risk",
+      severity: "warning",
+      message: `Estimated bed-adhesion ratio (${adhesionRatio.toFixed(3)}) is below threshold (${minBedAdhesionRatio.toFixed(3)}).`,
+      evidence: { adhesionRatio, minBedAdhesionRatio, bedContactArea, totalArea },
+    });
+  }
+  if ((stats.componentCount ?? 1) > 1 || stats.checks?.disconnectedComponents) {
+    issues.push({
+      id: "disconnected-components",
+      severity: "error",
+      message: "Model has disconnected components; print may fail or produce loose bodies without explicit assembly intent.",
+      evidence: { componentCount: stats.componentCount ?? null },
+    });
+  }
+  return {
+    kind: "printability",
+    pass: issues.every((issue) => issue.severity !== "error"),
+    thresholds: { minWallThickness, maxOverhangRatio, minBedAdhesionRatio },
+    metrics: { extents: { x: extX, y: extY, z: extZ }, overhangRatio, adhesionRatio },
+    issues,
+  };
+}
+
+function analyzeMoldability(
+  stats: NonNullable<import("./session-client.js").RunResult["stats"]>,
+  rawArgs: Record<string, unknown>,
+) {
+  const minDraftDeg = asNumber(rawArgs.minDraftDeg, 2);
+  const maxThicknessVarianceRatio = asNumber(rawArgs.maxThicknessVarianceRatio, 0.35);
+  const issues: AnalysisIssue[] = [];
+  const bb = stats.boundingBox;
+  const extX = bb.max[0] - bb.min[0];
+  const extY = bb.max[1] - bb.min[1];
+  const extZ = bb.max[2] - bb.min[2];
+  const sideArea = 2 * ((extX * extZ) + (extY * extZ));
+  const totalArea = stats.surfaceArea ?? 0;
+  const sideAreaRatio = totalArea > 0 ? sideArea / totalArea : 0;
+  const inferredDraftDeg = Math.max(0, (1 - Math.min(1, sideAreaRatio)) * 6);
+  if (inferredDraftDeg < minDraftDeg) {
+    issues.push({
+      id: "low-draft-risk",
+      severity: "warning",
+      message: `Inferred draft proxy (${inferredDraftDeg.toFixed(2)}°) is below minimum target (${minDraftDeg.toFixed(2)}°).`,
+      evidence: { inferredDraftDeg, minDraftDeg, sideAreaRatio },
+    });
+  }
+  const thicknessProxy = stats.volume && totalArea ? (2 * stats.volume) / totalArea : 0;
+  const dims = [extX, extY, extZ].filter((n) => Number.isFinite(n) && n > 0);
+  const thicknessSpread = dims.length > 0 ? (Math.max(...dims) - Math.min(...dims)) / Math.max(...dims) : 0;
+  if (thicknessSpread > maxThicknessVarianceRatio) {
+    issues.push({
+      id: "wall-uniformity-risk",
+      severity: "warning",
+      message: `Wall-thickness variance proxy (${thicknessSpread.toFixed(3)}) exceeds threshold (${maxThicknessVarianceRatio.toFixed(3)}).`,
+      evidence: { thicknessSpread, maxThicknessVarianceRatio, thicknessProxy },
+    });
+  }
+  if ((stats.componentCount ?? 1) > 1) {
+    issues.push({
+      id: "multi-component-risk",
+      severity: "warning",
+      message: "Model has multiple disconnected components; mold split strategy may be required.",
+      evidence: { componentCount: stats.componentCount ?? null },
+    });
+  }
+  if (stats.triangles > 150_000) {
+    issues.push({
+      id: "complexity-risk",
+      severity: "info",
+      message: "High triangle count suggests geometric complexity that may introduce tooling and polishing challenges.",
+      evidence: { triangles: stats.triangles },
+    });
+  }
+  return {
+    kind: "moldability",
+    pass: issues.every((issue) => issue.severity !== "error"),
+    thresholds: { minDraftDeg, maxThicknessVarianceRatio },
+    metrics: { inferredDraftDeg, thicknessProxy, thicknessSpread },
+    issues,
+  };
+}
+
+function buildImprovementSuggestions(
+  stats: NonNullable<import("./session-client.js").RunResult["stats"]>,
+  diagnostics: Array<{ severity?: string; message?: string }>,
+  rawArgs: Record<string, unknown>,
+) {
+  const includeChecks = Array.isArray(rawArgs.includeChecks)
+    ? rawArgs.includeChecks.filter((value): value is "printability" | "moldability" => value === "printability" || value === "moldability")
+    : ["printability", "moldability"];
+
+  const suggestions: Array<{
+    id: string;
+    source: "printability" | "moldability" | "validation";
+    severity: "info" | "warning" | "error";
+    message: string;
+    autoFixable: boolean;
+  }> = [];
+
+  if (includeChecks.includes("printability")) {
+    for (const issue of analyzePrintability(stats, rawArgs).issues) {
+      suggestions.push({
+        id: `printability:${issue.id}`,
+        source: "printability",
+        severity: issue.severity,
+        message: issue.message,
+        autoFixable: issue.id === "thin-feature" || issue.id === "bed-adhesion-risk",
+      });
+    }
+  }
+  if (includeChecks.includes("moldability")) {
+    for (const issue of analyzeMoldability(stats, rawArgs).issues) {
+      suggestions.push({
+        id: `moldability:${issue.id}`,
+        source: "moldability",
+        severity: issue.severity,
+        message: issue.message,
+        autoFixable: issue.id === "low-draft-risk" || issue.id === "wall-uniformity-risk",
+      });
+    }
+  }
+  for (const diag of diagnostics) {
+    if (diag.severity === "error" || diag.severity === "warning") {
+      suggestions.push({
+        id: `validation:${slugify(diag.message ?? "diagnostic")}`,
+        source: "validation",
+        severity: diag.severity,
+        message: diag.message ?? "Validation diagnostic",
+        autoFixable: false,
+      });
+    }
+  }
+
+  const deduped = dedupeSuggestions(suggestions);
+  return {
+    kind: "suggest_improvements",
+    total: deduped.length,
+    bySeverity: {
+      error: deduped.filter((item) => item.severity === "error").length,
+      warning: deduped.filter((item) => item.severity === "warning").length,
+      info: deduped.filter((item) => item.severity === "info").length,
+    },
+    suggestions: deduped,
+  };
+}
+
+function dedupeSuggestions<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of items) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+  }
+  return out;
+}
+
+function slugify(input: string): string {
+  return input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "item";
+}
+
+function asNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function errorContent(message: string) {
