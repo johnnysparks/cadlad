@@ -61,13 +61,15 @@ describe("feature registry + AST feature operations", () => {
     expect(next).toMatchInlineSnapshot(`
       "
       const scene = defineScene({
-        features: [feature(\"roof.gable\", {
+        features: [
+          feature("roof.gable", {
               depth: 20,
-              id: \"roof-main\",
+              id: "roof-main",
               overhang: 2,
               pitchDeg: 42,
               width: 30
-          })]
+          })
+      ],
       });
       "
     `);
