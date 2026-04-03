@@ -11,7 +11,7 @@ import { Assembly } from "./assembly.js";
 import { _setParamValues, _resetParams, _getParamDefs } from "./params.js";
 import { collectHints } from "./hints.js";
 import type { ModelResult, Body, ParamDef, Hint } from "../engine/types.js";
-import { normalizeScene, defineScene } from "./scene-contract.js";
+import { normalizeScene, defineScene, mm } from "./scene-contract.js";
 
 // All API symbols that get injected into model scope
 import { param } from "./params.js";
@@ -37,6 +37,7 @@ export async function evaluateModel(
   }
 
   const runtimeErrors: string[] = [];
+  const errors: string[] = [];
   const bodies: Body[] = [];
   const collectedParams: ParamDef[] = [];
   let hints: Hint[] = [];
@@ -61,14 +62,14 @@ export async function evaluateModel(
       "box", "cylinder", "sphere", "roundedRect", "roundedBox", "taperedBox",
       "sweep", "loft",
       "assembly", "Solid", "Assembly",
-      "defineScene",
+      "defineScene", "mm",
     ];
     const apiValues = [
       param, Sketch, rect, circle,
       box, cylinder, sphere, roundedRect, roundedBox, taperedBox,
       sweep, loft,
       assembly, Solid, Assembly,
-      defineScene,
+      defineScene, mm,
     ];
 
     // Wrap user code so it can use top-level return
@@ -83,9 +84,18 @@ export async function evaluateModel(
     // Process return value
     // Supports: Solid, Assembly, Array, or { model, camera } metadata object
     let model = result;
-    const normalized = normalizeScene(code, result);
+    const normalized = normalizeScene(code, result, paramValues);
     if (normalized.scene) {
       model = normalized.scene.model;
+      for (const [name, value] of Object.entries(normalized.scene.params)) {
+        if (typeof value !== "number") continue;
+        const existing = collectedParams.find((paramDef) => paramDef.name === name);
+        if (existing) continue;
+        collectedParams.push({
+          name,
+          value,
+        });
+      }
     }
     if (normalized.diagnostics.length > 0) {
       errors.push(...normalized.diagnostics.map((diag) => {
@@ -149,7 +159,7 @@ export async function evaluateModel(
   return withLayeredValidation({
     bodies,
     params: collectedParams,
-    runtimeErrors,
+    runtimeErrors: [...errors, ...runtimeErrors],
     hints,
     camera,
   });

@@ -6,7 +6,12 @@ export type SceneSourceRange = {
 };
 
 export type SceneDiagnostic = {
-  code: "scene.invalid-envelope" | "scene.feature-id.missing" | "scene.feature-id.duplicate";
+  code:
+    | "scene.invalid-envelope"
+    | "scene.feature-id.missing"
+    | "scene.feature-id.duplicate"
+    | "scene.validator.failed"
+    | "scene.test.failed";
   message: string;
   featureId?: string;
   range?: SceneSourceRange;
@@ -18,12 +23,59 @@ export type SceneFeatureDeclaration = {
   label?: string;
 };
 
-export type SceneEnvelope<TModel = unknown> = {
-  model: TModel;
-  params?: readonly string[];
+export type UnitBrand<TUnit extends string> = number & { readonly __unit: TUnit };
+export type Millimeters = UnitBrand<"mm">;
+
+export function mm(value: number): Millimeters {
+  return value as Millimeters;
+}
+
+export type SceneParamDefinition<TValue extends number | string | boolean = number | string | boolean> = {
+  value: TValue;
+  label?: string;
+  description?: string;
+  min?: TValue extends number ? number : never;
+  max?: TValue extends number ? number : never;
+  step?: TValue extends number ? number : never;
+  unit?: string;
+};
+
+export type SceneParamsShape = Record<string, SceneParamDefinition>;
+
+export type InferSceneParams<TParams extends SceneParamsShape | undefined> =
+  TParams extends SceneParamsShape
+    ? { [K in keyof TParams]: TParams[K]["value"] }
+    : Record<string, never>;
+
+export type SceneMeta = {
+  id?: string;
+  name: string;
+  version?: string;
+  description?: string;
+  tags?: readonly string[];
+};
+
+export type SceneValidatorContext<TParams extends SceneParamsShape | undefined = SceneParamsShape | undefined> = {
+  params: InferSceneParams<TParams>;
+};
+
+export type SceneValidator<TParams extends SceneParamsShape | undefined = SceneParamsShape | undefined> = (
+  context: SceneValidatorContext<TParams>,
+) => string | void;
+
+export type SceneTest<TParams extends SceneParamsShape | undefined = SceneParamsShape | undefined> = {
+  id: string;
+  description?: string;
+  run: (context: SceneValidatorContext<TParams>) => string | void;
+};
+
+export type SceneEnvelope<TModel = unknown, TParams extends SceneParamsShape | undefined = SceneParamsShape | undefined> = {
+  meta?: SceneMeta;
+  model: TModel | ((context: SceneValidatorContext<TParams>) => TModel);
+  params?: TParams;
   features: readonly SceneFeatureDeclaration[];
-  validators?: readonly string[];
-  tests?: readonly string[];
+  validators?: readonly SceneValidator<TParams>[];
+  tests?: readonly SceneTest<TParams>[];
 };
 
 export type NormalizedSceneFeature = {
@@ -34,8 +86,11 @@ export type NormalizedSceneFeature = {
 };
 
 export type NormalizedScene<TModel = unknown> = {
+  meta?: SceneMeta;
   model: TModel;
+  params: Record<string, number | string | boolean>;
   features: NormalizedSceneFeature[];
+  diagnostics: SceneDiagnostic[];
 };
 
 const SCENE_MARKER = Symbol.for("cadlad.scene-envelope");
@@ -97,15 +152,91 @@ function tryFindFeatureRange(code: string, featureId: string): SceneSourceRange 
   };
 }
 
-export function defineScene<TModel>(scene: SceneEnvelope<TModel>): SceneEnvelope<TModel> {
-  return Object.freeze({ ...scene, [SCENE_MARKER]: true }) as SceneEnvelope<TModel>;
+function resolveSceneParams(
+  sceneParams: SceneParamsShape | undefined,
+  paramOverrides: Map<string, number> | undefined,
+): { resolved: Record<string, number | string | boolean>; diagnostics: SceneDiagnostic[] } {
+  if (!sceneParams) {
+    return { resolved: {}, diagnostics: [] };
+  }
+
+  const resolved: Record<string, number | string | boolean> = {};
+  const diagnostics: SceneDiagnostic[] = [];
+
+  for (const [name, definition] of Object.entries(sceneParams)) {
+    if (!isRecord(definition) || !("value" in definition)) {
+      diagnostics.push({
+        code: "scene.invalid-envelope",
+        message: `Scene param "${name}" must be declared as { value: ... }.`,
+      });
+      continue;
+    }
+
+    const baseValue = definition.value;
+    if (typeof baseValue === "number" && paramOverrides?.has(name)) {
+      resolved[name] = paramOverrides.get(name) as number;
+    } else if (typeof baseValue === "number" || typeof baseValue === "string" || typeof baseValue === "boolean") {
+      resolved[name] = baseValue;
+    } else {
+      diagnostics.push({
+        code: "scene.invalid-envelope",
+        message: `Scene param "${name}" only supports number/string/boolean values.`,
+      });
+    }
+  }
+
+  return { resolved, diagnostics };
+}
+
+function runSceneHooks(
+  resolvedParams: Record<string, number | string | boolean>,
+  validators: readonly SceneValidator[] | undefined,
+  tests: readonly SceneTest[] | undefined,
+): SceneDiagnostic[] {
+  const diagnostics: SceneDiagnostic[] = [];
+
+  if (validators) {
+    validators.forEach((validator) => {
+      const message = validator({ params: resolvedParams });
+      if (typeof message === "string" && message.trim().length > 0) {
+        diagnostics.push({
+          code: "scene.validator.failed",
+          message,
+        });
+      }
+    });
+  }
+
+  if (tests) {
+    tests.forEach((test) => {
+      const message = test.run({ params: resolvedParams });
+      if (typeof message === "string" && message.trim().length > 0) {
+        diagnostics.push({
+          code: "scene.test.failed",
+          message: `[${test.id}] ${message}`,
+        });
+      }
+    });
+  }
+
+  return diagnostics;
+}
+
+export function defineScene<TModel, TParams extends SceneParamsShape | undefined = undefined>(
+  scene: SceneEnvelope<TModel, TParams>,
+): SceneEnvelope<TModel, TParams> {
+  return Object.freeze({ ...scene, [SCENE_MARKER]: true }) as SceneEnvelope<TModel, TParams>;
 }
 
 export function isSceneEnvelope(value: unknown): value is SceneEnvelopeInternal {
   return isRecord(value) && (value as SceneEnvelopeInternal)[SCENE_MARKER] === true;
 }
 
-export function normalizeScene(code: string, value: unknown): {
+export function normalizeScene(
+  code: string,
+  value: unknown,
+  paramOverrides?: Map<string, number>,
+): {
   scene?: NormalizedScene;
   diagnostics: SceneDiagnostic[];
 } {
@@ -123,6 +254,9 @@ export function normalizeScene(code: string, value: unknown): {
     });
     return { diagnostics };
   }
+
+  const { resolved: resolvedParams, diagnostics: paramDiagnostics } = resolveSceneParams(scene.params, paramOverrides);
+  diagnostics.push(...paramDiagnostics);
 
   const features: NormalizedSceneFeature[] = [];
   const seenIds = new Set<string>();
@@ -163,10 +297,19 @@ export function normalizeScene(code: string, value: unknown): {
     });
   }
 
+  diagnostics.push(...runSceneHooks(resolvedParams, scene.validators, scene.tests));
+
+  const sceneModel = typeof scene.model === "function"
+    ? (scene.model as (context: { params: Record<string, number | string | boolean> }) => unknown)({ params: resolvedParams })
+    : scene.model;
+
   return {
     scene: {
-      model: scene.model,
+      meta: scene.meta,
+      model: sceneModel,
+      params: resolvedParams,
       features,
+      diagnostics,
     },
     diagnostics,
   };
