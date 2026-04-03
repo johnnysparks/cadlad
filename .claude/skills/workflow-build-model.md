@@ -110,3 +110,4 @@ See: `workflow-evaluate-model.md`
 - [ ] Parameters work across their min/max range
 - [ ] Visually evaluated from multiple angles
 - [ ] Recognizable as the thing it's supposed to be
+- [ ] Repeated geometry pattern? Hardened into a local strict wrapper with validator + inline tests
