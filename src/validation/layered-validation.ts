@@ -1,9 +1,11 @@
 import type {
   Body,
+  EvaluationBundle,
   GeometryValidationConfig,
   GeometryStats,
   ModelResult,
   ParamDef,
+  SceneValidationReport,
   ValidationDiagnostic,
   ValidationStage,
 } from "../engine/types.js";
@@ -259,7 +261,7 @@ export function formatValidationDiagnostic(diag: ValidationDiagnostic): string {
 }
 
 export function withLayeredValidation(
-  result: Omit<ModelResult, "errors"> & { runtimeErrors: string[]; geometryValidation?: GeometryValidationConfig },
+  result: Omit<ModelResult, "errors" | "evaluation"> & { runtimeErrors: string[]; geometryValidation?: GeometryValidationConfig },
 ): ModelResult {
   const validated = runLayeredValidation({
     runtimeErrors: result.runtimeErrors,
@@ -277,5 +279,56 @@ export function withLayeredValidation(
     geometryStats: validated.stats,
     diagnostics: validated.diagnostics,
     errors: diagnosticsToErrors(validated.diagnostics),
+    evaluation: buildEvaluationBundle(validated, result.sceneValidation),
+  };
+}
+
+function buildEvaluationBundle(
+  validated: LayeredValidationResult,
+  sceneValidation?: SceneValidationReport,
+): EvaluationBundle {
+  const stageIndex = new Map<ValidationStage, number>(
+    VALIDATION_STAGES.map((stage, index) => [stage, index]),
+  );
+  const haltedIndex = validated.haltedAt ? stageIndex.get(validated.haltedAt) : undefined;
+  const diagnosticsFor = (stage: ValidationStage) => validated.diagnostics.filter((diag) => diag.stage === stage);
+  const stageSummaryFor = (stage: ValidationStage) => {
+    const diagnostics = diagnosticsFor(stage);
+    const errorCount = diagnostics.filter((diag) => diag.severity === "error").length;
+    const warningCount = diagnostics.filter((diag) => diag.severity === "warning").length;
+    const currentStageIndex = stageIndex.get(stage) ?? Number.MAX_SAFE_INTEGER;
+    const status = typeof haltedIndex === "number" && currentStageIndex > haltedIndex
+      ? "skipped"
+      : errorCount > 0
+        ? "fail"
+        : "pass";
+    return { status, errorCount, warningCount, diagnostics } as const;
+  };
+
+  const errorCount = validated.diagnostics.filter((diag) => diag.severity === "error").length;
+  const warningCount = validated.diagnostics.filter((diag) => diag.severity === "warning").length;
+  const tests = sceneValidation?.tests ?? [];
+  const testFailures = tests.filter((test) => test.status === "fail").length;
+
+  return {
+    haltedAt: validated.haltedAt,
+    summary: { errorCount, warningCount },
+    typecheck: stageSummaryFor("types/schema"),
+    semanticValidation: stageSummaryFor("semantic"),
+    geometryValidation: stageSummaryFor("geometry"),
+    relationValidation: stageSummaryFor("stats/relations"),
+    stats: {
+      available: Boolean(validated.stats),
+      data: validated.stats,
+    },
+    tests: {
+      status: tests.length === 0 ? "skipped" : testFailures > 0 ? "fail" : "pass",
+      total: tests.length,
+      failures: testFailures,
+      results: tests,
+    },
+    render: {
+      requested: false,
+    },
   };
 }

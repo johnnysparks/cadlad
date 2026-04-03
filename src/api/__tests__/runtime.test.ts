@@ -15,6 +15,8 @@ describe("evaluateModel", () => {
     expect(result.geometryStats?.volume).toBeGreaterThan(0);
     expect(result.geometryStats?.checks.hasZeroVolume).toBe(false);
     expect(result.geometryStats?.componentCount).toBe(1);
+    expect(result.evaluation.summary.errorCount).toBe(0);
+    expect(result.evaluation.stats.available).toBe(true);
   });
 
   it("collects param definitions", async () => {
@@ -86,6 +88,7 @@ describe("evaluateModel", () => {
   it("captures runtime errors", async () => {
     const result = await evaluateModel("throw new Error('boom')");
     expect(result.errors).toContain("boom");
+    expect(result.evaluation.semanticValidation.status).toBe("fail");
   });
 
   it("errors on disconnected parts in a single Solid", async () => {

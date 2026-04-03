@@ -111,7 +111,15 @@ export async function evaluateModel(
         const feature = diag.featureId ? ` [feature:${diag.featureId}]` : "";
         return `[${diag.code}]${feature}${location} ${diag.message}`;
       }));
-      return { bodies, params: collectedParams, errors, hints, camera, sceneValidation };
+      return withLayeredValidation({
+        bodies,
+        params: collectedParams,
+        runtimeErrors: errors,
+        hints,
+        camera,
+        sceneValidation,
+        geometryValidation: geometryValidationConfig,
+      });
     }
     if (!normalized.scene && result && typeof result === "object" && !(result instanceof Solid) && !(result instanceof Assembly) && !Array.isArray(result)) {
       // Metadata object: { model: Solid|Assembly, camera: [x,y,z] }
