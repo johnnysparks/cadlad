@@ -6,7 +6,7 @@ TypeScript is the file format. The browser is the CAD system.
 
 ## What is this?
 
-CadLad is a parametric 3D modeling environment where you write TypeScript/JavaScript
+CadLad is a parametric 3D modeling environment where you write TypeScript
 to define geometry. It runs in the browser with a Monaco editor, live parameter sliders,
 and a Three.js 3D viewport. Models can also run headless via the CLI for validation
 and STL export.
@@ -28,10 +28,10 @@ in real time. Click **STL** to export.
 
 ## Modeling API
 
-Models are plain JavaScript functions that call the CadLad API and `return` a Solid:
+Models are plain TypeScript functions that call the CadLad API and `return` a Solid:
 
-```js
-// box-with-hole.forge.js
+```ts
+// box-with-hole.forge.ts
 const width  = param("Width", 60, { min: 20, max: 200, unit: "mm" });
 const height = param("Height", 20, { min: 5, max: 100, unit: "mm" });
 const holeR  = param("Hole Radius", 8, { min: 2, max: 30, unit: "mm" });
@@ -102,22 +102,21 @@ The `projects/` directory contains ready-to-run models:
 
 | File | Description |
 |---|---|
-| `box-with-hole.forge.js` | Hello world — box with a through-hole |
-| `parametric-bracket.forge.js` | L-bracket with mounting holes |
-| `phone-stand.forge.js` | Three-part phone stand |
-| `assembly-demo.forge.js` | Multi-part assembly with positioning |
+| `box-with-hole.forge.ts` | Hello world — box with a through-hole |
+| `parametric-bracket.forge.ts` | L-bracket with mounting holes |
+| `phone-stand.forge.ts` | Three-part phone stand |
+| `assembly-demo.forge.ts` | Multi-part assembly with positioning |
 
 Paste any example into the studio editor or run via CLI.
 
 ## CLI
 
 ```bash
-# Validate a model (.forge.js or .forge.ts)
-cadlad run projects/box-with-hole.forge.js
+# Validate a model (.forge.ts)
 cadlad run projects/box-with-hole.forge.ts
 
 # Export to STL
-cadlad export projects/box-with-hole.forge.js -o output.stl
+cadlad export projects/box-with-hole.forge.ts -o output.stl
 ```
 
 ## Architecture
@@ -128,7 +127,7 @@ src/
   api/             Public modeling API (param, sketch, assembly, runtime)
   studio/          Browser IDE (Monaco + Three.js + param panel)
   cli/             Node.js CLI tool
-projects/          Example .forge.js models
+projects/          Example .forge.ts models
 ```
 
 ### Design Principles
@@ -161,24 +160,21 @@ npm run lint         # lint with ESLint
 
 ## Live Sessions
 
-Share a model with an AI assistant or collaborator in real time.
-
-Tap **🤖☁️** in the studio to create a session — it copies a capability URL to the clipboard. Paste it into Claude (or any MCP-capable assistant) and it can read the model, make changes, and see renders while you watch the viewport update live.
-
-Sessions are backed by a Cloudflare Worker + Durable Object that stores source, params, and a full patch history. Every change is reversible.
+Share a model with an AI assistant or collaborator in real time using OAuth-backed
+session APIs and typed source revisions.
 
 ```bash
 npm run worker:dev   # live-session backend at http://localhost:8787
 ```
 
-See `docs/assistant-live-modeling.md` for assistant setup and `docs/live-session-api.md` for the full API.
+See `docs/live-session-deploy.md` for deployment details.
 
 ### Writing a Model
 
-Create a `.forge.js` or `.forge.ts` file that calls the CadLad API and returns a `Solid` or `Assembly`:
+Create a `.forge.ts` file that calls the CadLad API and returns a `Solid` or `Assembly`:
 
-```js
-// my-part.forge.js
+```ts
+// my-part.forge.ts
 const r = param("Radius", 10, { min: 5, max: 50, unit: "mm" });
 
 const body = sphere(r).color("#89b4fa");
@@ -193,7 +189,7 @@ The runtime injects all API functions (`param`, `box`, `cylinder`, `sphere`,
 
 ### File Conventions
 
-- `.forge.js` / `.forge.ts` — 3D model definitions
+- `.forge.ts` — 3D model definitions
 - Models must `return` a `Solid`, `Assembly`, or array of `Solid`s
 
 ## License
