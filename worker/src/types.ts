@@ -61,6 +61,129 @@ export interface ModelStats {
   volume?: number;
   /** Approximate surface area in model units² (sum of all bodies) */
   surfaceArea?: number;
+  componentCount?: number;
+  checks?: {
+    zeroVolume: boolean;
+    degenerateBoundingBox: boolean;
+    disconnectedComponents: boolean;
+  };
+  parts?: Array<{
+    index: number;
+    id: string;
+    name: string;
+    triangles: number;
+    boundingBox: {
+      min: [number, number, number];
+      max: [number, number, number];
+    };
+    extents: { x: number; y: number; z: number };
+    volume: number;
+    surfaceArea: number;
+  }>;
+  pairwise?: Array<{
+    partA: string;
+    partAId: string;
+    partB: string;
+    partBId: string;
+    intersects: boolean;
+    minDistance: number;
+  }>;
+}
+
+export interface ValidationDiagnostic {
+  stage: "types/schema" | "semantic" | "geometry" | "stats/relations" | "render/snapshots/tests";
+  severity: "error" | "warning";
+  message: string;
+  featureId?: string;
+}
+
+export interface SceneValidationRuleResult {
+  id: string;
+  name?: string;
+  pass: boolean;
+  message?: string;
+  details?: Record<string, unknown>;
+}
+
+export interface EvaluationBundle {
+  haltedAt?: ValidationDiagnostic["stage"];
+  summary: {
+    errorCount: number;
+    warningCount: number;
+  };
+  typecheck: {
+    status: "pass" | "fail" | "skipped";
+    errorCount: number;
+    warningCount: number;
+    diagnostics: ValidationDiagnostic[];
+  };
+  semanticValidation: {
+    status: "pass" | "fail" | "skipped";
+    errorCount: number;
+    warningCount: number;
+    diagnostics: ValidationDiagnostic[];
+  };
+  geometryValidation: {
+    status: "pass" | "fail" | "skipped";
+    errorCount: number;
+    warningCount: number;
+    diagnostics: ValidationDiagnostic[];
+  };
+  relationValidation: {
+    status: "pass" | "fail" | "skipped";
+    errorCount: number;
+    warningCount: number;
+    diagnostics: ValidationDiagnostic[];
+  };
+  stats: {
+    available: boolean;
+    data?: {
+      triangles: number;
+      bodies: number;
+      componentCount: number;
+      boundingBox: {
+        min: [number, number, number];
+        max: [number, number, number];
+      };
+      volume: number;
+      surfaceArea: number;
+      parts: Array<{
+        index: number;
+        id: string;
+        name: string;
+        triangles: number;
+        boundingBox: {
+          min: [number, number, number];
+          max: [number, number, number];
+        };
+        extents: { x: number; y: number; z: number };
+        volume: number;
+        surfaceArea: number;
+      }>;
+      pairwise: Array<{
+        partA: string;
+        partAId: string;
+        partB: string;
+        partBId: string;
+        intersects: boolean;
+        minDistance: number;
+      }>;
+      checks: {
+        zeroVolume: boolean;
+        degenerateBoundingBox: boolean;
+        disconnectedComponents: boolean;
+      };
+    };
+  };
+  tests: {
+    status: "pass" | "fail" | "skipped";
+    total: number;
+    failures: number;
+    results: SceneValidationRuleResult[];
+  };
+  render: {
+    requested: boolean;
+  };
 }
 
 export interface RunResult {
@@ -80,6 +203,12 @@ export interface RunResult {
   screenshotStatus?: 'ok' | 'blocked' | 'unavailable';
   /** Optional reason for screenshotStatus when not "ok". */
   screenshotStatusReason?: string;
+  /** Full machine-readable layered evaluation bundle for the latest run. */
+  evaluation?: EvaluationBundle;
+  /** Full diagnostics from layered validation and scene validators/tests. */
+  diagnostics?: ValidationDiagnostic[];
+  /** Param values used during evaluation. */
+  params?: Record<string, number>;
 }
 
 // ── SSE event types ───────────────────────────────────────────────────────────

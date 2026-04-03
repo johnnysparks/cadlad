@@ -82,10 +82,12 @@ The pieces exist (`Solid.volume()`, `Solid.surfaceArea()`, `Solid.boundingBox()`
 
 ### 1.1 Rich evaluation MCP tools
 
-- [ ] `evaluate(code?, paramOverrides?)` → full `EvaluationBundle` (not just errors).
-- [ ] `get_stats()` → structured geometry stats for current model.
-- [ ] `get_validation()` → all diagnostics, validators, tests, with pass/fail and messages.
-- [ ] `compare(codeA, codeB)` → diff of geometry stats, validation results, param values.
+- [x] `evaluate(code?, paramOverrides?)` → full `EvaluationBundle` (not just errors).  
+      _Current behavior returns the active session's latest run; arbitrary remote code execution is intentionally not enabled yet._
+- [x] `get_stats()` → structured geometry stats for current model.
+- [x] `get_validation()` → all diagnostics, validators, tests, with pass/fail and messages.
+- [x] `compare(codeA, codeB)` → diff of geometry stats, validation results, param values.  
+      _Current behavior compares previously evaluated session revisions/source snapshots._
 
 These let an agent reason about model quality without vision.
 

@@ -7,8 +7,9 @@
  *
  * Endpoint: POST /mcp
  *
- * Tools: get_session_state · list_patch_history · replace_source · apply_patch ·
- *        update_params · revert_patch · get_latest_screenshot · get_model_stats
+ * Tools: evaluate · get_stats · get_validation · compare · get_session_state ·
+ *        list_patch_history · replace_source · apply_patch · update_params ·
+ *        revert_patch · get_latest_screenshot · get_model_stats
  */
 
 import type { Env, SessionState, Patch, RunResult, ModelStats, RenderStatus } from './types.js';
@@ -17,6 +18,46 @@ import { resolveAccessToken, loadScreenshot } from './oauth-store.js';
 // ── Tool definitions (no session/token in schemas) ────────────────────────────
 
 const TOOLS = [
+  {
+    name: 'evaluate',
+    description: 'Get the latest full evaluation bundle (diagnostics, stage summaries, tests, and geometry stats) for the active model.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        code: { type: 'string', description: 'Optional source for API compatibility; current session run is returned.' },
+        paramOverrides: { type: 'object', additionalProperties: { type: 'number' } },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_stats',
+    description: 'Get structured geometry stats from the latest run result for the active model.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_validation',
+    description: 'Get all validation diagnostics and stage/test pass-fail summaries from the latest model run.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'compare',
+    description: 'Compare two previously evaluated revisions (or code snapshots) by stats and validation summary deltas.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        revisionA: { type: 'number' },
+        revisionB: { type: 'number' },
+        codeA: { type: 'string' },
+        codeB: { type: 'string' },
+      },
+      required: [],
+    },
+  },
   {
     name: 'get_session_state',
     description: 'Read the current model: source code, parameter values, revision, and last-successful revision. Call this first to understand what you\'re working with.',
@@ -340,7 +381,8 @@ async function callTool(
       return { content: [{ type: 'text', text: 'No screenshot available. Open CadLad Studio and run the model to generate one.' }] };
     }
 
-    case 'get_model_stats': {
+    case 'get_model_stats':
+    case 'get_stats': {
       const resp = await stub.fetch(new Request(`${base}/run-result`));
       if (resp.status === 404 || !resp.ok) {
         return { content: [{ type: 'text', text: 'No run result yet. Open CadLad Studio and run the model.' }] };
@@ -350,6 +392,106 @@ async function callTool(
         return { content: [{ type: 'text', text: 'No geometry stats available yet.' }] };
       }
       return { content: [{ type: 'text', text: formatStats(data.runResult.stats) }] };
+    }
+
+    case 'evaluate': {
+      const resp = await stub.fetch(new Request(`${base}/run-result`));
+      if (resp.status === 404 || !resp.ok) {
+        return { content: [{ type: 'text', text: 'No run result yet. Open CadLad Studio and run the model.' }] };
+      }
+      const data = await resp.json() as { runResult: RunResult | null; revision?: number };
+      if (!data.runResult) {
+        return { content: [{ type: 'text', text: 'No run result yet. Open CadLad Studio and run the model.' }] };
+      }
+      const hasCodeArg = typeof args.code === 'string';
+      const hasParamOverrides = Boolean(args.paramOverrides && typeof args.paramOverrides === 'object');
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            revision: data.revision,
+            success: data.runResult.success,
+            evaluation: data.runResult.evaluation ?? null,
+            diagnostics: data.runResult.diagnostics ?? [],
+            stats: data.runResult.stats ?? null,
+            params: data.runResult.params ?? null,
+            notes: [
+              ...(hasCodeArg ? ['code argument was provided; remote evaluate currently returns the active session run only.'] : []),
+              ...(hasParamOverrides ? ['paramOverrides were provided; remote evaluate currently returns the active session run only.'] : []),
+            ],
+          }, null, 2),
+        }],
+      };
+    }
+
+    case 'get_validation': {
+      const resp = await stub.fetch(new Request(`${base}/run-result`));
+      if (resp.status === 404 || !resp.ok) {
+        return { content: [{ type: 'text', text: 'No run result yet. Open CadLad Studio and run the model.' }] };
+      }
+      const data = await resp.json() as { runResult: RunResult | null; revision?: number };
+      if (!data.runResult) {
+        return { content: [{ type: 'text', text: 'No run result yet. Open CadLad Studio and run the model.' }] };
+      }
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            revision: data.revision,
+            success: data.runResult.success,
+            evaluation: data.runResult.evaluation ?? null,
+            diagnostics: data.runResult.diagnostics ?? [],
+            errors: data.runResult.errors ?? [],
+            warnings: data.runResult.warnings ?? [],
+          }, null, 2),
+        }],
+      };
+    }
+
+    case 'compare': {
+      const historyResp = await stub.fetch(new Request(`${base}/history?limit=200&offset=0`));
+      if (!historyResp.ok) throw new Error(`History read failed: ${historyResp.status}`);
+      const history = await historyResp.json() as { patches: Patch[] };
+      const { revisionA, revisionB, codeA, codeB } = args as {
+        revisionA?: number;
+        revisionB?: number;
+        codeA?: string;
+        codeB?: string;
+      };
+      const patchFor = (revision: number | undefined, code: string | undefined): Patch | undefined => {
+        if (typeof revision === 'number') return history.patches.find((patch) => patch.revision === revision);
+        if (typeof code === 'string') return history.patches.find((patch) => patch.sourceAfter === code);
+        return undefined;
+      };
+      const patchA = patchFor(revisionA, codeA);
+      const patchB = patchFor(revisionB, codeB) ?? history.patches[history.patches.length - 1];
+      if (!patchA || !patchB) {
+        return { content: [{ type: 'text', text: 'Unable to resolve compare inputs. Provide revisionA/revisionB or previously used code snapshots.' }] };
+      }
+      const evalA = patchA.runResult?.evaluation;
+      const evalB = patchB.runResult?.evaluation;
+      const statsA = patchA.runResult?.stats;
+      const statsB = patchB.runResult?.stats;
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            revisions: { a: patchA.revision, b: patchB.revision },
+            summary: {
+              successA: patchA.runResult?.success ?? null,
+              successB: patchB.runResult?.success ?? null,
+              errorCountDelta: (evalB?.summary.errorCount ?? 0) - (evalA?.summary.errorCount ?? 0),
+              warningCountDelta: (evalB?.summary.warningCount ?? 0) - (evalA?.summary.warningCount ?? 0),
+            },
+            statsDelta: compareStats(statsA, statsB),
+            params: {
+              a: patchA.paramsAfter,
+              b: patchB.paramsAfter,
+            },
+            notes: (!evalA || !evalB) ? ['One or both revisions do not include evaluation bundles yet.'] : [],
+          }, null, 2),
+        }],
+      };
     }
 
     default:
@@ -424,6 +566,28 @@ function formatStats(stats: ModelStats): string {
     stats.volume !== undefined ? `Volume: ${stats.volume.toFixed(2)} units³` : '',
     stats.surfaceArea !== undefined ? `Surface area: ${stats.surfaceArea.toFixed(2)} units²` : '',
   ].filter(Boolean).join('\n');
+}
+
+function compareStats(
+  a: ModelStats | undefined,
+  b: ModelStats | undefined,
+): Record<string, number | null> {
+  if (!a || !b) {
+    return {
+      triangles: null,
+      bodies: null,
+      volume: null,
+      surfaceArea: null,
+      componentCount: null,
+    };
+  }
+  return {
+    triangles: b.triangles - a.triangles,
+    bodies: b.bodies - a.bodies,
+    volume: (b.volume ?? 0) - (a.volume ?? 0),
+    surfaceArea: (b.surfaceArea ?? 0) - (a.surfaceArea ?? 0),
+    componentCount: (b.componentCount ?? 0) - (a.componentCount ?? 0),
+  };
 }
 
 function formatRenderStatus(status: RenderStatus): string {

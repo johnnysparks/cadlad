@@ -297,6 +297,10 @@ export class LiveSession implements DurableObject {
     this.lastRunResult = body.result;
     this.lastRunRevision = body.revision;
     if (body.result.success) this.lastSuccessfulRevision = body.revision;
+    const matchingPatch = this.patches.find((patch) => patch.revision === body.revision);
+    if (matchingPatch) {
+      matchingPatch.runResult = body.result;
+    }
 
     // Persist screenshot to KV so it survives DO eviction
     if (body.result.screenshot && this.id) {
