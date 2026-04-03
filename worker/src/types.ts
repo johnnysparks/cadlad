@@ -12,6 +12,31 @@ export interface SessionState {
   updatedAt: number;
 }
 
+export interface RevisionEvaluationRef {
+  eventId: string;
+  success: boolean;
+  errorCount: number;
+  warningCount: number;
+  hasEvaluationBundle: boolean;
+  timestamp: number;
+}
+
+export interface RevisionSnapshot {
+  id: string;
+  revision: number;
+  parentRevision: number | null;
+  sourceHash: string;
+  source: string;
+  params: Record<string, number>;
+  eventIds: string[];
+  createdAt: number;
+  actor: {
+    kind: 'human' | 'agent';
+    id?: string;
+  };
+  evaluation?: RevisionEvaluationRef;
+}
+
 export type RenderState = 'no_render' | 'render_pending' | 'render_failed' | 'screenshot_blocked' | 'ready';
 
 export interface RenderStatus {

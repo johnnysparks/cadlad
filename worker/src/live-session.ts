@@ -13,6 +13,8 @@ import type {
   RenderStatus,
   RunResult,
   CapabilityGapRequest,
+  RevisionSnapshot,
+  RevisionEvaluationRef,
 } from './types.js';
 import { createLinkCode, saveScreenshot } from './oauth-store.js';
 import type { EventActor, EventEnvelope, EventType } from './event-store.js';
@@ -35,6 +37,7 @@ interface StoredSession {
   updatedAt: number;
   lastRunResult?: RunResult | null;
   lastRunRevision?: number | null;
+  revisions?: RevisionSnapshot[];
 }
 
 // ── Durable Object ────────────────────────────────────────────────────────────
@@ -60,6 +63,7 @@ export class LiveSession implements DurableObject {
   private lastRunResult: RunResult | null = null;
   /** Revision associated with lastRunResult */
   private lastRunRevision: number | null = null;
+  private revisions: RevisionSnapshot[] = [];
   private readonly eventStore: SqliteEventStore;
 
   constructor(state: DurableObjectState, env: Env) {
@@ -81,6 +85,7 @@ export class LiveSession implements DurableObject {
         this.updatedAt = stored.updatedAt;
         this.lastRunResult = stored.lastRunResult ?? null;
         this.lastRunRevision = stored.lastRunRevision ?? null;
+        this.revisions = stored.revisions ?? [];
       }
     });
   }
@@ -102,6 +107,9 @@ export class LiveSession implements DurableObject {
       if (request.method === 'GET' && (sub === '' || sub === '/')) return this.handleGetSession();
       if (request.method === 'GET' && sub === '/history') return this.handleGetHistory(url);
       if (request.method === 'GET' && sub === '/event-log') return this.handleGetEventLog(url);
+      if (request.method === 'GET' && sub === '/revisions') return this.handleGetRevisions(url);
+      const revisionMatch = sub.match(/^\/revisions\/(\d+)$/);
+      if (request.method === 'GET' && revisionMatch) return this.handleGetRevision(Number(revisionMatch[1]));
       if (request.method === 'GET' && sub === '/events') return this.handleSSE(request);
       if (request.method === 'GET' && sub === '/run-result') return this.handleGetRunResult();
       if (request.method === 'POST' && sub === '/patch') return this.handlePatch(request);
@@ -145,13 +153,19 @@ export class LiveSession implements DurableObject {
     };
     this.patches = [initial];
 
-    await this.appendEvents([
+    const initEvents = [
       this.makeEvent('source.replaced', {
         source: this.source,
         params: { ...this.params },
         revision: this.revision,
       }, this.resolveActor(request)),
-    ]);
+    ];
+    await this.appendEvents(initEvents);
+    await this.checkpointRevision({
+      revision: this.revision,
+      eventIds: initEvents.map((event) => event.id),
+      actor: initEvents[0].actor,
+    });
 
     await this.persist();
     return ok(this.fullState());
@@ -181,6 +195,27 @@ export class LiveSession implements DurableObject {
       beforeTimestamp: Number.isFinite(beforeTimestamp) ? beforeTimestamp : undefined,
     });
     return ok({ events, total: events.length, limit });
+  }
+
+  private handleGetRevisions(url: URL): Response {
+    const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50', 10), 200);
+    const offset = Math.max(parseInt(url.searchParams.get('offset') ?? '0', 10), 0);
+    const slice = this.revisions.slice(offset, offset + limit);
+    return ok({ revisions: slice, total: this.revisions.length, offset, limit });
+  }
+
+  private handleGetRevision(revision: number): Response {
+    const snapshot = this.revisions.find((entry) => entry.revision === revision);
+    if (!snapshot) return err('Revision not found', 'REVISION_NOT_FOUND', 404);
+    const patch = this.patches.find((entry) => entry.revision === revision);
+    return ok({
+      revision: snapshot,
+      runResult: patch?.runResult ?? null,
+      source: snapshot.source,
+      params: snapshot.params,
+      stats: patch?.runResult?.stats ?? null,
+      validation: patch?.runResult?.evaluation ?? null,
+    });
   }
 
   private handleSSE(request: Request): Response {
@@ -280,6 +315,11 @@ export class LiveSession implements DurableObject {
       }, actor.kind === 'agent' ? actor : { kind: 'agent', id: actor.id }));
     }
     await this.appendEvents(events);
+    await this.checkpointRevision({
+      revision: this.revision,
+      eventIds: events.map((event) => event.id),
+      actor,
+    });
     await this.persist();
 
     const event: SessionEvent = { type: 'patch_applied', patch, session: this.summary() };
@@ -316,6 +356,20 @@ export class LiveSession implements DurableObject {
 
     this.addPatch(revertPatch);
     this.updatedAt = Date.now();
+    const actor = this.resolveActor(request);
+    const revertEvents = [
+      this.makeEvent('source.replaced', {
+        source: this.source,
+        params: { ...this.params },
+        revision: this.revision,
+      }, actor),
+    ];
+    await this.appendEvents(revertEvents);
+    await this.checkpointRevision({
+      revision: this.revision,
+      eventIds: revertEvents.map((event) => event.id),
+      actor,
+    });
     await this.persist();
 
     const event: SessionEvent = { type: 'patch_reverted', patch: revertPatch, session: this.summary() };
@@ -363,15 +417,22 @@ export class LiveSession implements DurableObject {
     }
 
     this.updatedAt = Date.now();
-    await this.appendEvents([
-      this.makeEvent('evaluation.completed', {
+    const evaluationEvent = this.makeEvent('evaluation.completed', {
         revision: body.revision,
         success: body.result.success,
         errorCount: body.result.errors.length,
         warningCount: body.result.warnings.length,
         hasEvaluationBundle: Boolean(body.result.evaluation),
-      }, this.resolveActor(request)),
-    ]);
+      }, this.resolveActor(request));
+    await this.appendEvents([evaluationEvent]);
+    this.attachEvaluationToRevision(body.revision, {
+      eventId: evaluationEvent.id,
+      success: body.result.success,
+      errorCount: body.result.errors.length,
+      warningCount: body.result.warnings.length,
+      hasEvaluationBundle: Boolean(body.result.evaluation),
+      timestamp: Date.now(),
+    });
     await this.persist();
 
     const event: SessionEvent = { type: 'run_result_posted', result: body.result, revision: body.revision };
@@ -470,6 +531,7 @@ export class LiveSession implements DurableObject {
         ? { ...this.lastRunResult, screenshot: undefined }
         : null,
       lastRunRevision: this.lastRunRevision,
+      revisions: this.revisions,
     };
     await this.state.storage.put('session', stored);
   }
@@ -554,6 +616,41 @@ export class LiveSession implements DurableObject {
 
     return base;
   }
+
+  private async checkpointRevision(input: {
+    revision: number;
+    eventIds: string[];
+    actor: EventActor;
+  }): Promise<void> {
+    const previous = this.revisions[this.revisions.length - 1];
+    const sourceHash = await hashText(this.source);
+    const snapshot: RevisionSnapshot = {
+      id: crypto.randomUUID(),
+      revision: input.revision,
+      parentRevision: previous?.revision ?? null,
+      sourceHash,
+      source: this.source,
+      params: { ...this.params },
+      eventIds: input.eventIds,
+      createdAt: Date.now(),
+      actor: input.actor,
+    };
+    const existingIdx = this.revisions.findIndex((entry) => entry.revision === input.revision);
+    if (existingIdx >= 0) {
+      this.revisions[existingIdx] = {
+        ...snapshot,
+        evaluation: this.revisions[existingIdx].evaluation,
+      };
+      return;
+    }
+    this.revisions.push(snapshot);
+  }
+
+  private attachEvaluationToRevision(revision: number, evaluation: RevisionEvaluationRef): void {
+    const target = this.revisions.find((entry) => entry.revision === revision);
+    if (!target) return;
+    target.evaluation = evaluation;
+  }
 }
 
 // ── SSE / response utilities ──────────────────────────────────────────────────
@@ -582,4 +679,10 @@ function err(message: string, code: string, status: number): Response {
     status,
     headers: { 'Content-Type': 'application/json', ...corsHeaders() },
   });
+}
+
+async function hashText(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  const bytes = new Uint8Array(digest);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
