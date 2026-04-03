@@ -67,6 +67,11 @@ describe("evaluateModel", () => {
     expect(result.bodies).toHaveLength(1);
     expect(result.errors).toContain("Model[1] must be a Solid or Assembly, got number.");
     expect(result.errors).toContain("Model[2] must be a Solid or Assembly, got string.");
+    expect(result.diagnostics?.[0]).toMatchObject({
+      stage: "semantic",
+      severity: "error",
+    });
+    expect(result.diagnostics?.[1]?.featureId).toBe("model[2]");
   });
 
   it("captures syntax errors", async () => {

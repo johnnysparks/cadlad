@@ -19,6 +19,7 @@ import { EditorDecorations } from "./editor-decorations.js";
 import { PatchHistoryPanel } from "./patch-history.js";
 import type { PatchEvent } from "./types/live-session.js";
 import type { CadladAutomationApi } from "./automation-types.js";
+import { formatValidationDiagnostic } from "../validation/layered-validation.js";
 
 const REMOTE_RUN_DEBOUNCE_MS = 150;
 
@@ -336,7 +337,12 @@ async function boot() {
       lastResult = result;
 
       if (result.errors.length > 0) {
-        errorBarText.textContent = result.errors.join("\n");
+        const errorLines = result.diagnostics && result.diagnostics.length > 0
+          ? result.diagnostics
+            .filter((diag) => diag.severity === "error")
+            .map((diag) => formatValidationDiagnostic(diag))
+          : result.errors;
+        errorBarText.textContent = errorLines.join("\n");
         errorBar.classList.add("visible");
       }
 
@@ -365,7 +371,9 @@ async function boot() {
           void liveClient.postRunResult(liveSessionId, liveRevision, {
             success: result.errors.length === 0,
             errors: result.errors,
-            warnings: [],
+            warnings: (result.diagnostics ?? [])
+              .filter((diag) => diag.severity === "warning")
+              .map((diag) => formatValidationDiagnostic(diag)),
             timestamp: Date.now(),
             screenshot,
             stats,

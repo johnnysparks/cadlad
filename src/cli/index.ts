@@ -16,6 +16,7 @@ import { initManifold } from "../engine/manifold-backend.js";
 import { evaluateModel } from "../api/runtime.js";
 import { loadModelSource } from "./source-loader.js";
 import { buildRunReport, formatRunReportText } from "./run-output.js";
+import { formatValidationDiagnostic } from "../validation/layered-validation.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -56,10 +57,16 @@ async function cmdRun(args: string[], options: { watchMode: boolean }) {
 
       if (result.errors.length > 0) {
         if (printJson) {
-          console.log(JSON.stringify({ ok: false, errors: result.errors }, null, 2));
+          console.log(JSON.stringify({ ok: false, errors: result.errors, diagnostics: result.diagnostics ?? [] }, null, 2));
         } else {
           console.error("Errors:");
-          result.errors.forEach((e) => console.error(`  ${e}`));
+          if (result.diagnostics && result.diagnostics.length > 0) {
+            result.diagnostics
+              .filter((diag) => diag.severity === "error")
+              .forEach((diag) => console.error(`  ${formatValidationDiagnostic(diag)}`));
+          } else {
+            result.errors.forEach((e) => console.error(`  ${e}`));
+          }
         }
         return false;
       }
@@ -128,7 +135,13 @@ async function cmdExport(args: string[]) {
 
   if (result.errors.length > 0) {
     console.error("Errors:");
-    result.errors.forEach((e) => console.error(`  ${e}`));
+    if (result.diagnostics && result.diagnostics.length > 0) {
+      result.diagnostics
+        .filter((diag) => diag.severity === "error")
+        .forEach((diag) => console.error(`  ${formatValidationDiagnostic(diag)}`));
+    } else {
+      result.errors.forEach((e) => console.error(`  ${e}`));
+    }
     process.exit(1);
   }
 

@@ -17,6 +17,7 @@ import { param } from "./params.js";
 import { Sketch, rect, circle } from "./sketch.js";
 import { box, cylinder, sphere, roundedRect, roundedBox, taperedBox, sweep, loft } from "../engine/primitives.js";
 import { assembly } from "./assembly.js";
+import { withLayeredValidation } from "../validation/layered-validation.js";
 
 /**
  * Evaluate a model script string and return the result.
@@ -34,7 +35,7 @@ export async function evaluateModel(
     _setParamValues(new Map());
   }
 
-  const errors: string[] = [];
+  const runtimeErrors: string[] = [];
   const bodies: Body[] = [];
   const collectedParams: ParamDef[] = [];
   let hints: Hint[] = [];
@@ -43,7 +44,7 @@ export async function evaluateModel(
   const collectSolid = (solid: Solid, context: string): void => {
     const nComp = solid.numComponents();
     if (nComp > 1) {
-      errors.push(
+      runtimeErrors.push(
         `${context} has ${nComp} disconnected parts. ` +
         `Use assembly() to group separate parts, or union overlapping solids so they connect. ` +
         `Disconnected geometry in a single Solid is not allowed.`,
@@ -100,7 +101,7 @@ export async function evaluateModel(
           bodies.push(...item.toBodies());
         } else {
           const valueType = item === null ? "null" : typeof item;
-          errors.push(
+          runtimeErrors.push(
             `Model[${i}] must be a Solid or Assembly, got ${valueType}.`,
           );
         }
@@ -108,11 +109,11 @@ export async function evaluateModel(
     } else {
       const valueType = model === null ? "null" : typeof model;
       if (valueType === "undefined") {
-        errors.push(
+        runtimeErrors.push(
           "Model script must return geometry: Solid, Assembly, array of Solid/Assembly, or { model, camera }.",
         );
       } else {
-        errors.push(
+        runtimeErrors.push(
           `Model script returned unsupported type: ${valueType}. ` +
           "Expected Solid, Assembly, array of Solid/Assembly, or { model, camera }.",
         );
@@ -120,7 +121,7 @@ export async function evaluateModel(
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    errors.push(msg);
+    runtimeErrors.push(msg);
   }
 
   // Warn about real geometry problems (not style opinions)
@@ -128,5 +129,11 @@ export async function evaluateModel(
     emptyBodies: bodies.filter((b) => b.mesh.positions.length === 0).length,
   });
 
-  return { bodies, params: collectedParams, errors, hints, camera };
+  return withLayeredValidation({
+    bodies,
+    params: collectedParams,
+    runtimeErrors,
+    hints,
+    camera,
+  });
 }
