@@ -12,41 +12,56 @@ export interface FeatureValidationResult {
   errors: string[];
 }
 
-export interface FeatureDefinition<TParams extends Record<string, unknown> = Record<string, unknown>> {
+export interface FeatureValidationContext {
+  features?: ReadonlyArray<{
+    id: string;
+    kind: string;
+  }>;
+}
+
+export interface FeaturePlugin<
+  TArgs extends Record<string, unknown> = Record<string, unknown>,
+  TResult = string,
+> {
   kind: string;
   schema: FeatureSchema;
-  build: (params: TParams) => string;
-  validate?: (params: TParams) => string[];
+  compatibleHostKinds?: readonly string[];
+  build: (args: TArgs) => TResult;
+  validate?: (args: TArgs, context: FeatureValidationContext) => string[];
 }
 
 export class FeatureRegistry {
-  private readonly definitions = new Map<string, FeatureDefinition>();
+  private readonly plugins = new Map<string, FeaturePlugin>();
 
-  register(definition: FeatureDefinition): void {
-    if (this.definitions.has(definition.kind)) {
-      throw new Error(`Feature kind \"${definition.kind}\" is already registered.`);
+  register(plugin: FeaturePlugin): void {
+    if (this.plugins.has(plugin.kind)) {
+      throw new Error(`Feature kind \"${plugin.kind}\" is already registered.`);
     }
-    this.definitions.set(definition.kind, definition);
+    this.plugins.set(plugin.kind, plugin);
   }
 
-  get(kind: string): FeatureDefinition {
-    const definition = this.definitions.get(kind);
-    if (!definition) {
+  get(kind: string): FeaturePlugin {
+    const plugin = this.plugins.get(kind);
+    if (!plugin) {
       throw new Error(`Unknown feature kind \"${kind}\".`);
     }
-    return definition;
+    return plugin;
   }
 
   has(kind: string): boolean {
-    return this.definitions.has(kind);
+    return this.plugins.has(kind);
   }
 
-  validate(kind: string, params: Record<string, unknown>): FeatureValidationResult {
-    const definition = this.get(kind);
+  validate(
+    kind: string,
+    args: Record<string, unknown>,
+    context: FeatureValidationContext = {},
+  ): FeatureValidationResult {
+    const plugin = this.get(kind);
     const errors: string[] = [];
 
-    for (const [fieldName, fieldSchema] of Object.entries(definition.schema)) {
-      const value = params[fieldName];
+    for (const [fieldName, fieldSchema] of Object.entries(plugin.schema)) {
+      const value = args[fieldName];
       if (value === undefined || value === null) {
         if (fieldSchema.required !== false) {
           errors.push(`Missing required field \"${fieldName}\" for ${kind}.`);
@@ -61,14 +76,30 @@ export class FeatureRegistry {
       }
     }
 
-    for (const key of Object.keys(params)) {
-      if (!(key in definition.schema)) {
+    for (const key of Object.keys(args)) {
+      if (!(key in plugin.schema)) {
         errors.push(`Unknown field \"${key}\" for ${kind}.`);
       }
     }
 
-    if (definition.validate) {
-      errors.push(...definition.validate(params));
+    if (plugin.compatibleHostKinds) {
+      const hostId = args.hostId;
+      if (typeof hostId !== "string" || hostId.trim().length === 0) {
+        errors.push(`Field \"hostId\" must be a non-empty string for ${kind}.`);
+      } else {
+        const hostFeature = context.features?.find((feature) => feature.id === hostId);
+        if (!hostFeature) {
+          errors.push(`Feature host \"${hostId}\" was not found for ${kind}.`);
+        } else if (!plugin.compatibleHostKinds.includes(hostFeature.kind)) {
+          errors.push(
+            `Feature host \"${hostId}\" must be one of [${plugin.compatibleHostKinds.join(", ")}] for ${kind}, got \"${hostFeature.kind}\".`,
+          );
+        }
+      }
+    }
+
+    if (plugin.validate) {
+      errors.push(...plugin.validate(args, context));
     }
 
     return {
@@ -89,10 +120,10 @@ export function createDefaultFeatureRegistry(): FeatureRegistry {
       height: { type: "number" },
       thickness: { type: "number" },
     },
-    validate: (params) => {
+    validate: (args) => {
       const errors: string[] = [];
       for (const key of ["length", "height", "thickness"] as const) {
-        const value = params[key];
+        const value = args[key];
         if (typeof value === "number" && value <= 0) {
           errors.push(`Field \"${key}\" must be > 0 for wall.straight.`);
         }
@@ -107,21 +138,27 @@ export function createDefaultFeatureRegistry(): FeatureRegistry {
     kind: "roof.gable",
     schema: {
       id: { type: "string" },
+      hostId: { type: "string" },
       width: { type: "number" },
       depth: { type: "number" },
       pitchDeg: { type: "number" },
       overhang: { type: "number" },
     },
-    validate: (params) => {
+    compatibleHostKinds: ["wall.straight"],
+    validate: (args) => {
       const errors: string[] = [];
-      const pitch = params.pitchDeg;
+      const pitch = args.pitchDeg;
       if (typeof pitch === "number" && (pitch <= 0 || pitch >= 80)) {
         errors.push("Field \"pitchDeg\" must be in (0, 80) for roof.gable.");
       }
+      const overhang = args.overhang;
+      if (typeof overhang === "number" && overhang < 0) {
+        errors.push("Field \"overhang\" must be >= 0 for roof.gable.");
+      }
       return errors;
     },
-    build: (params) =>
-      `createGableRoof(${String(params.width)}, ${String(params.depth)}, ${String(params.pitchDeg)}, ${String(params.overhang)})`,
+    build: (args) =>
+      `createGableRoof(${String(args.width)}, ${String(args.depth)}, ${String(args.pitchDeg)}, ${String(args.overhang)})`,
   });
 
   return registry;
