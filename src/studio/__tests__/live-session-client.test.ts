@@ -76,6 +76,58 @@ describe('LiveSessionClient', () => {
       url: 'http://localhost:8787/health',
     });
   });
+
+  it('uses oauth access_token from query, stores it, and scrubs the URL', async () => {
+    const setItem = vi.fn();
+    const getItem = vi.fn().mockReturnValue(null);
+    const replaceState = vi.fn();
+    const fakeWindow = {
+      location: new URL('https://studio.example.com/?access_token=queryToken&foo=1'),
+      localStorage: { setItem, getItem },
+      history: { replaceState, state: { ok: true } },
+    };
+    Object.defineProperty(globalThis, 'window', { value: fakeWindow, configurable: true });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ sessionId: 's1', liveUrl: 'https://studio.example.com/live' }),
+    }));
+
+    const client = new LiveSessionClient();
+    await client.createSession({ source: 'return box(1,1,1);', params: {} });
+
+    expect(setItem).toHaveBeenCalledWith('cadlad_access_token', 'queryToken');
+    expect(replaceState).toHaveBeenCalledWith(
+      { ok: true },
+      '',
+      'https://studio.example.com/?foo=1',
+    );
+  });
+
+  it('uses oauth access_token from hash and removes only that hash field', async () => {
+    const setItem = vi.fn();
+    const getItem = vi.fn().mockReturnValue(null);
+    const replaceState = vi.fn();
+    const fakeWindow = {
+      location: new URL('https://studio.example.com/#access_token=hashToken&token_type=bearer'),
+      localStorage: { setItem, getItem },
+      history: { replaceState, state: null },
+    };
+    Object.defineProperty(globalThis, 'window', { value: fakeWindow, configurable: true });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ sessionId: 's1', liveUrl: 'https://studio.example.com/live' }),
+    }));
+
+    const client = new LiveSessionClient();
+    await client.createSession({ source: 'return box(1,1,1);', params: {} });
+
+    expect(setItem).toHaveBeenCalledWith('cadlad_access_token', 'hashToken');
+    expect(replaceState).toHaveBeenCalledWith(
+      null,
+      '',
+      'https://studio.example.com/#token_type=bearer',
+    );
+  });
 });
 
 describe('parseLiveSessionEvent', () => {
