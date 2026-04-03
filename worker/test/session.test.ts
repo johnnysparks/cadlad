@@ -103,6 +103,83 @@ describe('oauth-protected sessions', () => {
     expect(body.hasImage).toBe(true);
     expect(body.artifactRef).toBeTruthy();
   });
+
+  it('records phase 2.1 session events and exposes event log', async () => {
+    const token = await getAccessToken();
+    const created = await createSession(token);
+
+    const patchResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/patch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'X-CadLad-Actor-Kind': 'agent',
+        'X-CadLad-Actor-Id': 'test-agent',
+      },
+      body: JSON.stringify({
+        type: 'param_update',
+        params: { width: 45 },
+        summary: 'Try wider body',
+        intent: 'Improve grip comfort',
+      }),
+    });
+    expect(patchResp.status).toBe(201);
+
+    const runResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/run-result`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'X-CadLad-Actor-Kind': 'agent',
+        'X-CadLad-Actor-Id': 'test-agent',
+      },
+      body: JSON.stringify({
+        revision: 2,
+        result: {
+          success: true,
+          errors: [],
+          warnings: [],
+          timestamp: Date.now(),
+          evaluation: {
+            summary: { errorCount: 0, warningCount: 0 },
+            typecheck: { status: 'pass', errorCount: 0, warningCount: 0, diagnostics: [] },
+            semanticValidation: { status: 'pass', errorCount: 0, warningCount: 0, diagnostics: [] },
+            geometryValidation: { status: 'pass', errorCount: 0, warningCount: 0, diagnostics: [] },
+            relationValidation: { status: 'pass', errorCount: 0, warningCount: 0, diagnostics: [] },
+            stats: { available: false },
+            tests: { status: 'skipped', total: 0, failures: 0, results: [] },
+            render: { requested: false },
+          },
+        },
+      }),
+    });
+    expect(runResp.status).toBe(200);
+
+    const capGapResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/capability-gap`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'X-CadLad-Actor-Kind': 'agent',
+        'X-CadLad-Actor-Id': 'test-agent',
+      },
+      body: JSON.stringify({ message: 'Need semantic hole-adding helper', context: 'Had to hand-write subtract() chain' }),
+    });
+    expect(capGapResp.status).toBe(201);
+
+    const eventLogResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/event-log?limit=20`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(eventLogResp.status).toBe(200);
+    const body = await eventLogResp.json() as { events: Array<{ type: string }> };
+    const eventTypes = body.events.map((event) => event.type);
+
+    expect(eventTypes).toContain('source.replaced');
+    expect(eventTypes).toContain('scene.param_set');
+    expect(eventTypes).toContain('agent.intent_declared');
+    expect(eventTypes).toContain('evaluation.completed');
+    expect(eventTypes).toContain('agent.capability_gap');
+  });
 });
 
 async function sha256Base64Url(input: string): Promise<string> {

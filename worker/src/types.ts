@@ -269,6 +269,13 @@ export interface RevertRequest {
   summary?: string;
 }
 
+export interface CapabilityGapRequest {
+  /** What the agent could not do. */
+  message: string;
+  /** Optional extra context, like attempted workaround details. */
+  context?: string;
+}
+
 export interface ApiError {
   error: string;
   code: string;
