@@ -7,7 +7,12 @@
 import { createEditor } from "./editor.js";
 import { Viewport } from "./viewport.js";
 import { ParamPanel } from "./param-panel.js";
-import { LiveSessionClient, type LiveSessionState, type PatchEventPayload } from "./live-session-client.js";
+import {
+  LiveSessionClient,
+  type LiveSessionEvent,
+  type LiveSessionState,
+  type SessionPatchPayload,
+} from "./live-session-client.js";
 import { evaluateModel } from "../api/runtime.js";
 import { computeModelStats } from "./model-stats.js";
 import { EditorDecorations } from "./editor-decorations.js";
@@ -19,7 +24,7 @@ const REMOTE_RUN_DEBOUNCE_MS = 150;
 
 type LiveUiState = "idle" | "connecting" | "connected" | "patching" | "rerunning" | "failed";
 
-function toPatchEvent(serverPatch: NonNullable<PatchEventPayload["patch"]>): PatchEvent {
+function toPatchEvent(serverPatch: SessionPatchPayload): PatchEvent {
   const compactTitle = serverPatch.summary.trim().replace(/\s+/g, " ");
   return {
     patchId: serverPatch.id,
@@ -443,23 +448,21 @@ async function boot() {
     scheduleRemoteRun();
   };
 
-  const handleLiveEvent = (event: PatchEventPayload) => {
+  const handleLiveEvent = (event: LiveSessionEvent) => {
     switch (event.type) {
       case "session_snapshot":
         setLiveUi("connected", "snapshot synced");
-        if (event.session) applyRemoteSession(event.session);
+        applyRemoteSession(event.session);
         break;
       case "patch_applied":
       case "patch_reverted": {
-        setLiveUi("patching", event.patch?.summary ?? "assistant update");
-        if (event.patch) {
-          const nextHistory = [...patchHistory, toPatchEvent(event.patch)];
-          applyPatchHistory(nextHistory);
-        }
+        setLiveUi("patching", event.patch.summary ?? "assistant update");
+        const nextHistory = [...patchHistory, toPatchEvent(event.patch)];
+        applyPatchHistory(nextHistory);
         const patchPayload = {
-          source: event.patch?.sourceAfter,
-          params: event.patch?.paramsAfter,
-          revision: event.patch?.revision,
+          source: event.patch.sourceAfter,
+          params: event.patch.paramsAfter,
+          revision: event.patch.revision,
           ...event.session,
         };
         applyRemoteSession(patchPayload);
@@ -467,7 +470,7 @@ async function boot() {
       }
       case "run_status":
         setLiveUi("connected", "run status received");
-        if (typeof event.revision === "number" && event.result) {
+        {
           const result = event.result;
           const nextHistory = patchHistory.map((patch) =>
             patch.revision === event.revision
@@ -486,7 +489,7 @@ async function boot() {
         }
         break;
       case "error":
-        setLiveUi("failed", event.message ?? "session error");
+        setLiveUi("failed", event.message);
         break;
       default:
         break;

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { LiveSessionClient, resolveLiveSessionApiBase } from '../live-session-client.js';
+import { LiveSessionClient, parseLiveSessionEvent, resolveLiveSessionApiBase } from '../live-session-client.js';
 
 describe('resolveLiveSessionApiBase', () => {
   it('prefers explicit option base', () => {
@@ -75,5 +75,37 @@ describe('LiveSessionClient', () => {
       body: null,
       url: 'http://localhost:8787/health',
     });
+  });
+});
+
+describe('parseLiveSessionEvent', () => {
+  it('parses patch events with required patch shape', () => {
+    const event = parseLiveSessionEvent({
+      type: 'patch_applied',
+      patch: {
+        id: 'p1',
+        revision: 2,
+        summary: 'adjust shell width',
+      },
+    });
+
+    expect(event).toEqual({
+      type: 'patch_applied',
+      ts: undefined,
+      patch: {
+        id: 'p1',
+        revision: 2,
+        summary: 'adjust shell width',
+      },
+      session: undefined,
+    });
+  });
+
+  it('rejects run status events missing a valid result payload', () => {
+    expect(parseLiveSessionEvent({
+      type: 'run_status',
+      revision: 3,
+      result: { success: true },
+    })).toBeNull();
   });
 });
