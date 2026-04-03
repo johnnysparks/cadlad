@@ -3,11 +3,13 @@
  * CadLad CLI.
  *
  * Usage:
- *   cadlad run <file.forge.ts> — validate & evaluate a model
- *   cadlad export <file> -o out.stl — export to STL
- *   cadlad studio                   — launch browser studio (dev server)
+ *   cadlad run <file.forge.ts>            — validate & evaluate a model once
+ *   cadlad validate <file.forge.ts>       — local-only validation loop (--watch)
+ *   cadlad export <file> -o out.stl       — export to STL
+ *   cadlad studio                          — launch browser studio (dev server)
  */
 
+import { watch } from "node:fs";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { initManifold } from "../engine/manifold-backend.js";
@@ -20,7 +22,10 @@ const [, , command, ...args] = process.argv;
 async function main() {
   switch (command) {
     case "run":
-      await cmdRun(args);
+      await cmdRun(args, { watchMode: false });
+      break;
+    case "validate":
+      await cmdRun(args, { watchMode: args.includes("--watch") });
       break;
     case "export":
       await cmdExport(args);
@@ -34,34 +39,77 @@ async function main() {
   }
 }
 
-async function cmdRun(args: string[]) {
+async function cmdRun(args: string[], options: { watchMode: boolean }) {
   const file = args[0];
   const printJson = args.includes("--json");
   if (!file) {
-    console.error("Usage: cadlad run <file.forge.ts>");
+    console.error(`Usage: cadlad ${options.watchMode ? "validate" : "run"} <file.forge.ts>`);
     process.exit(1);
   }
 
   await initManifold();
-  const code = await loadModelSource(file);
-  const result = await evaluateModel(code);
 
-  if (result.errors.length > 0) {
-    if (printJson) {
-      console.log(JSON.stringify({ ok: false, errors: result.errors }, null, 2));
-    } else {
-      console.error("Errors:");
-      result.errors.forEach((e) => console.error(`  ${e}`));
+  const runOnce = async () => {
+    try {
+      const code = await loadModelSource(file);
+      const result = await evaluateModel(code);
+
+      if (result.errors.length > 0) {
+        if (printJson) {
+          console.log(JSON.stringify({ ok: false, errors: result.errors }, null, 2));
+        } else {
+          console.error("Errors:");
+          result.errors.forEach((e) => console.error(`  ${e}`));
+        }
+        return false;
+      }
+
+      const report = buildRunReport(result);
+      if (printJson) {
+        console.log(JSON.stringify({ ok: true, ...report }, null, 2));
+      } else {
+        console.log(formatRunReportText(report));
+      }
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (printJson) {
+        console.log(JSON.stringify({ ok: false, errors: [message] }, null, 2));
+      } else {
+        console.error(message);
+      }
+      return false;
     }
-    process.exit(1);
-  }
+  };
 
-  const report = buildRunReport(result);
-  if (printJson) {
-    console.log(JSON.stringify({ ok: true, ...report }, null, 2));
+  const firstRunOk = await runOnce();
+  if (!options.watchMode) {
+    if (!firstRunOk) process.exit(1);
     return;
   }
-  console.log(formatRunReportText(report));
+
+  console.log(`\n[cadlad] Watching ${resolve(file)} for changes. Press Ctrl+C to stop.`);
+  let runScheduled = false;
+  let running = false;
+
+  const scheduleRun = () => {
+    if (runScheduled) return;
+    runScheduled = true;
+    setTimeout(async () => {
+      runScheduled = false;
+      if (running) {
+        scheduleRun();
+        return;
+      }
+      running = true;
+      console.log(`\n[cadlad] Revalidating at ${new Date().toISOString()}...`);
+      await runOnce();
+      running = false;
+    }, 150);
+  };
+
+  watch(resolve(file), scheduleRun);
+  await new Promise(() => {});
 }
 
 async function cmdExport(args: string[]) {
@@ -140,7 +188,8 @@ function printUsage() {
 CadLad — Code-first parametric CAD
 
 Usage:
-  cadlad run <file.forge.ts> Validate and evaluate a model
+  cadlad run <file.forge.ts>            Validate and evaluate a model once
+  cadlad validate <file.forge.ts>       Validate locally (use --watch for loop)
   cadlad export <file> -o output.stl    Export model to STL
   cadlad studio                         Launch browser studio
 `);
