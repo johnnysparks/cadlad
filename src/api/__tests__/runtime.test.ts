@@ -161,6 +161,21 @@ describe("evaluateModel", () => {
     expect(result.errors[0]).toContain("[L");
   });
 
+  it("reports invalid scene feature references", async () => {
+    const code = `
+      return defineScene({
+        model: box(10, 10, 10),
+        features: [
+          { id: "base", kind: "primitive", label: "Base box" },
+          { id: "hole", kind: "cut", refs: ["missing.feature"] },
+        ],
+      });
+    `;
+    const result = await evaluateModel(code);
+    expect(result.bodies).toHaveLength(0);
+    expect(result.errors[0]).toContain("[scene.feature-ref.invalid]");
+  });
+
   it("evaluates defineScene model factories with typed params", async () => {
     const code = `
       return defineScene({
@@ -189,9 +204,17 @@ describe("evaluateModel", () => {
         },
         features: [{ id: "wall", kind: "primitive", label: "Wall" }],
         validators: [
-          ({ params }) => params.wall < 2 ? "Wall thickness must be >= 2mm." : undefined,
+          {
+            id: "wall.min-thickness",
+            stage: "semantic",
+            run: ({ params }) => params.wall < 2 ? "Wall thickness must be >= 2mm." : undefined,
+          },
         ],
         tests: [
+          {
+            id: "wall.min-geometry",
+            run: ({ bodies }) => bodies.length === 0 ? "Expected at least one body." : undefined,
+          },
           {
             id: "wall.max",
             run: ({ params }) => params.wall > 20 ? "Wall is unexpectedly thick." : undefined,
@@ -202,7 +225,9 @@ describe("evaluateModel", () => {
     `;
 
     const result = await evaluateModel(code);
-    expect(result.bodies).toHaveLength(0);
-    expect(result.errors).toContain("[scene.validator.failed] Wall thickness must be >= 2mm.");
+    expect(result.bodies).toHaveLength(1);
+    expect(result.errors.some((message) => message.includes("[scene.validator.failed]"))).toBe(true);
+    expect(result.sceneValidation?.summary.validatorFailures).toBe(1);
+    expect(result.sceneValidation?.tests.find((entry) => entry.id === "wall.min-geometry")?.status).toBe("pass");
   });
 });

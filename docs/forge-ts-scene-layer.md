@@ -7,11 +7,52 @@ This introduces a strict `defineScene(...)` envelope that is machine-operable wh
 A scene can declare:
 - `meta` (identity + intent)
 - `params` (typed defaults and machine-readable ranges)
-- `features` (stable IDs + semantic kinds)
-- `validators` (author assertions)
-- `tests` (lightweight scene checks)
+- `features` (stable IDs + semantic kinds + deterministic `refs`)
+- `validators` (author assertions at semantic and/or geometry stages)
+- `tests` (lightweight in-source checks run after model output exists)
 
-The runtime normalizes this structure before geometry build and emits deterministic diagnostics for scene envelope errors and failed hooks.
+The runtime normalizes this structure before geometry build and emits deterministic diagnostics for scene envelope errors and failed hooks. It also records a structured `sceneValidation` report that includes diagnostics, per-validator/per-test pass-fail status, and summary counts for downstream MCP/agent/UI surfaces.
+
+## Validation stack (high-speed first)
+
+`defineScene(...)` now runs a deterministic stack in this order:
+
+1. **Type-level checks (pre-render)**
+   - malformed scene envelope
+   - missing feature IDs
+   - duplicate feature IDs
+2. **Semantic checks (pre-render)**
+   - invalid feature references (`feature.refs` target unknown IDs)
+   - scene semantic validators (`validators` with `stage: "semantic"`)
+3. **Geometry checks (post-model, pre-render surface use)**
+   - empty scene output / empty mesh buffers
+   - disconnected multi-body output warning
+   - scene geometry validators (`validators` with `stage: "geometry"`)
+4. **In-source tests (post-model)**
+   - tests declared in `tests` with stable IDs
+
+All checks are deterministic, avoid fuzzy heuristics, and are intentionally cheap.
+
+## Authoring pattern
+
+```ts
+return defineScene({
+  features: [
+    { id: "base", kind: "primitive.box" },
+    { id: "hole", kind: "primitive.cylinder" },
+    { id: "result", kind: "boolean.subtract", refs: ["base", "hole"] },
+  ],
+  validators: [
+    { id: "hole.fits", stage: "semantic", run: ({ params }) => ... },
+    { id: "result.one-body", stage: "geometry", run: ({ bodies }) => ... },
+  ],
+  tests: [
+    { id: "mesh.non-empty", run: ({ bodies }) => ... },
+    { id: "height.positive", run: ({ params }) => ... },
+  ],
+  model: ({ params }) => ...
+});
+```
 
 ## Escape hatch retained
 

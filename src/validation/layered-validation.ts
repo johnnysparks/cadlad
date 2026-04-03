@@ -184,6 +184,7 @@ export function withLayeredValidation(result: Omit<ModelResult, "errors"> & { ru
     params: result.params,
     hints: result.hints,
     camera: result.camera,
+    sceneValidation: result.sceneValidation,
     diagnostics: validated.diagnostics,
     errors: diagnosticsToErrors(validated.diagnostics),
   };
