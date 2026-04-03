@@ -53,6 +53,16 @@ Start with `--angles 1` for quick iteration. Escalate to 4 or 7 when issues aren
 
 Update `README.md` Build Log with session entry + screenshot reference.
 
+## Harden-this-pattern checklist
+
+If you notice yourself repeating the same geometry workaround in 2+ edits, promote it in the same PR:
+
+- [ ] Extract a named local strict wrapper for the pattern.
+- [ ] Add at least one validator with clear `rule`, `cause`, and `fix` diagnostics.
+- [ ] Add inline pass/fail tests that prove the hardening contract.
+- [ ] Replace ad-hoc call sites with the wrapper.
+- [ ] Add a short README note describing when to use the wrapper.
+
 ## API quick reference
 
 ```js
