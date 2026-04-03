@@ -1,54 +1,81 @@
 /**
- * mcp-handler.ts — Remote MCP endpoint for CadLad live sessions.
+ * mcp-handler.ts — Remote MCP endpoint (Streamable HTTP transport, 2025-03-26).
+ *
+ * Auth: OAuth 2.1 Bearer token. Every request (except initialize/ping/tools/list)
+ * requires Authorization: Bearer <access_token>. The token is resolved server-side
+ * to a session + write token; nothing sensitive appears in tool inputs or outputs.
+ *
+ * Endpoint: POST /mcp
+ *
+ * Tools: get_session_state · list_patch_history · replace_source · apply_patch ·
+ *        update_params · revert_patch · get_latest_screenshot · get_model_stats
  */
 
-import type { Env, SessionState, Patch, ModelStats, RunResult } from './types.js';
-import type { OAuthPrincipal } from './oauth.js';
+import type { Env, SessionState, Patch, RunResult, ModelStats } from './types.js';
+import { resolveAccessToken } from './oauth-store.js';
+import { loadScreenshot } from './oauth-store.js';
 
-const SESSION_PROPS = {
-  session: { type: 'string', description: 'Session id (optional when projectRef is set)' },
-  token: { type: 'string', description: 'Legacy token field; ignored when OAuth auth is used' },
-  projectRef: { type: 'string', description: 'Optional project reference. Defaults to your latest session.' },
-} as const;
+// ── Tool definitions (no session/token in schemas) ────────────────────────────
 
 const TOOLS = [
   {
     name: 'get_session_state',
-    title: 'Get Session',
-    description: 'Use this when you need the active session source, params, and revision.',
-    annotations: { readOnlyHint: true },
+    description: 'Read the current model: source code, parameter values, revision, and last-successful revision. Call this first to understand what you\'re working with.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'list_patch_history',
+    description: 'Use this when you need to review prior changes or find a patch to revert. Returns each patch with its summary, intent, run status, and ID.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: {
       type: 'object',
       properties: {
-        projectRef: { type: 'string', description: 'Optional project reference. Defaults to your latest session.' },
+        limit: { type: 'number', description: 'Max patches to return (default 20, max 50)' },
+        offset: { type: 'number', description: 'Skip first N patches for pagination' },
       },
       required: [],
     },
   },
   {
     name: 'replace_source',
-    title: 'Replace Source',
-    description: 'Use this when you want to replace the full model source.',
+    description: 'Use this to replace the entire .forge.js model source. The studio rerenders automatically. Always provide a clear summary and intent.',
+    annotations: { readOnlyHint: false, destructiveHint: false },
     inputSchema: {
       type: 'object',
       properties: {
-        projectRef: { type: 'string' },
-        source: { type: 'string' },
-        summary: { type: 'string' },
-        intent: { type: 'string' },
-        approach: { type: 'string' },
+        source: { type: 'string', description: 'Complete new .forge.js model source code' },
+        summary: { type: 'string', description: 'One-line description of what changed' },
+        intent: { type: 'string', description: 'Why this change was made' },
+        approach: { type: 'string', description: 'Technical approach used' },
       },
       required: ['source', 'summary'],
     },
   },
   {
-    name: 'update_params',
-    title: 'Update Params',
-    description: 'Use this when you need to adjust param values without changing source code.',
+    name: 'apply_patch',
+    description: 'Use this to apply a source or parameter change atomically. type=source_replace for full code update, type=param_update for slider changes.',
+    annotations: { readOnlyHint: false, destructiveHint: false },
     inputSchema: {
       type: 'object',
       properties: {
-        projectRef: { type: 'string' },
+        type: { type: 'string', enum: ['source_replace', 'param_update'] },
+        source: { type: 'string', description: 'Required for source_replace' },
+        params: { type: 'object', additionalProperties: { type: 'number' }, description: 'Required for param_update' },
+        summary: { type: 'string' },
+        intent: { type: 'string' },
+        approach: { type: 'string' },
+      },
+      required: ['type', 'summary'],
+    },
+  },
+  {
+    name: 'update_params',
+    description: 'Use this to change param() slider values without rewriting source. Good for exploring parameter space.',
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
         params: { type: 'object', additionalProperties: { type: 'number' } },
         summary: { type: 'string' },
         intent: { type: 'string' },
@@ -57,81 +84,49 @@ const TOOLS = [
     },
   },
   {
+    name: 'revert_patch',
+    description: 'Use this to undo a specific patch by its ID. Creates a new patch that restores prior state — history is never rewritten.',
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        patchId: { type: 'string', description: 'ID of the patch to revert (from list_patch_history)' },
+        summary: { type: 'string' },
+      },
+      required: ['patchId'],
+    },
+  },
+  {
     name: 'get_latest_screenshot',
-    title: 'Get Latest Screenshot',
-    description: 'Use this when you need the most recent rendered screenshot artifact.',
-    annotations: { readOnlyHint: true },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        projectRef: { type: 'string' },
-      },
-      required: [],
-    },
+    description: 'Use this to see the current render. Returns a PNG image of the most recent model render from the connected CadLad Studio.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {
-    name: 'request_render_refresh',
-    title: 'Request Render Refresh',
-    description: 'Use this when you need the studio to generate a fresh screenshot.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        projectRef: { type: 'string' },
-      },
-      required: [],
-    },
-  },
-  {
-    name: 'get_part_stats',
-    description:
-      'Get named-part stats from the latest run. Optionally filter by partName.',
-    annotations: { readOnlyHint: true },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        ...SESSION_PROPS,
-        partName: { type: 'string', description: 'Optional exact part name to return (errors if ambiguous)' },
-        partId: { type: 'string', description: 'Optional stable part id from get_part_stats output' },
-      },
-      required: ['session', 'token'],
-    },
-  },
-  {
-    name: 'query_part_relationship',
-    description:
-      'Query pairwise relationship between two named parts: intersection flag and minimum distance.',
-    annotations: { readOnlyHint: true },
-    inputSchema: {
-      type: 'object',
-      properties: {
-        ...SESSION_PROPS,
-        partA: { type: 'string', description: 'First part name (required when partAId is omitted)' },
-        partAId: { type: 'string', description: 'Stable id for first part (preferred)' },
-        partB: { type: 'string', description: 'Second part name (required when partBId is omitted)' },
-        partBId: { type: 'string', description: 'Stable id for second part (preferred)' },
-      },
-      required: ['session', 'token'],
-    },
+    name: 'get_model_stats',
+    description: 'Use this to check geometry metrics: triangle count, body count, bounding box, volume, surface area.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: { type: 'object', properties: {}, required: [] },
   },
 ];
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 
-export async function handleMcp(request: Request, env: Env, origin: string, principal: OAuthPrincipal): Promise<Response> {
+export async function handleMcp(request: Request, env: Env, origin: string): Promise<Response> {
   const cors = corsHeaders(origin);
 
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: cors });
+  }
+
+  // GET — SSE keepalive probe (MCP Streamable HTTP optional server→client channel)
   if (request.method === 'GET') {
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
-    const enc = new TextEncoder();
-    writer.write(enc.encode(': cadlad-mcp-ready\n\n')).then(() => writer.close()).catch(() => {});
+    writer.write(new TextEncoder().encode(': cadlad-mcp-ready\n\n')).then(() => writer.close()).catch(() => {});
     return new Response(readable, {
       status: 200,
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        ...cors,
-      },
+      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', ...cors },
     });
   }
 
@@ -154,199 +149,204 @@ export async function handleMcp(request: Request, env: Env, origin: string, prin
 
   try {
     switch (method) {
+      // initialize and ping do not require auth — they are protocol-level handshakes.
       case 'initialize':
         return rpcResult(id, {
-          protocolVersion: '2024-11-05',
+          protocolVersion: '2025-03-26',
           capabilities: { tools: {} },
-          serverInfo: { name: 'cadlad-live-session', version: '0.2.0' },
+          serverInfo: { name: 'cadlad', version: '1.0.0' },
         }, cors);
+
       case 'ping':
         return rpcResult(id, {}, cors);
+
+      // tools/list is intentionally public — no secrets in the schema.
       case 'tools/list':
         return rpcResult(id, { tools: TOOLS }, cors);
+
       case 'tools/call': {
+        // All tool calls require a valid OAuth Bearer token.
+        const authContext = await resolveAuth(request, env);
+        if (!authContext) {
+          // Signal the MCP client to initiate OAuth flow.
+          const resourceMeta = `${origin}/.well-known/oauth-protected-resource`;
+          return new Response(
+            JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32001, message: 'Unauthorized: obtain an access token via OAuth' } }),
+            {
+              status: 401,
+              headers: {
+                'Content-Type': 'application/json',
+                // WWW-Authenticate per MCP 2025-03-26 OAuth spec
+                'WWW-Authenticate': `Bearer realm="cadlad", resource_metadata="${resourceMeta}"`,
+                ...cors,
+              },
+            },
+          );
+        }
+
         const p = params as { name?: string; arguments?: Record<string, unknown> } | undefined;
         const toolName = p?.name ?? '';
         const args = p?.arguments ?? {};
-        const result = await callTool(toolName, args, env, principal, request);
+        const result = await callTool(toolName, args, authContext.sessionId, authContext.writeToken, env);
         return rpcResult(id, result, cors);
       }
+
       default:
         return rpcError(id, -32601, `Method not found: ${method}`, cors);
     }
   } catch (err) {
-    const m = err instanceof Error ? err.message : String(err);
-    return rpcError(id, -32603, `Internal error: ${m}`, cors);
+    const msg = err instanceof Error ? err.message : String(err);
+    return rpcError(id, -32603, `Internal error: ${msg}`, cors);
   }
 }
+
+// ── Auth resolution ───────────────────────────────────────────────────────────
+
+async function resolveAuth(
+  request: Request,
+  env: Env,
+): Promise<{ sessionId: string; writeToken: string } | null> {
+  const header = request.headers.get('Authorization') ?? '';
+  if (!header.startsWith('Bearer ')) return null;
+  const token = header.slice(7).trim();
+  if (!token) return null;
+  const resolved = await resolveAccessToken(env.KV, token);
+  if (!resolved) return null;
+  return { sessionId: resolved.sessionId, writeToken: resolved.writeToken };
+}
+
+// ── Tool implementations ──────────────────────────────────────────────────────
 
 async function callTool(
   name: string,
   args: Record<string, unknown>,
+  sessionId: string,
+  writeToken: string,
   env: Env,
-  principal: OAuthPrincipal,
-  request: Request,
-): Promise<Record<string, unknown>> {
-  const sessionId = await resolveSessionId(args.projectRef as string | undefined, env, principal.sub, request);
-  if (!sessionId) {
-    return {
-      content: [{ type: 'text', text: 'No live session found for this account. Create one from the studio first.' }],
-      structuredContent: { status: 'missing_session' },
-    };
-  }
-
+): Promise<{ content: Array<{ type: string; text?: string; data?: string; mimeType?: string }> }> {
   const stub = env.LIVE_SESSION.get(env.LIVE_SESSION.idFromName(sessionId));
   const base = `http://do/api/live/session/${sessionId}`;
 
   switch (name) {
     case 'get_session_state': {
-      const session = await doGet<SessionState>(stub, base, principal.sub);
-      return {
-        content: [{ type: 'text', text: `Loaded session ${session.projectRef} at revision ${session.revision}.` }],
-        structuredContent: {
-          projectRef: session.projectRef,
-          revision: session.revision,
-          lastSuccessfulRevision: session.lastSuccessfulRevision,
-        },
-        _meta: {
-          source: session.source,
-          params: session.params,
-          patchCount: session.patches.length,
-        },
-      };
+      const resp = await stub.fetch(new Request(base));
+      if (!resp.ok) throw new Error(`Session read failed: ${resp.status}`);
+      const session = await resp.json() as SessionState;
+      return { content: [{ type: 'text', text: formatSession(session) }] };
+    }
+
+    case 'list_patch_history': {
+      const limit = Math.min(Number(args.limit ?? 20), 50);
+      const offset = Number(args.offset ?? 0);
+      const resp = await stub.fetch(new Request(`${base}/history?limit=${limit}&offset=${offset}`));
+      if (!resp.ok) throw new Error(`History read failed: ${resp.status}`);
+      const history = await resp.json() as { patches: Patch[]; total: number };
+      return { content: [{ type: 'text', text: formatHistory(history) }] };
     }
 
     case 'replace_source': {
-      const { source, summary, intent, approach } = args as { source?: string; summary?: string; intent?: string; approach?: string };
+      const { source, summary, intent, approach } = args as {
+        source?: string; summary?: string; intent?: string; approach?: string;
+      };
       if (!source || !summary) throw new Error('source and summary are required');
-      const result = await doPost<{ patch: Patch }>(stub, `${base}/patch`, principal.sub, {
+      const resp = await doPost(stub, `${base}/patch`, writeToken, {
         type: 'source_replace', source, summary, intent, approach,
       });
-      return {
-        content: [{ type: 'text', text: `Source updated to revision ${result.patch.revision}.` }],
-        structuredContent: { status: 'ok', revision: result.patch.revision },
+      const result = await resp.json() as { patch: Patch };
+      return { content: [{ type: 'text', text: patchAppliedMsg(result.patch) }] };
+    }
+
+    case 'apply_patch': {
+      const { type, source, params, summary, intent, approach } = args as {
+        type?: string; source?: string; params?: Record<string, number>;
+        summary?: string; intent?: string; approach?: string;
       };
+      if (!type || !summary) throw new Error('type and summary are required');
+      if (type === 'source_replace' && !source) throw new Error('source is required for source_replace');
+      if (type === 'param_update' && (!params || Object.keys(params).length === 0))
+        throw new Error('params is required for param_update');
+      const resp = await doPost(stub, `${base}/patch`, writeToken, {
+        type, source, params, summary, intent, approach,
+      });
+      const result = await resp.json() as { patch: Patch };
+      return { content: [{ type: 'text', text: patchAppliedMsg(result.patch) }] };
     }
 
     case 'update_params': {
-      const { params, summary, intent } = args as { params?: Record<string, number>; summary?: string; intent?: string };
+      const { params, summary, intent } = args as {
+        params?: Record<string, number>; summary?: string; intent?: string;
+      };
       if (!params || !summary) throw new Error('params and summary are required');
-      const result = await doPost<{ patch: Patch }>(stub, `${base}/patch`, principal.sub, {
+      const resp = await doPost(stub, `${base}/patch`, writeToken, {
         type: 'param_update', params, summary, intent,
       });
+      const result = await resp.json() as { patch: Patch };
+      const changed = Object.entries(params).map(([k, v]) => `  ${k} → ${v}`).join('\n');
       return {
-        content: [{ type: 'text', text: `Params updated in revision ${result.patch.revision}.` }],
-        structuredContent: { status: 'ok', revision: result.patch.revision },
+        content: [{
+          type: 'text',
+          text: `Param update applied: revision ${result.patch.revision}\n\nChanged:\n${changed}\n\nThe studio will rerender automatically.`,
+        }],
       };
     }
 
-    case 'request_render_refresh': {
-      const data = await doPost<{ requestedAt: number }>(stub, `${base}/render/refresh`, principal.sub, {});
+    case 'revert_patch': {
+      const { patchId, summary } = args as { patchId?: string; summary?: string };
+      if (!patchId) throw new Error('patchId is required');
+      const resp = await doPost(stub, `${base}/revert`, writeToken, { patchId, summary });
+      const result = await resp.json() as { patch: Patch };
       return {
-        content: [{ type: 'text', text: 'Render refresh requested.' }],
-        structuredContent: { status: 'queued', requestedAt: data.requestedAt },
+        content: [{
+          type: 'text',
+          text: `Revert applied: revision ${result.patch.revision}\nReverted: ${patchId}\nSummary: ${result.patch.summary}`,
+        }],
       };
     }
 
     case 'get_latest_screenshot': {
-      const data = await doGet<{ status: string; artifactRef: string | null; hasImage: boolean; imageDataUrl?: string; revision?: number }>(stub, `${base}/render/latest`, principal.sub);
-      if (!data.hasImage || !data.imageDataUrl) {
-        const run = await doGet<{ runResult: { stats?: ModelStats } | null }>(stub, `${base}/run-result`, principal.sub);
-        return {
-          content: [{ type: 'text', text: 'No screenshot artifact is available yet.' }],
-          structuredContent: { status: 'missing', artifactRef: null, hasImage: false },
-          _meta: { stats: run.runResult?.stats ?? null },
-        };
-      }
-
-      return {
-        content: [{ type: 'text', text: `Latest screenshot ready (artifact ${data.artifactRef}).` }],
-        structuredContent: {
-          status: 'ready',
-          artifactRef: data.artifactRef,
-          hasImage: true,
-          revision: data.revision,
-        },
-        _meta: {
-          widgetDescription: 'Latest CadLad render screenshot',
-          image: {
-            dataUrl: data.imageDataUrl,
-            mimeType: 'image/png',
-            artifactRef: data.artifactRef,
-          },
-        },
-      };
-    }
-
-    case 'get_part_stats': {
       const resp = await stub.fetch(new Request(`${base}/run-result`));
       if (resp.status === 404) {
         return { content: [{ type: 'text', text: 'No run result yet. Open CadLad Studio and run the model.' }] };
       }
       if (!resp.ok) throw new Error(`Run-result fetch failed: ${resp.status}`);
       const data = await resp.json() as { runResult: RunResult | null; revision?: number };
-      const stats = data.runResult?.stats;
-      if (!stats?.parts || stats.parts.length === 0) {
-        return { content: [{ type: 'text', text: 'No named part stats available yet.' }] };
-      }
 
-      const partName = typeof args.partName === 'string' ? args.partName : undefined;
-      const partId = typeof args.partId === 'string' ? args.partId : undefined;
-      if (partName || partId) {
-        const part = findPart(stats.parts, { name: partName, id: partId });
-        if (!part) {
-          return { content: [{ type: 'text', text: `Part not found. Available parts: ${stats.parts.map((p) => `${p.name} (${p.id})`).join(', ')}` }] };
+      // Try DO memory first, then fall back to KV for post-eviction persistence
+      const screenshot = data.runResult?.screenshot ?? await loadScreenshot(env.KV, sessionId);
+
+      if (screenshot) {
+        const match = screenshot.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          const [, mimeType, base64Data] = match;
+          return {
+            content: [
+              { type: 'image', data: base64Data, mimeType },
+              {
+                type: 'text',
+                text: `Render at revision ${data.revision ?? '?'}. Success: ${data.runResult?.success ?? true}.${data.runResult?.errors?.length ? `\nErrors: ${data.runResult.errors.join('; ')}` : ''}`,
+              },
+            ],
+          };
         }
-        return { content: [{ type: 'text', text: formatPartStats(part) }] };
       }
 
-      return { content: [{ type: 'text', text: stats.parts.map(formatPartStats).join('\n\n') }] };
+      if (data.runResult?.stats) {
+        return { content: [{ type: 'text', text: `No screenshot yet. Stats:\n${formatStats(data.runResult.stats)}` }] };
+      }
+
+      return { content: [{ type: 'text', text: 'No screenshot available. Open CadLad Studio and run the model to generate one.' }] };
     }
 
-    case 'query_part_relationship': {
-      const partA = typeof args.partA === 'string' ? args.partA : undefined;
-      const partAId = typeof args.partAId === 'string' ? args.partAId : undefined;
-      const partB = typeof args.partB === 'string' ? args.partB : undefined;
-      const partBId = typeof args.partBId === 'string' ? args.partBId : undefined;
-      if (!partA && !partAId) throw new Error('partA or partAId is required');
-      if (!partB && !partBId) throw new Error('partB or partBId is required');
-
+    case 'get_model_stats': {
       const resp = await stub.fetch(new Request(`${base}/run-result`));
-      if (resp.status === 404) {
+      if (resp.status === 404 || !resp.ok) {
         return { content: [{ type: 'text', text: 'No run result yet. Open CadLad Studio and run the model.' }] };
       }
-      if (!resp.ok) throw new Error(`Run-result fetch failed: ${resp.status}`);
       const data = await resp.json() as { runResult: RunResult | null; revision?: number };
-      const stats = data.runResult?.stats;
-      if (!stats?.parts || stats.parts.length === 0) {
-        return { content: [{ type: 'text', text: 'No named part stats available yet.' }] };
+      if (!data.runResult?.stats) {
+        return { content: [{ type: 'text', text: 'No geometry stats available yet.' }] };
       }
-
-      const a = findPart(stats.parts, { name: partA, id: partAId });
-      const b = findPart(stats.parts, { name: partB, id: partBId });
-      if (!a || !b) {
-        return { content: [{ type: 'text', text: `Unknown part(s). Available parts: ${stats.parts.map((p) => `${p.name} (${p.id})`).join(', ')}` }] };
-      }
-
-      const pair = stats.pairwise?.find((r) =>
-        (r.partAId === a.id && r.partBId === b.id) || (r.partAId === b.id && r.partBId === a.id),
-      );
-
-      if (!pair) {
-        return { content: [{ type: 'text', text: `No relationship data available for ${a.name} (${a.id}) ↔ ${b.name} (${b.id}).` }] };
-      }
-
-      return {
-        content: [{
-          type: 'text',
-          text: [
-            `Part A: ${a.name} (${a.id})`,
-            `Part B: ${b.name} (${b.id})`,
-            `Intersects: ${pair.intersects ? 'yes' : 'no'}`,
-            `Minimum distance: ${pair.minDistance.toFixed(3)} units`,
-          ].join('\n'),
-        }],
-      };
+      return { content: [{ type: 'text', text: formatStats(data.runResult.stats) }] };
     }
 
     default:
@@ -354,53 +354,72 @@ async function callTool(
   }
 }
 
-async function resolveSessionId(projectRef: string | undefined, env: Env, sub: string, request: Request): Promise<string | null> {
-  if (projectRef) {
-    // projectRef lookup is not indexed yet; fallback to explicit session id usage for now.
-    if (projectRef.startsWith('session_')) return projectRef.slice('session_'.length);
+// ── DO helper ─────────────────────────────────────────────────────────────────
+
+async function doPost(
+  stub: DurableObjectStub,
+  url: string,
+  writeToken: string,
+  body: unknown,
+): Promise<Response> {
+  const resp = await stub.fetch(new Request(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${writeToken}` },
+    body: JSON.stringify(body),
+  }));
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => String(resp.status));
+    throw new Error(`DO request failed (${resp.status}): ${text}`);
   }
-
-  const url = new URL(request.url);
-  const fromQuery = url.searchParams.get('session');
-  if (fromQuery) return fromQuery;
-
-  return null;
+  return resp;
 }
 
+// ── Formatters ────────────────────────────────────────────────────────────────
 
-
-function findPart(parts: NonNullable<ModelStats['parts']>, query: { name?: string; id?: string }): NonNullable<ModelStats['parts']>[number] | undefined {
-  if (query.id) {
-    return parts.find((part) => part.id === query.id);
-  }
-
-  if (!query.name) return undefined;
-
-  const matches = parts.filter((part) => part.name === query.name);
-  if (matches.length > 1) {
-    throw new Error(`Part name "${query.name}" is ambiguous. Use partId instead.`);
-  }
-
-  return matches[0];
-}
-
-async function doGet<T>(stub: DurableObjectStub, url: string, sub: string): Promise<T> {
-  const resp = await stub.fetch(new Request(url, { headers: { 'X-Cadlad-Sub': sub } }));
-  if (!resp.ok) throw new Error(`DO read failed (${resp.status})`);
-  return resp.json() as Promise<T>;
-}
-
-function formatPartStats(part: NonNullable<ModelStats['parts']>[number]): string {
-  const bb = part.boundingBox;
+function formatSession(s: SessionState): string {
   return [
-    `Part: ${part.name} (${part.id}) #${part.index}`,
-    `Triangles: ${part.triangles.toLocaleString()}`,
-    `Extents: X=${part.extents.x.toFixed(2)}  Y=${part.extents.y.toFixed(2)}  Z=${part.extents.z.toFixed(2)}`,
-    `Bounding box min: [${bb.min.map((v) => v.toFixed(2)).join(', ')}]`,
-    `Bounding box max: [${bb.max.map((v) => v.toFixed(2)).join(', ')}]`,
-    `Volume: ${part.volume.toFixed(2)} units³`,
-    `Surface area: ${part.surfaceArea.toFixed(2)} units²`,
+    `Revision: ${s.revision} (last successful: ${s.lastSuccessfulRevision})`,
+    `Params: ${Object.keys(s.params).length > 0 ? JSON.stringify(s.params) : 'none'}`,
+    `Patches: ${s.patches.length}`,
+    `Updated: ${new Date(s.updatedAt).toISOString()}`,
+    '',
+    '=== Source ===',
+    s.source,
   ].join('\n');
+}
+
+function formatHistory(h: { patches: Patch[]; total: number }): string {
+  if (h.patches.length === 0) return 'No patches yet.';
+  const lines = [`Showing ${h.patches.length} of ${h.total} patches`, ''];
+  for (const p of h.patches) {
+    const status = p.runResult
+      ? p.runResult.success ? '✓' : `✗ (${p.runResult.errors.slice(0, 1).join('; ')})`
+      : '?';
+    lines.push(`[${p.revision}] ${status} ${p.type} — ${p.summary}`);
+    lines.push(`  id: ${p.id}  at: ${new Date(p.createdAt).toISOString()}`);
+    if (p.intent) lines.push(`  intent: ${p.intent}`);
+    if (p.approach) lines.push(`  approach: ${p.approach}`);
+    if (p.revertOf) lines.push(`  reverts: ${p.revertOf}`);
+  }
+  return lines.join('\n');
+}
+
+function formatStats(stats: ModelStats): string {
+  const bb = stats.boundingBox;
+  const size = [
+    (bb.max[0] - bb.min[0]).toFixed(1),
+    (bb.max[1] - bb.min[1]).toFixed(1),
+    (bb.max[2] - bb.min[2]).toFixed(1),
+  ];
+  return [
+    `Bodies: ${stats.bodies}`,
+    `Triangles: ${stats.triangles.toLocaleString()}`,
+    `Bounding box: ${size[0]} × ${size[1]} × ${size[2]} (W × H × D, model units)`,
+    `  min: [${bb.min.map(v => v.toFixed(2)).join(', ')}]`,
+    `  max: [${bb.max.map(v => v.toFixed(2)).join(', ')}]`,
+    stats.volume !== undefined ? `Volume: ${stats.volume.toFixed(2)} units³` : '',
+    stats.surfaceArea !== undefined ? `Surface area: ${stats.surfaceArea.toFixed(2)} units²` : '',
+  ].filter(Boolean).join('\n');
 }
 
 function patchAppliedMsg(patch: Patch): string {
@@ -411,18 +430,10 @@ function patchAppliedMsg(patch: Patch): string {
     patch.approach ? `Approach: ${patch.approach}` : '',
     '',
     'The studio will rerender automatically. Call get_latest_screenshot after a moment to see the result.',
-  ].filter(line => line !== undefined).join('\n').replace(/\n\n\n+/g, '\n\n');
+  ].filter(l => l !== undefined).join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
-async function doPost<T>(stub: DurableObjectStub, url: string, sub: string, body: unknown): Promise<T> {
-  const resp = await stub.fetch(new Request(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Cadlad-Sub': sub },
-    body: JSON.stringify(body),
-  }));
-  if (!resp.ok) throw new Error(`DO write failed (${resp.status})`);
-  return resp.json() as Promise<T>;
-}
+// ── JSON-RPC helpers ──────────────────────────────────────────────────────────
 
 function rpcResult(id: unknown, result: unknown, cors: Record<string, string>): Response {
   return new Response(JSON.stringify({ jsonrpc: '2.0', id, result }), {
@@ -431,7 +442,12 @@ function rpcResult(id: unknown, result: unknown, cors: Record<string, string>): 
   });
 }
 
-function rpcError(id: unknown, code: number, message: string, cors: Record<string, string> = {}): Response {
+function rpcError(
+  id: unknown,
+  code: number,
+  message: string,
+  cors: Record<string, string> = {},
+): Response {
   return new Response(JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } }), {
     status: 200,
     headers: { 'Content-Type': 'application/json', ...cors },

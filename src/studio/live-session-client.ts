@@ -289,11 +289,30 @@ export class LiveSessionClient {
     }
   }
 
-  subscribe(sessionId: string, onEvent: (event: LiveSessionEvent) => void, onError: (err: Event) => void): EventSource {
-    const token = this.getAccessToken();
-    const url = new URL(`${this.apiBase}/api/live/session/${encodeURIComponent(sessionId)}/events`);
-    if (token) url.searchParams.set("access_token", token);
-    const source = new EventSource(url.toString());
+  /**
+   * Generate a short-lived link code for a session.
+   * The code is entered in the OAuth consent UI to authorize an MCP client.
+   * Requires the write token to prove session ownership.
+   */
+  async createLinkCode(sessionId: string, writeToken: string): Promise<{ linkCode: string; expiresIn: number }> {
+    const url = `${this.apiBase}/api/live/session/${encodeURIComponent(sessionId)}/link`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${writeToken}`,
+      },
+    });
+    if (!res.ok) {
+      throw new Error(`createLinkCode failed (${res.status})`);
+    }
+    return res.json() as Promise<{ linkCode: string; expiresIn: number }>;
+  }
+
+  subscribe(sessionId: string, onEvent: (event: PatchEventPayload) => void, onError: (err: Event) => void): EventSource {
+    // SSE is read-only — no token needed. The write token is never sent in URLs.
+    const url = `${this.apiBase}/api/live/session/${encodeURIComponent(sessionId)}/events`;
+    const source = new EventSource(url);
     source.onmessage = (message) => {
       try {
         const payload = parseLiveSessionEvent(JSON.parse(message.data) as unknown);

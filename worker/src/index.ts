@@ -3,79 +3,98 @@
 import { LiveSession } from './live-session.js';
 import { handleMcp } from './mcp-handler.js';
 import {
-  handleAuthorize,
+  handleProtectedResourceMetadata,
+  handleAuthServerMetadata,
   handleRegister,
+  handleAuthorize,
   handleToken,
-  oauthAuthorizationServerMetadata,
-  oauthProtectedResourceMetadata,
-  requireScope,
-  verifyAccessToken,
-} from './oauth.js';
+} from './oauth-handler.js';
 import type { Env, CreateSessionResponse, InitPayload, SessionState } from './types.js';
 
+// Re-export DO class so wrangler can find it
 export { LiveSession };
+
+// ── Worker fetch handler ──────────────────────────────────────────────────────
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const origin = resolveStudioOrigin(request, env);
 
-    if (url.pathname === '/.well-known/oauth-protected-resource') {
-      return json(oauthProtectedResourceMetadata(request), 200, corsHeaders('*'));
-    }
-    if (url.pathname === '/.well-known/oauth-authorization-server') {
-      return json(oauthAuthorizationServerMetadata(request), 200, corsHeaders('*'));
-    }
-    if (url.pathname === '/oauth/authorize') return handleAuthorize(request, env);
-    if (url.pathname === '/oauth/token') return handleToken(request, env);
-    if (url.pathname === '/oauth/register') return handleRegister();
-
+    // For /mcp, always reflect the actual request Origin for CORS.
+    // The MCP endpoint must accept requests from Claude.ai (and other MCP clients),
+    // not just the configured STUDIO_ORIGIN.
     const mcpOrigin = resolveMcpOrigin(request);
     if (url.pathname === '/mcp') {
       if (request.method === 'OPTIONS') {
         return new Response(null, { status: 204, headers: corsHeaders(mcpOrigin) });
       }
-      const principal = await verifyAccessToken(request, env);
-      const authErr = requireScope(principal, 'cadlad.sessions.read');
-      if (authErr) return authErr;
-      return handleMcp(request, env, mcpOrigin, principal!);
+      return handleMcp(request, env, mcpOrigin);
     }
 
+    // ── OAuth 2.1 discovery and authorization endpoints ───────────────────────
+
+    // RFC 8707: Protected Resource Metadata (tells clients which AS to use)
+    if (url.pathname === '/.well-known/oauth-protected-resource') {
+      const resourceOrigin = `${url.protocol}//${url.host}`;
+      return handleProtectedResourceMetadata(resourceOrigin);
+    }
+
+    // RFC 8414: Authorization Server Metadata
+    if (url.pathname === '/.well-known/oauth-authorization-server') {
+      const resourceOrigin = `${url.protocol}//${url.host}`;
+      return handleAuthServerMetadata(resourceOrigin);
+    }
+
+    if (url.pathname === '/oauth/register') return handleRegister(request, env);
+    if (url.pathname === '/oauth/authorize') return handleAuthorize(request, env);
+    if (url.pathname === '/oauth/token') return handleToken(request, env);
+
+    // CORS preflight for non-MCP routes
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
 
+    // POST /api/live/session — create a new live session
     if (url.pathname === '/api/live/session') {
       if (request.method !== 'POST') {
         return json(
-          { error: `Method ${request.method} not allowed. Use POST.`, code: 'METHOD_NOT_ALLOWED' },
+          { error: `Method ${request.method} not allowed. Use POST.`, code: 'METHOD_NOT_ALLOWED', hint: 'POST /api/live/session with JSON body {source: string, params?: object}' },
           405,
           { ...corsHeaders(origin), Allow: 'POST, OPTIONS' },
         );
       }
-      const principal = await verifyAccessToken(request, env);
-      const authErr = requireScope(principal, 'cadlad.sessions.write');
-      if (authErr) return authErr;
-      return handleCreateSession(request, env, origin, principal!.sub);
+      return handleCreateSession(request, env, origin);
     }
 
+    // /api/live/session/:id[/*] — delegate to Durable Object
     const sessionMatch = url.pathname.match(/^\/api\/live\/session\/([^/]+)(\/.*)?$/);
     if (sessionMatch) {
       const sessionId = sessionMatch[1];
-      const principal = await verifyAccessToken(request, env);
-      const neededScope = request.method === 'GET' ? 'cadlad.sessions.read' : 'cadlad.sessions.write';
-      const authErr = requireScope(principal, neededScope);
-      if (authErr) return authErr;
-      return proxyToDO(request, env, sessionId, origin, principal!.sub);
+      return proxyToDO(request, env, sessionId, origin);
     }
 
+    // Health check
     if (url.pathname === '/' || url.pathname === '/health') {
       return json({
         status: 'ok',
         service: 'cadlad-live-sessions',
         timestamp: new Date().toISOString(),
-        oauthProtectedResource: '/.well-known/oauth-protected-resource',
         studioOrigin: env.STUDIO_ORIGIN || '(dynamic — reflects request Origin)',
+        auth: 'OAuth 2.1 — see /.well-known/oauth-protected-resource',
+        routes: [
+          'POST /mcp (OAuth Bearer required for tools/call)',
+          'GET  /.well-known/oauth-protected-resource',
+          'GET  /.well-known/oauth-authorization-server',
+          'POST /oauth/register',
+          'GET  /oauth/authorize',
+          'POST /oauth/token',
+          'POST /api/live/session',
+          'GET  /api/live/session/:id',
+          'POST /api/live/session/:id/patch',
+          'POST /api/live/session/:id/link',
+          'GET  /health',
+        ],
       }, 200, corsHeaders(origin));
     }
 
@@ -83,10 +102,12 @@ export default {
   },
 };
 
-async function handleCreateSession(request: Request, env: Env, origin: string, ownerSub: string): Promise<Response> {
-  let body: { source?: string; params?: Record<string, number>; projectRef?: string };
+// ── Session creation ──────────────────────────────────────────────────────────
+
+async function handleCreateSession(request: Request, env: Env, origin: string): Promise<Response> {
+  let body: { source?: string; params?: Record<string, number> };
   try {
-    body = await request.json() as { source?: string; params?: Record<string, number>; projectRef?: string };
+    body = await request.json() as { source?: string; params?: Record<string, number> };
   } catch {
     return json({ error: 'Invalid JSON body', code: 'INVALID_REQUEST' }, 400, corsHeaders(origin));
   }
@@ -96,12 +117,12 @@ async function handleCreateSession(request: Request, env: Env, origin: string, o
   }
 
   const sessionId = crypto.randomUUID();
-  const projectRef = body.projectRef || `project_${sessionId.slice(0, 8)}`;
+  const writeToken = crypto.randomUUID();
 
+  // Construct the internal /init request forwarded to the DO
   const initPayload: InitPayload = {
     sessionId,
-    ownerSub,
-    projectRef,
+    writeToken,
     source: body.source,
     params: body.params ?? {},
   };
@@ -124,30 +145,36 @@ async function handleCreateSession(request: Request, env: Env, origin: string, o
 
   const session = await initResp.json() as SessionState;
 
+  // Build the studio liveUrl
   const studioBase = origin !== '*' ? origin : `https://${new URL(request.url).hostname}`;
-  const liveUrl = `${studioBase}?session=${sessionId}`;
+  const liveUrl = `${studioBase}?session=${sessionId}&token=${writeToken}`;
 
-  const response: CreateSessionResponse = { sessionId, projectRef, liveUrl, session };
+  const response: CreateSessionResponse = { sessionId, writeToken, liveUrl, session };
   return json(response, 201, corsHeaders(origin));
 }
 
-async function proxyToDO(request: Request, env: Env, sessionId: string, origin: string, userSub: string): Promise<Response> {
-  const stub = env.LIVE_SESSION.get(env.LIVE_SESSION.idFromName(sessionId));
-  const headers = new Headers(request.headers);
-  headers.set('X-Cadlad-Sub', userSub);
-  const forward = new Request(request, { headers });
-  const doResp = await stub.fetch(forward);
+// ── Proxy to Durable Object ───────────────────────────────────────────────────
 
+async function proxyToDO(request: Request, env: Env, sessionId: string, origin: string): Promise<Response> {
+  const stub = env.LIVE_SESSION.get(env.LIVE_SESSION.idFromName(sessionId));
+  const doResp = await stub.fetch(request);
+
+  // For non-streaming responses, copy and inject CORS headers
   const contentType = doResp.headers.get('Content-Type') ?? '';
   if (!contentType.startsWith('text/event-stream')) {
     const body = await doResp.arrayBuffer();
-    const respHeaders = new Headers(doResp.headers);
-    for (const [k, v] of Object.entries(corsHeaders(origin))) respHeaders.set(k, v);
-    return new Response(body, { status: doResp.status, headers: respHeaders });
+    const headers = new Headers(doResp.headers);
+    for (const [k, v] of Object.entries(corsHeaders(origin))) {
+      headers.set(k, v);
+    }
+    return new Response(body, { status: doResp.status, headers });
   }
 
+  // For SSE (streaming), pass through directly — the DO already sets CORS headers
   return doResp;
 }
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
 
 function corsHeaders(origin = '*'): Record<string, string> {
   return {
@@ -168,7 +195,9 @@ function resolveStudioOrigin(request: Request, env: Env): string {
   if (configured) return configured;
 
   const requestOrigin = request.headers.get('Origin')?.trim();
-  if (requestOrigin && isHttpOrigin(requestOrigin)) return requestOrigin;
+  if (requestOrigin && isHttpOrigin(requestOrigin)) {
+    return requestOrigin;
+  }
 
   return '*';
 }

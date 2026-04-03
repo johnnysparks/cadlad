@@ -3,7 +3,7 @@ main = "src/index.ts"
 compatibility_date = "2024-09-25"
 
 # Studio origin used for CORS and liveUrl construction.
-# Leave blank to reflect the request Origin dynamically (recommended for multi-origin usage).
+# Leave blank to reflect the request Origin dynamically (recommended for shared preview workers).
 # Override via `wrangler dev --var STUDIO_ORIGIN:http://localhost:5173`
 # or set in the Cloudflare dashboard for production.
 [vars]
@@ -16,6 +16,16 @@ class_name = "LiveSession"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["LiveSession"]
+
+# KV namespace for OAuth state (clients, link codes, auth codes, tokens)
+# and screenshot persistence. Create with:
+#   wrangler kv:namespace create "KV"
+#   wrangler kv:namespace create "KV" --preview
+# Then replace the placeholder IDs below with the real ones.
+[[kv_namespaces]]
+binding = "KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+preview_id = "REPLACE_WITH_KV_PREVIEW_NAMESPACE_ID"
 
 [dev]
 port = 8787

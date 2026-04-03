@@ -11,88 +11,93 @@ import type {
   RevertRequest,
   PostRunResultRequest,
   RunResult,
-  RenderArtifact,
 } from './types.js';
+import { createLinkCode, saveScreenshot } from './oauth-store.js';
 
 const MAX_PATCHES = 100;
-const HEARTBEAT_INTERVAL_MS = 25_000;
+const HEARTBEAT_INTERVAL_MS = 25_000; // keep SSE connections alive
+
+// ── Stored payload (everything we persist to DO storage) ─────────────────────
 
 interface StoredSession {
   id: string;
-  ownerSub: string;
-  projectRef: string;
   source: string;
   params: Record<string, number>;
   revision: number;
   lastSuccessfulRevision: number;
   patches: Patch[];
+  writeToken: string;
   createdAt: number;
   updatedAt: number;
   lastRunResult?: RunResult | null;
-  latestRender?: RenderArtifact | null;
 }
+
+// ── Durable Object ────────────────────────────────────────────────────────────
 
 export class LiveSession implements DurableObject {
   private readonly state: DurableObjectState;
+  private readonly env: Env;
 
+  // In-memory SSE connections: connectionId → writer
   private readonly sseClients: Map<string, WritableStreamDefaultWriter<Uint8Array>> = new Map();
 
+  // Session state (loaded from storage in blockConcurrencyWhile)
   private id = '';
-  private ownerSub = '';
-  private projectRef = '';
   private source = '';
   private params: Record<string, number> = {};
   private revision = 0;
   private lastSuccessfulRevision = 0;
   private patches: Patch[] = [];
+  private writeToken = '';
   private createdAt = 0;
   private updatedAt = 0;
+  /** Latest run result posted by a connected studio */
   private lastRunResult: RunResult | null = null;
-  private latestRender: RenderArtifact | null = null;
 
-  constructor(state: DurableObjectState, _env: Env) {
+  constructor(state: DurableObjectState, env: Env) {
     this.state = state;
+    this.env = env;
 
     this.state.blockConcurrencyWhile(async () => {
       const stored = await this.state.storage.get<StoredSession>('session');
       if (stored) {
         this.id = stored.id;
-        this.ownerSub = stored.ownerSub;
-        this.projectRef = stored.projectRef;
         this.source = stored.source;
         this.params = stored.params;
         this.revision = stored.revision;
         this.lastSuccessfulRevision = stored.lastSuccessfulRevision;
         this.patches = stored.patches ?? [];
+        this.writeToken = stored.writeToken;
         this.createdAt = stored.createdAt;
         this.updatedAt = stored.updatedAt;
         this.lastRunResult = stored.lastRunResult ?? null;
-        this.latestRender = stored.latestRender ?? null;
       }
     });
   }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    // Strip /api/live/session/:id prefix to get the sub-path
     const sub = (url.pathname.match(/^\/api\/live\/session\/[^/]+(\/[^?]*)?/) ?? [])[1] ?? '';
 
     try {
+      // CORS preflight (belt-and-suspenders; worker handles it too)
       if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders() });
-      if (request.method === 'POST' && sub === '/init') return this.handleInit(request);
-      if (!this.id) return err('Session not found', 'NOT_FOUND', 404);
 
-      const userSub = request.headers.get('X-Cadlad-Sub');
-      if (!userSub || userSub !== this.ownerSub) return err('Forbidden', 'FORBIDDEN', 403);
+      // Internal init (worker → DO only, not exposed publicly)
+      if (request.method === 'POST' && sub === '/init') return this.handleInit(request);
+
+      if (!this.id) return err('Session not found', 'NOT_FOUND', 404);
 
       if (request.method === 'GET' && (sub === '' || sub === '/')) return this.handleGetSession();
       if (request.method === 'GET' && sub === '/history') return this.handleGetHistory(url);
       if (request.method === 'GET' && sub === '/events') return this.handleSSE(request);
       if (request.method === 'GET' && sub === '/run-result') return this.handleGetRunResult();
-      if (request.method === 'GET' && sub === '/render/latest') return this.handleGetLatestRender();
       if (request.method === 'POST' && sub === '/patch') return this.handlePatch(request);
       if (request.method === 'POST' && sub === '/revert') return this.handleRevert(request);
       if (request.method === 'POST' && sub === '/run-result') return this.handlePostRunResult(request);
-      if (request.method === 'POST' && sub === '/render/refresh') return this.handleRequestRenderRefresh();
+      // Studio calls this to generate a link code for OAuth authorization
+      if (request.method === 'POST' && sub === '/link') return this.handleCreateLink(request);
 
       return err('Not found', 'NOT_FOUND', 404);
     } catch (e) {
@@ -101,16 +106,17 @@ export class LiveSession implements DurableObject {
     }
   }
 
+  // ── Route handlers ──────────────────────────────────────────────────────────
+
   private async handleInit(request: Request): Promise<Response> {
     const body = await request.json() as InitPayload;
 
     this.id = body.sessionId;
-    this.ownerSub = body.ownerSub;
-    this.projectRef = body.projectRef;
     this.source = body.source ?? '';
     this.params = body.params ?? {};
     this.revision = 1;
     this.lastSuccessfulRevision = 0;
+    this.writeToken = body.writeToken;
     this.createdAt = Date.now();
     this.updatedAt = Date.now();
 
@@ -155,11 +161,14 @@ export class LiveSession implements DurableObject {
       writer.close().catch(() => {});
     };
 
+    // Detect client disconnect via AbortSignal (best-effort in CF environment)
     request.signal?.addEventListener('abort', cleanup);
 
+    // Send initial snapshot immediately
     const snapshot: SessionEvent = { type: 'session_snapshot', session: this.fullState() };
     writer.write(encoder.encode(sseMsg(snapshot))).catch(cleanup);
 
+    // Heartbeat to keep the connection alive through proxies and CF timeouts
     const heartbeat = setInterval(() => {
       const evt: SessionEvent = { type: 'heartbeat', ts: Date.now() };
       writer.write(encoder.encode(sseMsg(evt))).catch(() => {
@@ -167,6 +176,9 @@ export class LiveSession implements DurableObject {
         cleanup();
       });
     }, HEARTBEAT_INTERVAL_MS);
+
+    // Heartbeat failures (caught above) clear the interval when the stream closes.
+    // The abort signal also cleans up synchronously when the client disconnects.
 
     return new Response(readable, {
       status: 200,
@@ -181,6 +193,9 @@ export class LiveSession implements DurableObject {
   }
 
   private async handlePatch(request: Request): Promise<Response> {
+    const authErr = this.checkAuth(request);
+    if (authErr) return authErr;
+
     const body = await request.json() as ApplyPatchRequest;
     if (!body.type || !body.summary) return err('type and summary are required', 'INVALID_REQUEST', 400);
 
@@ -190,8 +205,6 @@ export class LiveSession implements DurableObject {
       revision: newRevision,
       type: body.type,
       summary: body.summary,
-      intent: body.intent,
-      approach: body.approach,
       sourceBefore: this.source,
       sourceAfter: body.source ?? this.source,
       paramsBefore: { ...this.params },
@@ -209,14 +222,18 @@ export class LiveSession implements DurableObject {
     this.updatedAt = Date.now();
     await this.persist();
 
-    this.broadcast({ type: 'patch_applied', patch, session: this.summary() });
+    const event: SessionEvent = { type: 'patch_applied', patch, session: this.summary() };
+    this.broadcast(event);
 
     return ok({ patch, session: this.fullState() }, 201);
   }
 
   private async handleRevert(request: Request): Promise<Response> {
+    const authErr = this.checkAuth(request);
+    if (authErr) return authErr;
+
     const body = await request.json() as RevertRequest;
-    const target = this.patches.find((p) => p.id === body.patchId);
+    const target = this.patches.find(p => p.id === body.patchId);
     if (!target) return err('Patch not found', 'PATCH_NOT_FOUND', 404);
 
     const newRevision = this.revision + 1;
@@ -241,7 +258,8 @@ export class LiveSession implements DurableObject {
     this.updatedAt = Date.now();
     await this.persist();
 
-    this.broadcast({ type: 'patch_reverted', patch: revertPatch, session: this.summary() });
+    const event: SessionEvent = { type: 'patch_reverted', patch: revertPatch, session: this.summary() };
+    this.broadcast(event);
 
     return ok({ patch: revertPatch, session: this.fullState() }, 201);
   }
@@ -250,25 +268,13 @@ export class LiveSession implements DurableObject {
     if (!this.lastRunResult) {
       return ok({ runResult: null, message: 'No run result posted yet. Connect CadLad Studio to the session and run the model.' });
     }
-    return ok({ runResult: { ...this.lastRunResult, screenshot: undefined }, revision: this.revision, artifactRef: this.latestRender?.artifactRef ?? null });
-  }
-
-  private handleGetLatestRender(): Response {
-    if (!this.latestRender) {
-      return ok({ status: 'missing', artifactRef: null, hasImage: false });
-    }
-    return ok({
-      status: 'ready',
-      artifactRef: this.latestRender.artifactRef,
-      hasImage: true,
-      revision: this.latestRender.revision,
-      createdAt: this.latestRender.createdAt,
-      mimeType: this.latestRender.mimeType,
-      imageDataUrl: this.latestRender.imageDataUrl,
-    });
+    return ok({ runResult: this.lastRunResult, revision: this.revision });
   }
 
   private async handlePostRunResult(request: Request): Promise<Response> {
+    const authErr = this.checkAuth(request);
+    if (authErr) return authErr;
+
     const body = await request.json() as PostRunResultRequest;
     if (typeof body.revision !== 'number' || !body.result) {
       return err('revision (number) and result (RunResult) are required', 'INVALID_REQUEST', 400);
@@ -277,34 +283,42 @@ export class LiveSession implements DurableObject {
     this.lastRunResult = body.result;
     if (body.result.success) this.lastSuccessfulRevision = body.revision;
 
-    const screenshot = body.result.screenshot;
-    if (typeof screenshot === 'string' && screenshot.startsWith('data:image/png;base64,')) {
-      this.latestRender = {
-        artifactRef: `render_${crypto.randomUUID()}`,
-        revision: body.revision,
-        createdAt: Date.now(),
-        mimeType: 'image/png',
-        imageDataUrl: screenshot,
-      };
+    // Persist screenshot to KV so it survives DO eviction
+    if (body.result.screenshot && this.id) {
+      void saveScreenshot(this.env.KV, this.id, body.result.screenshot);
     }
 
     this.updatedAt = Date.now();
     await this.persist();
 
-    this.broadcast({
-      type: 'run_result_posted',
-      result: { ...body.result, screenshot: undefined },
-      revision: body.revision,
-      artifactRef: this.latestRender?.artifactRef,
-    });
+    const event: SessionEvent = { type: 'run_result_posted', result: body.result, revision: body.revision };
+    this.broadcast(event);
 
-    return ok({ ok: true, artifactRef: this.latestRender?.artifactRef ?? null });
+    return ok({ ok: true });
   }
 
-  private async handleRequestRenderRefresh(): Promise<Response> {
-    const requestedAt = Date.now();
-    this.broadcast({ type: 'render_refresh_requested', requestedAt });
-    return ok({ ok: true, requestedAt });
+  /**
+   * POST /api/live/session/:id/link — generate a short-lived link code.
+   * Requires write token auth. The code is shown to the user in the studio
+   * and entered into the OAuth consent form to authorize a client like ChatGPT.
+   */
+  private async handleCreateLink(request: Request): Promise<Response> {
+    const authErr = this.checkAuth(request);
+    if (authErr) return authErr;
+
+    const code = await createLinkCode(this.env.KV, this.id, this.writeToken);
+    const expiresAt = Date.now() + 600_000; // 10 min, matching LINK_CODE_TTL_S in oauth-store
+    return ok({ linkCode: code, expiresAt, expiresIn: 600 });
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+
+  private checkAuth(request: Request): Response | null {
+    const header = request.headers.get('Authorization');
+    if (header?.startsWith('Bearer ') && header.slice(7) === this.writeToken) return null;
+    const url = new URL(request.url);
+    if (url.searchParams.get('token') === this.writeToken) return null;
+    return err('Invalid or missing write token', 'UNAUTHORIZED', 401);
   }
 
   private addPatch(patch: Patch): void {
@@ -315,17 +329,18 @@ export class LiveSession implements DurableObject {
   private async persist(): Promise<void> {
     const stored: StoredSession = {
       id: this.id,
-      ownerSub: this.ownerSub,
-      projectRef: this.projectRef,
       source: this.source,
       params: this.params,
       revision: this.revision,
       lastSuccessfulRevision: this.lastSuccessfulRevision,
       patches: this.patches,
+      writeToken: this.writeToken,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
-      lastRunResult: this.lastRunResult ? { ...this.lastRunResult, screenshot: undefined } : null,
-      latestRender: this.latestRender ?? null,
+      // Persist without screenshot to keep storage bounded
+      lastRunResult: this.lastRunResult
+        ? { ...this.lastRunResult, screenshot: undefined }
+        : null,
     };
     await this.state.storage.put('session', stored);
   }
@@ -342,14 +357,11 @@ export class LiveSession implements DurableObject {
   private fullState(): SessionState {
     return {
       id: this.id,
-      ownerSub: this.ownerSub,
-      projectRef: this.projectRef,
       source: this.source,
       params: { ...this.params },
       revision: this.revision,
       lastSuccessfulRevision: this.lastSuccessfulRevision,
       patches: [...this.patches],
-      latestRender: this.latestRender ? { ...this.latestRender, imageDataUrl: '' } : null,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };
@@ -360,6 +372,8 @@ export class LiveSession implements DurableObject {
     return rest;
   }
 }
+
+// ── SSE / response utilities ──────────────────────────────────────────────────
 
 function sseMsg(event: SessionEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
