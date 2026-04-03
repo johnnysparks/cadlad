@@ -102,9 +102,9 @@ These let an agent reason about model quality without vision.
 
 ### 1.3 Domain-aware suggestion tools
 
-- [ ] `check_printability(opts?)` — analyze for 3D printing: wall thickness, overhang angles, support requirements, bed adhesion area.
-- [ ] `check_moldability(opts?)` — analyze for injection molding: draft angles, undercuts, wall uniformity, gate placement hints.
-- [ ] `suggest_improvements()` → list of actionable suggestions with severity and auto-fix capability.
+- [x] `check_printability(opts?)` — analyze for 3D printing: wall thickness, overhang angles, support requirements, bed adhesion area.
+- [x] `check_moldability(opts?)` — analyze for injection molding: draft angles, undercuts, wall uniformity, gate placement hints.
+- [x] `suggest_improvements()` → list of actionable suggestions with severity and auto-fix capability.
 
 These encode the domain knowledge that's currently in CLAUDE.md's "hard-won lessons" section. The agent shouldn't need to read prose to avoid coplanar boolean artifacts — the system should catch it.
 
