@@ -180,6 +180,87 @@ describe('oauth-protected sessions', () => {
     expect(eventTypes).toContain('evaluation.completed');
     expect(eventTypes).toContain('agent.capability_gap');
   });
+
+  it('creates addressable revisions with source hash and evaluation reference', async () => {
+    const token = await getAccessToken();
+    const created = await createSession(token);
+
+    const patchResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/patch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'X-CadLad-Actor-Kind': 'agent',
+        'X-CadLad-Actor-Id': 'test-agent',
+      },
+      body: JSON.stringify({
+        type: 'source_replace',
+        source: 'const b = box(45, 40, 20); return b;',
+        summary: 'Increase width',
+        intent: 'Check alternate proportions',
+      }),
+    });
+    expect(patchResp.status).toBe(201);
+
+    const runResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/run-result`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'X-CadLad-Actor-Kind': 'agent',
+        'X-CadLad-Actor-Id': 'test-agent',
+      },
+      body: JSON.stringify({
+        revision: 2,
+        result: {
+          success: true,
+          errors: [],
+          warnings: [],
+          timestamp: Date.now(),
+          stats: {
+            triangles: 12,
+            bodies: 1,
+            boundingBox: { min: [0, 0, 0], max: [45, 40, 20] },
+          },
+          evaluation: {
+            summary: { errorCount: 0, warningCount: 0 },
+            typecheck: { status: 'pass', errorCount: 0, warningCount: 0, diagnostics: [] },
+            semanticValidation: { status: 'pass', errorCount: 0, warningCount: 0, diagnostics: [] },
+            geometryValidation: { status: 'pass', errorCount: 0, warningCount: 0, diagnostics: [] },
+            relationValidation: { status: 'pass', errorCount: 0, warningCount: 0, diagnostics: [] },
+            stats: { available: false },
+            tests: { status: 'skipped', total: 0, failures: 0, results: [] },
+            render: { requested: false },
+          },
+        },
+      }),
+    });
+    expect(runResp.status).toBe(200);
+
+    const revisionsResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/revisions?limit=10`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(revisionsResp.status).toBe(200);
+    const revisionsBody = await revisionsResp.json() as { revisions: Array<{ revision: number; sourceHash: string; evaluation?: { eventId: string } }> };
+    expect(revisionsBody.revisions.length).toBeGreaterThanOrEqual(2);
+    const revision2 = revisionsBody.revisions.find((entry) => entry.revision === 2);
+    expect(revision2).toBeTruthy();
+    expect(revision2?.sourceHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(revision2?.evaluation?.eventId).toBeTruthy();
+
+    const revisionResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/revisions/2`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(revisionResp.status).toBe(200);
+    const revisionBody = await revisionResp.json() as {
+      source: string;
+      stats: { triangles: number } | null;
+      validation: { summary: { errorCount: number } } | null;
+    };
+    expect(revisionBody.source).toContain('box(45, 40, 20)');
+    expect(revisionBody.stats?.triangles).toBe(12);
+    expect(revisionBody.validation?.summary.errorCount).toBe(0);
+  });
 });
 
 async function sha256Base64Url(input: string): Promise<string> {

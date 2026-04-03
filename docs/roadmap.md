@@ -132,9 +132,9 @@ This is the north star's core architecture, but motivated by agent workflows rat
 
 ### 2.2 Revisions
 
-- [ ] `Revision` type: checkpoint over a batch of events, with source hash and evaluation bundle reference.
-- [ ] Agent creates a revision after each meaningful modeling step (not every keystroke).
-- [ ] Revisions are addressable: an agent can retrieve the source, stats, and validation state at any revision.
+- [x] `Revision` type: checkpoint over a batch of events, with source hash and evaluation bundle reference.
+- [x] Agent creates a revision after each meaningful modeling step (not every keystroke).
+- [x] Revisions are addressable: an agent can retrieve the source, stats, and validation state at any revision.
 
 ### 2.3 Branches
 
