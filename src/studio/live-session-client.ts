@@ -179,6 +179,15 @@ export interface RunResultPayload {
   screenshotStatus?: "ok" | "blocked" | "unavailable";
   /** Optional reason for screenshotStatus when not "ok". */
   screenshotStatusReason?: string;
+  /** Full machine-readable layered evaluation bundle from evaluateModel(). */
+  evaluation?: Record<string, unknown>;
+  diagnostics?: Array<{
+    stage: "types/schema" | "semantic" | "geometry" | "stats/relations" | "render/snapshots/tests";
+    severity: "error" | "warning";
+    message: string;
+    featureId?: string;
+  }>;
+  params?: Record<string, number>;
 }
 
 export interface LiveSessionClientOptions {

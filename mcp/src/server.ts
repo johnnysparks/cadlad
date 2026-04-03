@@ -48,6 +48,58 @@ try {
 
 const TOOLS = [
   {
+    name: "evaluate",
+    description:
+      "Return the latest full machine-readable evaluation bundle for the active model (diagnostics, stage summaries, tests, stats). Optional code/paramOverrides are accepted for API compatibility but currently only the active studio run can be evaluated.",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        code: { type: "string", description: "Optional model source to evaluate (currently informational)." },
+        paramOverrides: { type: "object", additionalProperties: { type: "number" } },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_stats",
+    description:
+      "Get structured geometry stats for the current model: bbox, volume, area, component counts, parts, and pairwise relationships.",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "get_validation",
+    description:
+      "Get all validation diagnostics and stage pass/fail summaries for the current model evaluation.",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "compare",
+    description:
+      "Compare two model states using latest evaluation data (stats, validation summary, params). If codeA/codeB are provided they must match session source snapshots already evaluated in this session.",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        codeA: { type: "string" },
+        codeB: { type: "string" },
+        revisionA: { type: "number" },
+        revisionB: { type: "number" },
+      },
+      required: [],
+    },
+  },
+  {
     name: "get_session_state",
     description:
       "Read the current CadLad session: source code, parameter values, revision number, last-successful revision, and latest render/screenshot status (including artifact reference when available). Always call this first to understand what you're working with.",
@@ -438,6 +490,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case "evaluate": {
+        const data = await client.getRunResult();
+        if (!data.runResult) {
+          return errorContent("No run result yet. Open CadLad Studio and run the model first.");
+        }
+        const { code, paramOverrides } = args as { code?: string; paramOverrides?: Record<string, number> };
+        const notes: string[] = [];
+        if (code !== undefined) notes.push("code argument received; evaluating arbitrary code is not yet supported in remote sessions.");
+        if (paramOverrides !== undefined) notes.push("paramOverrides received; remote evaluate currently reports latest active run only.");
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                revision: data.revision,
+                success: data.runResult.success,
+                evaluation: data.runResult.evaluation ?? null,
+                diagnostics: data.runResult.diagnostics ?? [],
+                stats: data.runResult.stats ?? null,
+                params: data.runResult.params ?? null,
+                notes,
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case "get_stats":
       case "get_model_stats": {
         const data = await client.getRunResult();
         if (!data.runResult) {
@@ -468,6 +548,74 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             },
           ],
         };
+      }
+
+      case "get_validation": {
+        const data = await client.getRunResult();
+        if (!data.runResult) {
+          return errorContent("No run result yet. Open CadLad Studio and run the model.");
+        }
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                revision: data.revision,
+                success: data.runResult.success,
+                evaluation: data.runResult.evaluation ?? null,
+                diagnostics: data.runResult.diagnostics ?? [],
+                errors: data.runResult.errors ?? [],
+                warnings: data.runResult.warnings ?? [],
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case "compare": {
+        const { revisionA, revisionB, codeA, codeB } = args as {
+          revisionA?: number;
+          revisionB?: number;
+          codeA?: string;
+          codeB?: string;
+        };
+        const session = await client.getSession();
+        const patchFor = (revision: number | undefined, code: string | undefined) => {
+          if (typeof revision === "number") {
+            return session.patches.find((patch) => patch.revision === revision);
+          }
+          if (typeof code === "string") {
+            return session.patches.find((patch) => patch.sourceAfter === code);
+          }
+          return undefined;
+        };
+        const patchA = patchFor(revisionA, codeA);
+        const patchB = patchFor(revisionB, codeB) ?? session.patches[session.patches.length - 1];
+        if (!patchA || !patchB) {
+          return errorContent("Unable to resolve compare inputs. Provide revisionA/revisionB or previously used code snapshots.");
+        }
+        const evalA = patchA.runResult?.evaluation;
+        const evalB = patchB.runResult?.evaluation;
+        const statsA = patchA.runResult?.stats;
+        const statsB = patchB.runResult?.stats;
+        const compareResult = {
+          revisions: { a: patchA.revision, b: patchB.revision },
+          summary: {
+            successA: patchA.runResult?.success ?? null,
+            successB: patchB.runResult?.success ?? null,
+            errorCountDelta: (evalB?.summary.errorCount ?? 0) - (evalA?.summary.errorCount ?? 0),
+            warningCountDelta: (evalB?.summary.warningCount ?? 0) - (evalA?.summary.warningCount ?? 0),
+          },
+          statsDelta: buildStatsDelta(statsA, statsB),
+          params: {
+            a: patchA.paramsAfter,
+            b: patchB.paramsAfter,
+          },
+          notes: (!evalA || !evalB)
+            ? ["One or both revisions do not have posted evaluation bundles yet."]
+            : [],
+        };
+        return { content: [{ type: "text" as const, text: JSON.stringify(compareResult, null, 2) }] };
       }
 
       case "get_part_stats": {
@@ -649,6 +797,29 @@ function formatStats(stats: NonNullable<import("./session-client.js").RunResult[
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function buildStatsDelta(
+  a: NonNullable<import("./session-client.js").RunResult["stats"]> | undefined,
+  b: NonNullable<import("./session-client.js").RunResult["stats"]> | undefined,
+): Record<string, number | null> {
+  if (!a || !b) {
+    return {
+      triangles: null,
+      bodies: null,
+      volume: null,
+      surfaceArea: null,
+      componentCount: null,
+    };
+  }
+
+  return {
+    triangles: b.triangles - a.triangles,
+    bodies: b.bodies - a.bodies,
+    volume: (b.volume ?? 0) - (a.volume ?? 0),
+    surfaceArea: (b.surfaceArea ?? 0) - (a.surfaceArea ?? 0),
+    componentCount: (b.componentCount ?? 0) - (a.componentCount ?? 0),
+  };
 }
 
 function formatPartStats(part: NonNullable<import("./session-client.js").ModelStats["parts"]>[number]): string {

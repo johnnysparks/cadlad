@@ -391,6 +391,9 @@ async function boot() {
             screenshotStatus,
             screenshotStatusReason,
             stats,
+            evaluation: result.evaluation as unknown as Record<string, unknown>,
+            diagnostics: result.diagnostics,
+            params: Object.fromEntries(paramPanel.getValues().entries()),
           });
         } catch {
           // Best-effort — don't break the run on screenshot/post failure

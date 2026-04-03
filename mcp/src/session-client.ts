@@ -13,6 +13,12 @@ export interface ModelStats {
   };
   volume?: number;
   surfaceArea?: number;
+  componentCount?: number;
+  checks?: {
+    zeroVolume: boolean;
+    degenerateBoundingBox: boolean;
+    disconnectedComponents: boolean;
+  };
   parts?: Array<{
     index: number;
     name: string;
@@ -33,6 +39,64 @@ export interface ModelStats {
   }>;
 }
 
+export interface ValidationDiagnostic {
+  stage: "types/schema" | "semantic" | "geometry" | "stats/relations" | "render/snapshots/tests";
+  severity: "error" | "warning";
+  message: string;
+  featureId?: string;
+}
+
+export interface EvaluationBundle {
+  haltedAt?: ValidationDiagnostic["stage"];
+  summary: {
+    errorCount: number;
+    warningCount: number;
+  };
+  typecheck: {
+    status: "pass" | "fail" | "skipped";
+    errorCount: number;
+    warningCount: number;
+    diagnostics: ValidationDiagnostic[];
+  };
+  semanticValidation: {
+    status: "pass" | "fail" | "skipped";
+    errorCount: number;
+    warningCount: number;
+    diagnostics: ValidationDiagnostic[];
+  };
+  geometryValidation: {
+    status: "pass" | "fail" | "skipped";
+    errorCount: number;
+    warningCount: number;
+    diagnostics: ValidationDiagnostic[];
+  };
+  relationValidation: {
+    status: "pass" | "fail" | "skipped";
+    errorCount: number;
+    warningCount: number;
+    diagnostics: ValidationDiagnostic[];
+  };
+  stats: {
+    available: boolean;
+    data?: ModelStats;
+  };
+  tests: {
+    status: "pass" | "fail" | "skipped";
+    total: number;
+    failures: number;
+    results: Array<{
+      id: string;
+      name?: string;
+      pass: boolean;
+      message?: string;
+      details?: Record<string, unknown>;
+    }>;
+  };
+  render: {
+    requested: boolean;
+  };
+}
+
 export interface RunResult {
   success: boolean;
   errors: string[];
@@ -42,6 +106,9 @@ export interface RunResult {
   screenshot?: string;
   screenshotStatus?: "ok" | "blocked" | "unavailable";
   screenshotStatusReason?: string;
+  evaluation?: EvaluationBundle;
+  diagnostics?: ValidationDiagnostic[];
+  params?: Record<string, number>;
 }
 
 export type RenderState = 'ready' | 'no_render' | 'pending' | 'failed' | 'blocked' | 'unknown';
