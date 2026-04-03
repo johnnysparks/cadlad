@@ -29,7 +29,7 @@ if (!TOKEN || !ACCOUNT_ID) {
 const headers = { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' };
 const __dir = dirname(fileURLToPath(import.meta.url));
 const TOML = join(__dir, '..', 'wrangler.toml');
-// Title used for the shared KV namespace (personal tool — production + preview share one namespace)
+// Title used for the production KV namespace.
 const NAMESPACE_TITLE = 'cadlad-kv';
 
 async function cfFetch(path, opts = {}) {
@@ -63,12 +63,10 @@ if (!kvId) {
 
 console.log(`KV namespace ID: ${kvId}`);
 
-// Patch wrangler.toml: replace both placeholder strings with the real ID
+// Patch wrangler.toml: replace the placeholder string with the real ID
 let toml = readFileSync(TOML, 'utf8');
 const before = toml;
-toml = toml
-  .replace(/REPLACE_WITH_KV_NAMESPACE_ID/g, kvId)
-  .replace(/REPLACE_WITH_KV_PREVIEW_NAMESPACE_ID/g, kvId);
+toml = toml.replace(/REPLACE_WITH_KV_NAMESPACE_ID/g, kvId);
 if (toml === before) {
   console.log('wrangler.toml already has real KV IDs — nothing to patch');
 } else {
