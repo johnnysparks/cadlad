@@ -115,6 +115,9 @@ Paste any example into the studio editor or run via CLI.
 # Validate a model (.forge.ts)
 cadlad run projects/box-with-hole.forge.ts
 
+# Local-only validation loop (reruns on save)
+cadlad validate projects/box-with-hole.forge.ts --watch
+
 # Validate and emit machine-readable stats JSON (good for automation/agents)
 cadlad run projects/box-with-hole.forge.ts --json
 
