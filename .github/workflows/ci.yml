@@ -8,16 +8,15 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  checks:
+  lint:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-lint-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v5
 
@@ -27,7 +26,36 @@ jobs:
           cache: npm
 
       - run: npm ci
-
       - run: npm run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ci-typecheck-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
       - run: npm run typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ci-test-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
       - run: npm run test
