@@ -25,6 +25,8 @@ describe("computeModelStats", () => {
     expect(stats?.pairwise[0].partBId).toBe("cup-wall");
     expect(stats?.pairwise[0].intersects).toBe(false);
     expect(stats?.pairwise[0].minDistance).toBeCloseTo(15, 3);
+    expect(stats?.componentCount).toBe(2);
+    expect(stats?.checks.hasDisconnectedComponents).toBe(true);
   });
 
   it("disambiguates duplicate part names with stable ids", () => {
@@ -46,5 +48,7 @@ describe("computeModelStats", () => {
 
     expect(stats?.pairwise[0].intersects).toBe(true);
     expect(stats?.pairwise[0].minDistance).toBe(0);
+    expect(stats?.componentCount).toBe(1);
+    expect(stats?.checks.hasDisconnectedComponents).toBe(false);
   });
 });

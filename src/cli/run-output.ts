@@ -1,5 +1,5 @@
-import type { Body, ParamDef } from "../engine/types.js";
-import { computeModelStats, type ModelStats } from "../studio/model-stats.js";
+import type { Body, GeometryStats, ParamDef } from "../engine/types.js";
+import { computeModelStats } from "../studio/model-stats.js";
 
 export interface RunReport {
   bodies: number;
@@ -8,7 +8,7 @@ export interface RunReport {
     name: string;
     triangles: number;
   }>;
-  stats?: ModelStats;
+  geometryStats?: GeometryStats;
 }
 
 export function buildRunReport(input: { bodies: Body[]; params: ParamDef[] }): RunReport {
@@ -19,7 +19,7 @@ export function buildRunReport(input: { bodies: Body[]; params: ParamDef[] }): R
       name: body.name ?? "(unnamed)",
       triangles: body.mesh.indices.length / 3,
     })),
-    stats: computeModelStats(input.bodies),
+    geometryStats: computeModelStats(input.bodies),
   };
 }
 

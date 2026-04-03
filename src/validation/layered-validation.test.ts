@@ -38,6 +38,7 @@ describe("runLayeredValidation", () => {
       stage: "semantic",
       featureId: "model[2]",
     });
+    expect(result.stats?.bodies).toBe(1);
   });
 
   it("reports geometry-stage malformed mesh data", () => {
