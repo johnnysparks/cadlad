@@ -112,8 +112,9 @@ Paste any example into the studio editor or run via CLI.
 ## CLI
 
 ```bash
-# Validate a model
+# Validate a model (.forge.js or .forge.ts)
 cadlad run projects/box-with-hole.forge.js
+cadlad run projects/box-with-hole.forge.ts
 
 # Export to STL
 cadlad export projects/box-with-hole.forge.js -o output.stl
@@ -174,7 +175,7 @@ See `docs/assistant-live-modeling.md` for assistant setup and `docs/live-session
 
 ### Writing a Model
 
-Create a `.forge.js` file that calls the CadLad API and returns a `Solid` or `Assembly`:
+Create a `.forge.js` or `.forge.ts` file that calls the CadLad API and returns a `Solid` or `Assembly`:
 
 ```js
 // my-part.forge.js
