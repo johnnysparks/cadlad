@@ -481,7 +481,7 @@ If it's not documented, it doesn't exist.
 ### Revision Control
 - Version every design change
 - Note what changed and why
-- Git works for code-based CAD (CadLad .forge.js files are diffable text)
+- Git works for code-based CAD (CadLad .forge.ts files are diffable text)
 
 ---
 

@@ -131,7 +131,7 @@ npm run dev &
 sleep 3
 
 # Render a model from 7 angles
-node /tmp/cadlad_sniff/render.mjs projects/phone-stand/phone-stand.forge.js /tmp
+node /tmp/cadlad_sniff/render.mjs projects/phone-stand/phone-stand.forge.ts /tmp
 ```
 
 ### Using snapshot-test.mjs (preferred)

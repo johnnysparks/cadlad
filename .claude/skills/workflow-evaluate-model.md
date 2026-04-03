@@ -33,7 +33,7 @@ Quick path if Puppeteer is already installed:
 
 ```bash
 # Render one model from 7 angles
-node /tmp/cadlad_sniff/render.mjs projects/mymodel/mymodel.forge.js /tmp/screenshots
+node /tmp/cadlad_sniff/render.mjs projects/mymodel/mymodel.forge.ts /tmp/screenshots
 
 # Snapshot-test all examples against references
 node scripts/snapshot-test.mjs --url http://localhost:5173
@@ -48,7 +48,7 @@ node scripts/snapshot-test.mjs --url http://localhost:5173 --update
 npm run dev  # gallery is at localhost:5173/gallery/
 ```
 
-Open `/gallery/` in a browser. All `.forge.js` files from `projects/` render automatically. Toggle "High Contrast" mode for better geometry evaluation (light gray surfaces, dark edges, white background).
+Open `/gallery/` in a browser. All `.forge.ts` files from `projects/` render automatically. Toggle "High Contrast" mode for better geometry evaluation (light gray surfaces, dark edges, white background).
 
 ## What to look for
 
