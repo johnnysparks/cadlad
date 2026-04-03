@@ -169,7 +169,14 @@ describe("evaluateModel", () => {
           width: { value: 12, unit: "mm" },
           depth: { value: 8, unit: "mm" },
         },
-        features: [{ id: "base", kind: "primitive", label: "Base box" }],
+        features: [
+          wall.straight({
+            id: "base",
+            length: 12,
+            height: 5,
+            thickness: 8,
+          }),
+        ],
         model: ({ params }) => box(params.width, params.depth, 5),
       });
     `;
@@ -204,5 +211,32 @@ describe("evaluateModel", () => {
     const result = await evaluateModel(code);
     expect(result.bodies).toHaveLength(0);
     expect(result.errors).toContain("[scene.validator.failed] Wall thickness must be >= 2mm.");
+  });
+
+  it("reports registry-backed roof.gable host compatibility failures", async () => {
+    const code = `
+      return defineScene({
+        model: box(10, 10, 10),
+        features: [
+          {
+            id: "base",
+            kind: "primitive.box",
+          },
+          roof.gable({
+            id: "roof-main",
+            hostId: "base",
+            width: 20,
+            depth: 12,
+            pitchDeg: 35,
+            overhang: 1,
+          }),
+        ],
+      });
+    `;
+
+    const result = await evaluateModel(code);
+    expect(result.bodies).toHaveLength(0);
+    expect(result.errors[0]).toContain("[scene.feature.invalid]");
+    expect(result.errors[0]).toContain("[feature:roof-main]");
   });
 });

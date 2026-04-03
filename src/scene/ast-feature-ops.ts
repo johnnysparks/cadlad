@@ -111,6 +111,40 @@ function findFeatureById(featuresNode: ts.ArrayLiteralExpression, id: string): t
   return undefined;
 }
 
+function readStringProperty(
+  object: ts.ObjectLiteralExpression,
+  propertyName: string,
+): string | undefined {
+  for (const property of object.properties) {
+    if (
+      ts.isPropertyAssignment(property)
+      && ts.isIdentifier(property.name)
+      && property.name.text === propertyName
+      && ts.isStringLiteral(property.initializer)
+    ) {
+      return property.initializer.text;
+    }
+  }
+  return undefined;
+}
+
+function readFeatureContext(featuresNode: ts.ArrayLiteralExpression): Array<{ id: string; kind: string }> {
+  const context: Array<{ id: string; kind: string }> = [];
+  for (const element of featuresNode.elements) {
+    if (!ts.isCallExpression(element)) continue;
+    if (!ts.isIdentifier(element.expression) || element.expression.text !== "feature") continue;
+    const kindArg = element.arguments[0];
+    const paramsArg = element.arguments[1];
+    if (!kindArg || !ts.isStringLiteral(kindArg)) continue;
+    if (!paramsArg || !ts.isObjectLiteralExpression(paramsArg)) continue;
+
+    const id = readStringProperty(paramsArg, "id");
+    if (!id) continue;
+    context.push({ id, kind: kindArg.text });
+  }
+  return context;
+}
+
 function replaceFeaturesArray(
   sourceText: string,
   sourceFile: ts.SourceFile,
@@ -128,13 +162,15 @@ function replaceFeaturesArray(
 }
 
 export function insertFeature(sourceText: string, feature: FeatureRecord, registry: FeatureRegistry): string {
-  const validation = registry.validate(feature.kind, feature.params);
+  const sourceFile = ts.createSourceFile("scene.forge.ts", sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const featuresArray = resolveSceneFeaturesArray(sourceFile);
+  const validation = registry.validate(feature.kind, feature.params, {
+    features: readFeatureContext(featuresArray),
+  });
   if (!validation.ok) {
     throw new Error(`Schema validation failed: ${validation.errors.join(" ")}`);
   }
 
-  const sourceFile = ts.createSourceFile("scene.forge.ts", sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-  const featuresArray = resolveSceneFeaturesArray(sourceFile);
   const nextElements = [...featuresArray.elements, buildFeatureCall(feature)];
 
   return replaceFeaturesArray(sourceText, sourceFile, nextElements);
@@ -159,7 +195,9 @@ export function updateFeature(
     throw new Error(`Feature with id \"${featureId}\" has a non-literal kind argument.`);
   }
 
-  const validation = registry.validate(kindArg.text, nextParams);
+  const validation = registry.validate(kindArg.text, nextParams, {
+    features: readFeatureContext(featuresArray),
+  });
   if (!validation.ok) {
     throw new Error(`Schema validation failed: ${validation.errors.join(" ")}`);
   }

@@ -12,6 +12,7 @@ import { _setParamValues, _resetParams, _getParamDefs } from "./params.js";
 import { collectHints } from "./hints.js";
 import type { ModelResult, Body, ParamDef, Hint } from "../engine/types.js";
 import { normalizeScene, defineScene, mm } from "./scene-contract.js";
+import { feature, wall, roof } from "./features.js";
 
 // All API symbols that get injected into model scope
 import { param } from "./params.js";
@@ -62,14 +63,14 @@ export async function evaluateModel(
       "box", "cylinder", "sphere", "roundedRect", "roundedBox", "taperedBox",
       "sweep", "loft",
       "assembly", "Solid", "Assembly",
-      "defineScene", "mm",
+      "defineScene", "mm", "feature", "wall", "roof",
     ];
     const apiValues = [
       param, Sketch, rect, circle,
       box, cylinder, sphere, roundedRect, roundedBox, taperedBox,
       sweep, loft,
       assembly, Solid, Assembly,
-      defineScene, mm,
+      defineScene, mm, feature, wall, roof,
     ];
 
     // Wrap user code so it can use top-level return
@@ -107,7 +108,12 @@ export async function evaluateModel(
       }));
       return { bodies, params: collectedParams, errors, hints, camera };
     }
-    if (result && typeof result === "object" && !(result instanceof Solid) && !(result instanceof Assembly) && !Array.isArray(result)) {
+    if (!normalized.scene
+      && result
+      && typeof result === "object"
+      && !(result instanceof Solid)
+      && !(result instanceof Assembly)
+      && !Array.isArray(result)) {
       // Metadata object: { model: Solid|Assembly, camera: [x,y,z] }
       if (result.model) model = result.model;
       if (Array.isArray(result.camera) && result.camera.length === 3) {

@@ -5,8 +5,15 @@ import { createDefaultFeatureRegistry } from "../feature-registry.js";
 const baseSource = `
 const scene = defineScene({
   features: [
+    feature("wall.straight", {
+      id: "wall-main",
+      length: 30,
+      height: 12,
+      thickness: 0.5,
+    }),
     feature("roof.gable", {
       id: "roof-main",
+      hostId: "wall-main",
       width: 30,
       depth: 20,
       pitchDeg: 35,
@@ -48,6 +55,7 @@ describe("feature registry + AST feature operations", () => {
       "roof-main",
       {
         id: "roof-main",
+        hostId: "wall-main",
         width: 30,
         depth: 20,
         pitchDeg: 42,
@@ -61,13 +69,22 @@ describe("feature registry + AST feature operations", () => {
     expect(next).toMatchInlineSnapshot(`
       "
       const scene = defineScene({
-        features: [feature(\"roof.gable\", {
+        features: [
+          feature("wall.straight", {
+              id: "wall-main",
+              length: 30,
+              height: 12,
+              thickness: 0.5,
+          }),
+          feature("roof.gable", {
               depth: 20,
-              id: \"roof-main\",
+              hostId: "wall-main",
+              id: "roof-main",
               overhang: 2,
               pitchDeg: 42,
               width: 30
-          })]
+          })
+      ],
       });
       "
     `);
@@ -82,6 +99,7 @@ describe("feature registry + AST feature operations", () => {
         "roof-main",
         {
           id: "roof-main",
+          hostId: "wall-main",
           width: 30,
           depth: 20,
           pitchDeg: -10,

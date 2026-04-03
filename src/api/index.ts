@@ -23,6 +23,7 @@ export { Assembly, assembly } from "./assembly.js";
 // Typed scene contract
 export { defineScene } from "./scene-contract.js";
 export { mm } from "./scene-contract.js";
+export { feature, wall, roof } from "./features.js";
 export type {
   SceneEnvelope,
   SceneFeatureDeclaration,

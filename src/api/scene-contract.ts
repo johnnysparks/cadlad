@@ -1,3 +1,5 @@
+import { createDefaultFeatureRegistry } from "../scene/feature-registry.js";
+
 export type SceneSourceRange = {
   startLine: number;
   startColumn: number;
@@ -10,6 +12,7 @@ export type SceneDiagnostic = {
     | "scene.invalid-envelope"
     | "scene.feature-id.missing"
     | "scene.feature-id.duplicate"
+    | "scene.feature.invalid"
     | "scene.validator.failed"
     | "scene.test.failed";
   message: string;
@@ -21,6 +24,7 @@ export type SceneFeatureDeclaration = {
   id?: string;
   kind: string;
   label?: string;
+  args?: Record<string, unknown>;
 };
 
 export type UnitBrand<TUnit extends string> = number & { readonly __unit: TUnit };
@@ -82,6 +86,7 @@ export type NormalizedSceneFeature = {
   id: string;
   kind: string;
   label?: string;
+  args?: Record<string, unknown>;
   range?: SceneSourceRange;
 };
 
@@ -232,6 +237,10 @@ export function isSceneEnvelope(value: unknown): value is SceneEnvelopeInternal 
   return isRecord(value) && (value as SceneEnvelopeInternal)[SCENE_MARKER] === true;
 }
 
+function looksLikeSceneEnvelope(value: unknown): value is SceneEnvelope {
+  return isRecord(value) && "model" in value && "features" in value;
+}
+
 export function normalizeScene(
   code: string,
   value: unknown,
@@ -240,7 +249,7 @@ export function normalizeScene(
   scene?: NormalizedScene;
   diagnostics: SceneDiagnostic[];
 } {
-  if (!isSceneEnvelope(value)) {
+  if (!isSceneEnvelope(value) && !looksLikeSceneEnvelope(value)) {
     return { diagnostics: [] };
   }
 
@@ -293,8 +302,27 @@ export function normalizeScene(
       id: featureId,
       kind: feature.kind,
       label: typeof feature.label === "string" ? feature.label : undefined,
+      args: isRecord(feature.args) ? { ...feature.args } : undefined,
       range: tryFindFeatureRange(code, featureId),
     });
+  }
+
+  const registry = createDefaultFeatureRegistry();
+  for (const feature of features) {
+    if (!registry.has(feature.kind)) continue;
+    const featureArgs: Record<string, unknown> = {
+      ...(feature.args ?? {}),
+      id: feature.id,
+    };
+    const validation = registry.validate(feature.kind, featureArgs, { features });
+    if (!validation.ok) {
+      diagnostics.push({
+        code: "scene.feature.invalid",
+        featureId: feature.id,
+        range: feature.range,
+        message: validation.errors.join(" "),
+      });
+    }
   }
 
   diagnostics.push(...runSceneHooks(resolvedParams, scene.validators, scene.tests));
