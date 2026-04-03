@@ -40,6 +40,18 @@ export async function evaluateModel(
   let hints: Hint[] = [];
   let camera: [number, number, number] | undefined;
 
+  const collectSolid = (solid: Solid, context: string): void => {
+    const nComp = solid.numComponents();
+    if (nComp > 1) {
+      errors.push(
+        `${context} has ${nComp} disconnected parts. ` +
+        `Use assembly() to group separate parts, or union overlapping solids so they connect. ` +
+        `Disconnected geometry in a single Solid is not allowed.`,
+      );
+    }
+    bodies.push(solid.toBody());
+  };
+
   try {
     // Build a function that receives the API as arguments
     const apiNames = [
@@ -76,32 +88,34 @@ export async function evaluateModel(
     }
 
     if (model instanceof Solid) {
-      const nComp = model.numComponents();
-      if (nComp > 1) {
-        errors.push(
-          `Model has ${nComp} disconnected parts. ` +
-          `Use assembly() to group separate parts, or union overlapping solids so they connect. ` +
-          `Disconnected geometry in a single Solid is not allowed.`
-        );
-      }
-      bodies.push(model.toBody());
+      collectSolid(model, "Model");
     } else if (model instanceof Assembly) {
       bodies.push(...model.toBodies());
     } else if (Array.isArray(model)) {
-      for (const item of model) {
+      for (let i = 0; i < model.length; i += 1) {
+        const item = model[i];
         if (item instanceof Solid) {
-          const nComp = item.numComponents();
-          if (nComp > 1) {
-            errors.push(
-              `A returned Solid has ${nComp} disconnected parts. ` +
-              `Use assembly() to group separate parts, or union overlapping solids so they connect. ` +
-              `Disconnected geometry in a single Solid is not allowed.`
-            );
-          }
-          bodies.push(item.toBody());
+          collectSolid(item, `Model[${i}]`);
         } else if (item instanceof Assembly) {
           bodies.push(...item.toBodies());
+        } else {
+          const valueType = item === null ? "null" : typeof item;
+          errors.push(
+            `Model[${i}] must be a Solid or Assembly, got ${valueType}.`,
+          );
         }
+      }
+    } else {
+      const valueType = model === null ? "null" : typeof model;
+      if (valueType === "undefined") {
+        errors.push(
+          "Model script must return geometry: Solid, Assembly, array of Solid/Assembly, or { model, camera }.",
+        );
+      } else {
+        errors.push(
+          `Model script returned unsupported type: ${valueType}. ` +
+          "Expected Solid, Assembly, array of Solid/Assembly, or { model, camera }.",
+        );
       }
     }
   } catch (err: unknown) {
