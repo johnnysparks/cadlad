@@ -160,4 +160,49 @@ describe("evaluateModel", () => {
     expect(result.errors[0]).toContain("[feature:base]");
     expect(result.errors[0]).toContain("[L");
   });
+
+  it("evaluates defineScene model factories with typed params", async () => {
+    const code = `
+      return defineScene({
+        meta: { name: "scene-factory" },
+        params: {
+          width: { value: 12, unit: "mm" },
+          depth: { value: 8, unit: "mm" },
+        },
+        features: [{ id: "base", kind: "primitive", label: "Base box" }],
+        model: ({ params }) => box(params.width, params.depth, 5),
+      });
+    `;
+    const result = await evaluateModel(code, new Map([["width", 20]]));
+    expect(result.errors).toHaveLength(0);
+    expect(result.bodies).toHaveLength(1);
+    expect(result.params.find((entry) => entry.name === "width")?.value).toBe(20);
+    expect(result.params.find((entry) => entry.name === "depth")?.value).toBe(8);
+  });
+
+  it("reports scene validator and test failures", async () => {
+    const code = `
+      return defineScene({
+        meta: { name: "scene-checks" },
+        params: {
+          wall: { value: 1, unit: "mm" },
+        },
+        features: [{ id: "wall", kind: "primitive", label: "Wall" }],
+        validators: [
+          ({ params }) => params.wall < 2 ? "Wall thickness must be >= 2mm." : undefined,
+        ],
+        tests: [
+          {
+            id: "wall.max",
+            run: ({ params }) => params.wall > 20 ? "Wall is unexpectedly thick." : undefined,
+          },
+        ],
+        model: ({ params }) => box(10, 10, params.wall),
+      });
+    `;
+
+    const result = await evaluateModel(code);
+    expect(result.bodies).toHaveLength(0);
+    expect(result.errors).toContain("[scene.validator.failed] Wall thickness must be >= 2mm.");
+  });
 });

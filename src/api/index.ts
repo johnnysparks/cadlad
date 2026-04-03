@@ -22,7 +22,17 @@ export { Assembly, assembly } from "./assembly.js";
 
 // Typed scene contract
 export { defineScene } from "./scene-contract.js";
-export type { SceneEnvelope, SceneFeatureDeclaration } from "./scene-contract.js";
+export { mm } from "./scene-contract.js";
+export type {
+  SceneEnvelope,
+  SceneFeatureDeclaration,
+  SceneMeta,
+  SceneParamDefinition,
+  SceneParamsShape,
+  SceneTest,
+  SceneValidator,
+  Millimeters,
+} from "./scene-contract.js";
 
 // Types
 export type { Vec2, Vec3, Color, ParamDef, Body } from "../engine/types.js";
