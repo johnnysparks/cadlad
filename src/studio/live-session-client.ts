@@ -21,6 +21,7 @@ export interface LiveSessionState {
 
 export interface CreateLiveSessionResponse {
   sessionId: string;
+  writeToken: string;
   liveUrl: string;
   session?: LiveSessionState;
 }
@@ -309,7 +310,7 @@ export class LiveSessionClient {
     return res.json() as Promise<{ linkCode: string; expiresIn: number }>;
   }
 
-  subscribe(sessionId: string, onEvent: (event: PatchEventPayload) => void, onError: (err: Event) => void): EventSource {
+  subscribe(sessionId: string, onEvent: (event: LiveSessionEvent) => void, onError: (err: Event) => void): EventSource {
     // SSE is read-only — no token needed. The write token is never sent in URLs.
     const url = `${this.apiBase}/api/live/session/${encodeURIComponent(sessionId)}/events`;
     const source = new EventSource(url);

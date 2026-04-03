@@ -189,7 +189,8 @@ async function boot() {
 
   const liveClient = new LiveSessionClient();
   let liveSessionId: string | null = null;
-    let liveRevision = 0;
+  let liveToken: string | null = null;
+  let liveRevision = 0;
   let liveSource: EventSource | null = null;
   let remoteRunTimer: number | null = null;
 
@@ -212,6 +213,10 @@ async function boot() {
   // Load code from URL if provided (?code=base64)
   const urlParams = new URLSearchParams(window.location.search);
   const codeParam = urlParams.get("code");
+  const tokenParam = urlParams.get("token");
+  if (tokenParam) {
+    liveToken = tokenParam;
+  }
   if (codeParam) {
     try {
       editor.setValue(decodeURIComponent(escape(atob(codeParam))));
@@ -540,7 +545,9 @@ async function boot() {
       // Keep session + token in URL for page reload resilience (local to user's browser)
       const nextUrl = new URL(window.location.href);
       nextUrl.searchParams.set("session", created.sessionId);
+      nextUrl.searchParams.set("token", created.writeToken);
       window.history.replaceState({}, "", nextUrl.toString());
+      liveToken = created.writeToken;
 
       await attachLiveSession(created.sessionId);
     } catch (err: unknown) {
