@@ -4,26 +4,15 @@
 # (no HTTP hop). This is the preferred strategy; LIVE_SESSION_WORKER_URL below
 # is a fallback for environments where the service binding isn't available.
 #
-# Preview deployments (all non-main branches) use the shared preview Worker.
-# Production (main branch) uses the production Worker.
+# CadLad uses a single production Worker for all deployments.
 
 name = "cadlad"
 pages_build_output_dir = "dist"
 
-# Preview: service binding → shared preview Worker
 [[services]]
-binding = "LIVE_SESSION_API"
-service = "cadlad-live-sessions-preview"
-
-# Preview: HTTP URL fallback (used if service binding is absent)
-[vars]
-LIVE_SESSION_WORKER_URL = "https://cadlad-live-sessions-preview.johnnymsparks.workers.dev"
-
-# Production: service binding → production Worker
-[[env.production.services]]
 binding = "LIVE_SESSION_API"
 service = "cadlad-live-sessions"
 
-# Production: HTTP URL fallback
-[env.production.vars]
+# HTTP URL fallback (used if service binding is absent)
+[vars]
 LIVE_SESSION_WORKER_URL = "https://cadlad-live-sessions.johnnymsparks.workers.dev"
