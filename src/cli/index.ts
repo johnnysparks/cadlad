@@ -13,6 +13,7 @@ import { resolve } from "node:path";
 import { initManifold } from "../engine/manifold-backend.js";
 import { evaluateModel } from "../api/runtime.js";
 import { loadModelSource } from "./source-loader.js";
+import { buildRunReport, formatRunReportText } from "./run-output.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -35,6 +36,7 @@ async function main() {
 
 async function cmdRun(args: string[]) {
   const file = args[0];
+  const printJson = args.includes("--json");
   if (!file) {
     console.error("Usage: cadlad run <file.forge.ts>");
     process.exit(1);
@@ -45,19 +47,21 @@ async function cmdRun(args: string[]) {
   const result = await evaluateModel(code);
 
   if (result.errors.length > 0) {
-    console.error("Errors:");
-    result.errors.forEach((e) => console.error(`  ${e}`));
+    if (printJson) {
+      console.log(JSON.stringify({ ok: false, errors: result.errors }, null, 2));
+    } else {
+      console.error("Errors:");
+      result.errors.forEach((e) => console.error(`  ${e}`));
+    }
     process.exit(1);
   }
 
-  console.log(`Bodies: ${result.bodies.length}`);
-  console.log(`Params: ${result.params.length}`);
-
-  for (const body of result.bodies) {
-    const name = body.name ?? "(unnamed)";
-    const tris = body.mesh.indices.length / 3;
-    console.log(`  ${name}: ${tris} triangles`);
+  const report = buildRunReport(result);
+  if (printJson) {
+    console.log(JSON.stringify({ ok: true, ...report }, null, 2));
+    return;
   }
+  console.log(formatRunReportText(report));
 }
 
 async function cmdExport(args: string[]) {
