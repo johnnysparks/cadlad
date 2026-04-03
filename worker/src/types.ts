@@ -42,6 +42,7 @@ export interface ModelStats {
   /** Per-body stats keyed by body name (or generated part-N fallback) */
   parts?: Array<{
     index: number;
+    id: string;
     name: string;
     triangles: number;
     boundingBox: {
@@ -55,7 +56,9 @@ export interface ModelStats {
   /** Pairwise part relations based on per-part AABB proximity */
   pairwise?: Array<{
     partA: string;
+    partAId: string;
     partB: string;
+    partBId: string;
     intersects: boolean;
     minDistance: number;
   }>;
