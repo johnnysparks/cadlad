@@ -12,8 +12,11 @@ import type {
   PostRunResultRequest,
   RenderStatus,
   RunResult,
+  CapabilityGapRequest,
 } from './types.js';
 import { createLinkCode, saveScreenshot } from './oauth-store.js';
+import type { EventActor, EventEnvelope, EventType } from './event-store.js';
+import { SqliteEventStore } from './event-store.js';
 
 const MAX_PATCHES = 100;
 const HEARTBEAT_INTERVAL_MS = 25_000; // keep SSE connections alive
@@ -57,10 +60,12 @@ export class LiveSession implements DurableObject {
   private lastRunResult: RunResult | null = null;
   /** Revision associated with lastRunResult */
   private lastRunRevision: number | null = null;
+  private readonly eventStore: SqliteEventStore;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
+    this.eventStore = new SqliteEventStore(this.state.storage.sql);
 
     this.state.blockConcurrencyWhile(async () => {
       const stored = await this.state.storage.get<StoredSession>('session');
@@ -96,11 +101,13 @@ export class LiveSession implements DurableObject {
 
       if (request.method === 'GET' && (sub === '' || sub === '/')) return this.handleGetSession();
       if (request.method === 'GET' && sub === '/history') return this.handleGetHistory(url);
+      if (request.method === 'GET' && sub === '/event-log') return this.handleGetEventLog(url);
       if (request.method === 'GET' && sub === '/events') return this.handleSSE(request);
       if (request.method === 'GET' && sub === '/run-result') return this.handleGetRunResult();
       if (request.method === 'POST' && sub === '/patch') return this.handlePatch(request);
       if (request.method === 'POST' && sub === '/revert') return this.handleRevert(request);
       if (request.method === 'POST' && sub === '/run-result') return this.handlePostRunResult(request);
+      if (request.method === 'POST' && sub === '/capability-gap') return this.handleCapabilityGap(request);
       // Studio calls this to generate a link code for OAuth authorization
       if (request.method === 'POST' && sub === '/link') return this.handleCreateLink(request);
 
@@ -138,6 +145,14 @@ export class LiveSession implements DurableObject {
     };
     this.patches = [initial];
 
+    await this.appendEvents([
+      this.makeEvent('source.replaced', {
+        source: this.source,
+        params: { ...this.params },
+        revision: this.revision,
+      }, this.resolveActor(request)),
+    ]);
+
     await this.persist();
     return ok(this.fullState());
   }
@@ -151,6 +166,21 @@ export class LiveSession implements DurableObject {
     const offset = parseInt(url.searchParams.get('offset') ?? '0', 10);
     const slice = this.patches.slice(offset, offset + limit);
     return ok({ patches: slice, total: this.patches.length, offset, limit });
+  }
+
+  private async handleGetEventLog(url: URL): Promise<Response> {
+    const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '100', 10), 500);
+    const type = url.searchParams.get('type');
+    const afterTimestamp = parseInt(url.searchParams.get('after') ?? '', 10);
+    const beforeTimestamp = parseInt(url.searchParams.get('before') ?? '', 10);
+    const events = await this.eventStore.readStream({
+      projectId: this.id,
+      limit,
+      types: type ? [type as EventType] : undefined,
+      afterTimestamp: Number.isFinite(afterTimestamp) ? afterTimestamp : undefined,
+      beforeTimestamp: Number.isFinite(beforeTimestamp) ? beforeTimestamp : undefined,
+    });
+    return ok({ events, total: events.length, limit });
   }
 
   private handleSSE(request: Request): Response {
@@ -225,6 +255,31 @@ export class LiveSession implements DurableObject {
 
     this.addPatch(patch);
     this.updatedAt = Date.now();
+    const actor = this.resolveActor(request);
+    const events: EventEnvelope[] = [];
+    if (body.type === 'source_replace') {
+      events.push(this.makeEvent('source.replaced', {
+        source: this.source,
+        params: { ...this.params },
+        revision: this.revision,
+      }, actor));
+    }
+    if (body.type === 'param_update') {
+      events.push(this.makeEvent('scene.param_set', {
+        params: { ...this.params },
+        changed: body.params ?? {},
+        revision: this.revision,
+      }, actor));
+    }
+    if (typeof body.intent === 'string' && body.intent.trim().length > 0) {
+      events.push(this.makeEvent('agent.intent_declared', {
+        intent: body.intent.trim(),
+        summary: body.summary,
+        patchId: patch.id,
+        revision: this.revision,
+      }, actor.kind === 'agent' ? actor : { kind: 'agent', id: actor.id }));
+    }
+    await this.appendEvents(events);
     await this.persist();
 
     const event: SessionEvent = { type: 'patch_applied', patch, session: this.summary() };
@@ -308,12 +363,38 @@ export class LiveSession implements DurableObject {
     }
 
     this.updatedAt = Date.now();
+    await this.appendEvents([
+      this.makeEvent('evaluation.completed', {
+        revision: body.revision,
+        success: body.result.success,
+        errorCount: body.result.errors.length,
+        warningCount: body.result.warnings.length,
+        hasEvaluationBundle: Boolean(body.result.evaluation),
+      }, this.resolveActor(request)),
+    ]);
     await this.persist();
 
     const event: SessionEvent = { type: 'run_result_posted', result: body.result, revision: body.revision };
     this.broadcast(event);
 
     return ok({ ok: true });
+  }
+
+  private async handleCapabilityGap(request: Request): Promise<Response> {
+    const authErr = this.checkAuth(request);
+    if (authErr) return authErr;
+    const body = await request.json() as CapabilityGapRequest;
+    if (typeof body.message !== 'string' || body.message.trim().length === 0) {
+      return err('message is required', 'INVALID_REQUEST', 400);
+    }
+    await this.appendEvents([
+      this.makeEvent('agent.capability_gap', {
+        message: body.message.trim(),
+        context: typeof body.context === 'string' ? body.context : undefined,
+        revision: this.revision,
+      }, this.resolveActor(request, { kind: 'agent' })),
+    ]);
+    return ok({ ok: true }, 201);
   }
 
   /**
@@ -343,6 +424,34 @@ export class LiveSession implements DurableObject {
   private addPatch(patch: Patch): void {
     this.patches.push(patch);
     if (this.patches.length > MAX_PATCHES) this.patches = this.patches.slice(-MAX_PATCHES);
+  }
+
+  private resolveActor(request: Request, fallback: EventActor = { kind: 'human' }): EventActor {
+    const rawKind = request.headers.get('X-CadLad-Actor-Kind');
+    const rawId = request.headers.get('X-CadLad-Actor-Id');
+    const kind = rawKind === 'agent' || rawKind === 'human' ? rawKind : fallback.kind;
+    const id = rawId && rawId.trim().length > 0 ? rawId.trim() : fallback.id;
+    return id ? { kind, id } : { kind };
+  }
+
+  private makeEvent<T>(
+    type: EventType,
+    payload: T,
+    actor: EventActor,
+  ): EventEnvelope<T> {
+    return {
+      id: crypto.randomUUID(),
+      projectId: this.id,
+      actor,
+      type,
+      payload,
+      timestamp: Date.now(),
+    };
+  }
+
+  private async appendEvents(events: EventEnvelope[]): Promise<void> {
+    if (events.length === 0) return;
+    await this.eventStore.append(events);
   }
 
   private async persist(): Promise<void> {

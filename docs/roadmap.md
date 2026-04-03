@@ -118,10 +118,10 @@ This is the north star's core architecture, but motivated by agent workflows rat
 
 ### 2.1 Event store (minimal)
 
-- [ ] `EventEnvelope<T>` type with id, projectId, actor (human | agent), type, payload, timestamp.
-- [ ] `EventStore` interface: `append()`, `readStream()`.
-- [ ] In-memory implementation for dev. SQLite for persistence.
-- [ ] Start with 5 event types — no more:
+- [x] `EventEnvelope<T>` type with id, projectId, actor (human | agent), type, payload, timestamp.
+- [x] `EventStore` interface: `append()`, `readStream()`.
+- [x] In-memory implementation for dev. SQLite for persistence.
+- [x] Start with 5 event types — no more:
   - `source.replaced` — full source snapshot
   - `scene.param_set` — parameter change
   - `evaluation.completed` — evaluation bundle reference
