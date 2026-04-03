@@ -14,7 +14,6 @@ import {
   type SessionPatchPayload,
 } from "./live-session-client.js";
 import { evaluateModel } from "../api/runtime.js";
-import { computeModelStats } from "./model-stats.js";
 import { EditorDecorations } from "./editor-decorations.js";
 import { PatchHistoryPanel } from "./patch-history.js";
 import type { PatchEvent } from "./types/live-session.js";
@@ -380,7 +379,7 @@ async function boot() {
             screenshotStatus = "blocked";
             screenshotStatusReason = captureErr instanceof Error ? captureErr.message : String(captureErr);
           }
-          const stats = computeModelStats(result.bodies);
+          const stats = result.geometryStats;
           void liveClient.postRunResult(liveSessionId, liveRevision, {
             success: result.errors.length === 0,
             errors: result.errors,

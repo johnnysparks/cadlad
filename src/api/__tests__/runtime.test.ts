@@ -12,6 +12,9 @@ describe("evaluateModel", () => {
     expect(result.bodies).toHaveLength(1);
     expect(result.errors).toHaveLength(0);
     expect(result.bodies[0].mesh.positions.length).toBeGreaterThan(0);
+    expect(result.geometryStats?.volume).toBeGreaterThan(0);
+    expect(result.geometryStats?.checks.hasZeroVolume).toBe(false);
+    expect(result.geometryStats?.componentCount).toBe(1);
   });
 
   it("collects param definitions", async () => {
@@ -105,6 +108,8 @@ describe("evaluateModel", () => {
     const result = await evaluateModel(code);
     expect(result.errors).toHaveLength(0);
     expect(result.bodies).toHaveLength(2);
+    expect(result.geometryStats?.checks.hasDisconnectedComponents).toBe(true);
+    expect(result.geometryStats?.componentCount).toBe(2);
   });
 
   it("allows a single connected Solid", async () => {

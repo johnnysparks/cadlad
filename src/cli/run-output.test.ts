@@ -31,8 +31,8 @@ describe("run-output", () => {
       { name: "plate", triangles: 1 },
       { name: "brace", triangles: 1 },
     ]);
-    expect(report.stats?.parts.map((part) => part.id)).toEqual(["plate", "brace"]);
-    expect(report.stats?.pairwise[0].intersects).toBe(false);
+    expect(report.geometryStats?.parts.map((part) => part.id)).toEqual(["plate", "brace"]);
+    expect(report.geometryStats?.pairwise[0].intersects).toBe(false);
   });
 
   it("formats human-readable output compatible with existing CLI output", () => {

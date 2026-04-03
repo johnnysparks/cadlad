@@ -85,11 +85,55 @@ export interface SceneValidationReport {
   summary: SceneValidationSummary;
 }
 
+export interface GeometryBounds {
+  min: Vec3;
+  max: Vec3;
+}
+
+export interface GeometryPartStats {
+  index: number;
+  id: string;
+  name: string;
+  triangles: number;
+  boundingBox: GeometryBounds;
+  extents: { x: number; y: number; z: number };
+  volume: number;
+  surfaceArea: number;
+}
+
+export interface GeometryPairwisePartStats {
+  partA: string;
+  partAId: string;
+  partB: string;
+  partBId: string;
+  intersects: boolean;
+  minDistance: number;
+}
+
+export interface GeometryChecks {
+  hasZeroVolume: boolean;
+  hasDegenerateBoundingBox: boolean;
+  hasDisconnectedComponents: boolean;
+}
+
+export interface GeometryStats {
+  triangles: number;
+  bodies: number;
+  componentCount: number;
+  boundingBox: GeometryBounds;
+  volume: number;
+  surfaceArea: number;
+  parts: GeometryPartStats[];
+  pairwise: GeometryPairwisePartStats[];
+  checks: GeometryChecks;
+}
+
 /** Result of evaluating a model script */
 export interface ModelResult {
   bodies: Body[];
   params: ParamDef[];
   errors: string[];
+  geometryStats?: GeometryStats;
   diagnostics?: ValidationDiagnostic[];
   sceneValidation?: SceneValidationReport;
   hints: Hint[];

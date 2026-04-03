@@ -1,44 +1,9 @@
-import type { Body } from "../engine/types.js";
+import type { Body, GeometryBounds, GeometryPartStats, GeometryPairwisePartStats, GeometryStats } from "../engine/types.js";
 
-export interface Bounds {
-  min: [number, number, number];
-  max: [number, number, number];
-}
-
-export interface PartStats {
-  index: number;
-  id: string;
-  name: string;
-  triangles: number;
-  boundingBox: Bounds;
-  extents: { x: number; y: number; z: number };
-  volume: number;
-  surfaceArea: number;
-}
-
-export interface PairwisePartStats {
-  partA: string;
-  partAId: string;
-  partB: string;
-  partBId: string;
-  intersects: boolean;
-  minDistance: number;
-}
-
-export interface ModelStats {
-  triangles: number;
-  bodies: number;
-  boundingBox: Bounds;
-  volume: number;
-  surfaceArea: number;
-  parts: PartStats[];
-  pairwise: PairwisePartStats[];
-}
-
-export function computeModelStats(bodies: Body[]): ModelStats | undefined {
+export function computeModelStats(bodies: Body[]): GeometryStats | undefined {
   if (bodies.length === 0) return undefined;
 
-  const parts: PartStats[] = [];
+  const parts: GeometryPartStats[] = [];
   const partIdCounts = new Map<string, number>();
   let minX = Infinity, minY = Infinity, minZ = Infinity;
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
@@ -63,7 +28,7 @@ export function computeModelStats(bodies: Body[]): ModelStats | undefined {
     maxZ = Math.max(maxZ, part.boundingBox.max[2]);
   }
 
-  const pairwise: PairwisePartStats[] = [];
+  const pairwise: GeometryPairwisePartStats[] = [];
   for (let i = 0; i < parts.length; i += 1) {
     for (let j = i + 1; j < parts.length; j += 1) {
       const a = parts[i];
@@ -80,18 +45,26 @@ export function computeModelStats(bodies: Body[]): ModelStats | undefined {
     }
   }
 
+  const componentCount = countComponents(parts, pairwise);
+
   return {
     triangles: Math.floor(totalTriangles),
     bodies: bodies.length,
+    componentCount,
     boundingBox: { min: [minX, minY, minZ], max: [maxX, maxY, maxZ] },
     volume: totalVolume,
     surfaceArea: totalArea,
     parts,
     pairwise,
+    checks: {
+      hasZeroVolume: totalVolume <= Number.EPSILON,
+      hasDegenerateBoundingBox: (maxX - minX) <= Number.EPSILON || (maxY - minY) <= Number.EPSILON || (maxZ - minZ) <= Number.EPSILON,
+      hasDisconnectedComponents: componentCount > 1,
+    },
   };
 }
 
-function computePartStats(body: Body, index: number, partIdCounts: Map<string, number>): PartStats {
+function computePartStats(body: Body, index: number, partIdCounts: Map<string, number>): GeometryPartStats {
   const mesh = body.mesh;
   const positions = mesh.positions;
   const indices = mesh.indices;
@@ -178,7 +151,7 @@ function slugify(value: string): string {
   return normalized || "part";
 }
 
-function bboxMinDistance(a: Bounds, b: Bounds): number {
+function bboxMinDistance(a: GeometryBounds, b: GeometryBounds): number {
   const dx = axisGap(a.min[0], a.max[0], b.min[0], b.max[0]);
   const dy = axisGap(a.min[1], a.max[1], b.min[1], b.max[1]);
   const dz = axisGap(a.min[2], a.max[2], b.min[2], b.max[2]);
@@ -189,4 +162,42 @@ function axisGap(minA: number, maxA: number, minB: number, maxB: number): number
   if (maxA < minB) return minB - maxA;
   if (maxB < minA) return minA - maxB;
   return 0;
+}
+
+function countComponents(parts: GeometryPartStats[], pairwise: GeometryPairwisePartStats[]): number {
+  if (parts.length === 0) return 0;
+  if (parts.length === 1) return 1;
+
+  const adjacency = new Map<string, Set<string>>();
+  for (const part of parts) {
+    adjacency.set(part.id, new Set());
+  }
+
+  for (const pair of pairwise) {
+    if (!pair.intersects) continue;
+    adjacency.get(pair.partAId)?.add(pair.partBId);
+    adjacency.get(pair.partBId)?.add(pair.partAId);
+  }
+
+  let components = 0;
+  const visited = new Set<string>();
+
+  for (const part of parts) {
+    if (visited.has(part.id)) continue;
+    components += 1;
+    const queue = [part.id];
+    visited.add(part.id);
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current) continue;
+      for (const neighbor of adjacency.get(current) ?? []) {
+        if (visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+  }
+
+  return components;
 }

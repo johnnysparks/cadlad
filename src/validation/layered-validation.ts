@@ -1,11 +1,12 @@
 import type {
   Body,
+  GeometryStats,
   ModelResult,
   ParamDef,
   ValidationDiagnostic,
   ValidationStage,
 } from "../engine/types.js";
-import { computeModelStats, type ModelStats } from "../studio/model-stats.js";
+import { computeModelStats } from "../studio/model-stats.js";
 
 export const VALIDATION_STAGES = [
   "types/schema",
@@ -17,7 +18,7 @@ export const VALIDATION_STAGES = [
 
 export interface LayeredValidationResult {
   diagnostics: ValidationDiagnostic[];
-  stats?: ModelStats;
+  stats?: GeometryStats;
   haltedAt?: ValidationStage;
 }
 
@@ -27,11 +28,12 @@ export function runLayeredValidation(input: {
   bodies: Body[];
 }): LayeredValidationResult {
   const diagnostics: ValidationDiagnostic[] = [];
+  const stats = computeModelStats(input.bodies);
 
   const typesDiagnostics = validateParams(input.params);
   diagnostics.push(...typesDiagnostics);
   if (typesDiagnostics.some((diag) => diag.severity === "error")) {
-    return { diagnostics, haltedAt: "types/schema" };
+    return { diagnostics, stats, haltedAt: "types/schema" };
   }
 
   const semanticDiagnostics = input.runtimeErrors.map((message) => ({
@@ -42,16 +44,15 @@ export function runLayeredValidation(input: {
   }));
   diagnostics.push(...semanticDiagnostics);
   if (semanticDiagnostics.length > 0) {
-    return { diagnostics, haltedAt: "semantic" };
+    return { diagnostics, stats, haltedAt: "semantic" };
   }
 
   const geometryDiagnostics = validateGeometry(input.bodies);
   diagnostics.push(...geometryDiagnostics);
   if (geometryDiagnostics.some((diag) => diag.severity === "error")) {
-    return { diagnostics, haltedAt: "geometry" };
+    return { diagnostics, stats, haltedAt: "geometry" };
   }
 
-  const stats = computeModelStats(input.bodies);
   const relationDiagnostics = validateRelations(stats);
   diagnostics.push(...relationDiagnostics);
   if (relationDiagnostics.some((diag) => diag.severity === "error")) {
@@ -145,7 +146,7 @@ function validateGeometry(bodies: Body[]): ValidationDiagnostic[] {
   return diagnostics;
 }
 
-function validateRelations(stats?: ModelStats): ValidationDiagnostic[] {
+function validateRelations(stats?: GeometryStats): ValidationDiagnostic[] {
   if (!stats) return [];
   return stats.pairwise
     .filter((pair) => pair.intersects)
@@ -185,6 +186,7 @@ export function withLayeredValidation(result: Omit<ModelResult, "errors"> & { ru
     hints: result.hints,
     camera: result.camera,
     sceneValidation: result.sceneValidation,
+    geometryStats: validated.stats,
     diagnostics: validated.diagnostics,
     errors: diagnosticsToErrors(validated.diagnostics),
   };
