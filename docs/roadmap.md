@@ -96,7 +96,7 @@ These let an agent reason about model quality without vision.
 - [ ] `add_feature(kind, params)` — add a hole, fillet, chamfer, shell, etc. by semantic kind. The system generates correct `.forge.ts` code.
 - [ ] `modify_feature(id, params)` — change a feature's parameters by ID. Requires `defineScene()` with stable feature IDs.
 - [ ] `remove_feature(id)` — remove a feature.
-- [ ] `list_features()` → current feature tree with IDs, kinds, params.
+- [x] `list_features()` → current feature tree with IDs, kinds, params.
 
 **Why semantic operations matter for agents:** Raw code generation works but is fragile. An agent writing `solid.subtract(cylinder(12, 3).translate(5, 0, 6))` has to know the exact API, coordinate system, and sizing rules. An agent calling `add_feature("through_hole", { diameter: 6, position: [5, 0, 6] })` expresses intent. The system handles the implementation, including oversize-cutter rules, coordinate transforms, and validation.
 

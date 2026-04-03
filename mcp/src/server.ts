@@ -21,6 +21,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { SessionClient, clientFromUrl, ApiError, type RunResultEnvelope, type RenderStatus } from "./session-client.js";
+import { extractSceneFeatures } from "./scene-features.js";
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
@@ -252,6 +253,18 @@ const TOOLS = [
     name: "get_model_stats",
     description:
       "Get geometry statistics from the last run: triangle count, body count, and bounding box. Useful for validation without needing a screenshot (e.g., check if a part is within size constraints).",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+
+  {
+    name: "list_features",
+    description:
+      "List defineScene() features with stable ids, kinds, labels, and refs so agents can reason about feature-level edits.",
     annotations: { readOnlyHint: true },
     inputSchema: {
       type: "object" as const,
@@ -616,6 +629,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             : [],
         };
         return { content: [{ type: "text" as const, text: JSON.stringify(compareResult, null, 2) }] };
+      }
+
+
+      case "list_features": {
+        const session = await client.getSession();
+        const parsed = extractSceneFeatures(session.source);
+        if (parsed.features.length === 0) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                revision: session.revision,
+                features: [],
+                warnings: parsed.warnings,
+              }, null, 2),
+            }],
+          };
+        }
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              revision: session.revision,
+              count: parsed.features.length,
+              features: parsed.features,
+              warnings: parsed.warnings,
+            }, null, 2),
+          }],
+        };
       }
 
       case "get_part_stats": {
