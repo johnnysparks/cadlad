@@ -40,11 +40,26 @@ export interface Hint {
   severity: "tip" | "warning";
 }
 
+export type ValidationStage =
+  | "types/schema"
+  | "semantic"
+  | "geometry"
+  | "stats/relations"
+  | "render/snapshots/tests";
+
+export interface ValidationDiagnostic {
+  stage: ValidationStage;
+  severity: "error" | "warning";
+  message: string;
+  featureId?: string;
+}
+
 /** Result of evaluating a model script */
 export interface ModelResult {
   bodies: Body[];
   params: ParamDef[];
   errors: string[];
+  diagnostics?: ValidationDiagnostic[];
   hints: Hint[];
   /** Optional camera position hint from the model [x, y, z] */
   camera?: Vec3;
