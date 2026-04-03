@@ -24,7 +24,7 @@ export class FeatureRegistry {
 
   register(definition: FeatureDefinition): void {
     if (this.definitions.has(definition.kind)) {
-      throw new Error(`Feature kind \"${definition.kind}\" is already registered.`);
+      throw new Error(`Feature kind "${definition.kind}" is already registered.`);
     }
     this.definitions.set(definition.kind, definition);
   }
@@ -32,7 +32,7 @@ export class FeatureRegistry {
   get(kind: string): FeatureDefinition {
     const definition = this.definitions.get(kind);
     if (!definition) {
-      throw new Error(`Unknown feature kind \"${kind}\".`);
+      throw new Error(`Unknown feature kind "${kind}".`);
     }
     return definition;
   }
@@ -49,21 +49,21 @@ export class FeatureRegistry {
       const value = params[fieldName];
       if (value === undefined || value === null) {
         if (fieldSchema.required !== false) {
-          errors.push(`Missing required field \"${fieldName}\" for ${kind}.`);
+          errors.push(`Missing required field "${fieldName}" for ${kind}.`);
         }
         continue;
       }
 
       if (typeof value !== fieldSchema.type) {
         errors.push(
-          `Invalid type for \"${fieldName}\" in ${kind}: expected ${fieldSchema.type}, got ${typeof value}.`,
+          `Invalid type for "${fieldName}" in ${kind}: expected ${fieldSchema.type}, got ${typeof value}.`,
         );
       }
     }
 
     for (const key of Object.keys(params)) {
       if (!(key in definition.schema)) {
-        errors.push(`Unknown field \"${key}\" for ${kind}.`);
+        errors.push(`Unknown field "${key}" for ${kind}.`);
       }
     }
 
@@ -94,7 +94,7 @@ export function createDefaultFeatureRegistry(): FeatureRegistry {
       for (const key of ["length", "height", "thickness"] as const) {
         const value = params[key];
         if (typeof value === "number" && value <= 0) {
-          errors.push(`Field \"${key}\" must be > 0 for wall.straight.`);
+          errors.push(`Field "${key}" must be > 0 for wall.straight.`);
         }
       }
       return errors;
@@ -116,7 +116,7 @@ export function createDefaultFeatureRegistry(): FeatureRegistry {
       const errors: string[] = [];
       const pitch = params.pitchDeg;
       if (typeof pitch === "number" && (pitch <= 0 || pitch >= 80)) {
-        errors.push("Field \"pitchDeg\" must be in (0, 80) for roof.gable.");
+        errors.push('Field "pitchDeg" must be in (0, 80) for roof.gable.');
       }
       return errors;
     },

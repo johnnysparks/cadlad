@@ -151,12 +151,12 @@ export function updateFeature(
   const targetFeature = findFeatureById(featuresArray, featureId);
 
   if (!targetFeature) {
-    throw new Error(`Feature with id \"${featureId}\" was not found.`);
+    throw new Error(`Feature with id "${featureId}" was not found.`);
   }
 
   const kindArg = targetFeature.arguments[0];
   if (!kindArg || !ts.isStringLiteral(kindArg)) {
-    throw new Error(`Feature with id \"${featureId}\" has a non-literal kind argument.`);
+    throw new Error(`Feature with id "${featureId}" has a non-literal kind argument.`);
   }
 
   const validation = registry.validate(kindArg.text, nextParams);
