@@ -10,7 +10,7 @@ import { Solid } from "../engine/solid.js";
 import { Assembly } from "./assembly.js";
 import { _setParamValues, _resetParams, _getParamDefs } from "./params.js";
 import { collectHints } from "./hints.js";
-import type { ModelResult, Body, ParamDef, Hint } from "../engine/types.js";
+import type { ModelResult, Body, ParamDef, Hint, GeometryValidationConfig } from "../engine/types.js";
 import { normalizeScene, defineScene, mm, runScenePostModelValidation } from "./scene-contract.js";
 
 // All API symbols that get injected into model scope
@@ -43,6 +43,7 @@ export async function evaluateModel(
   let hints: Hint[] = [];
   let camera: [number, number, number] | undefined;
   let sceneValidation: ModelResult["sceneValidation"];
+  let geometryValidationConfig: GeometryValidationConfig | undefined;
 
   const collectSolid = (solid: Solid, context: string): void => {
     const nComp = solid.numComponents();
@@ -153,11 +154,13 @@ export async function evaluateModel(
     }
 
     if (normalized.scene) {
+      geometryValidationConfig = normalized.scene.geometryValidation;
       sceneValidation = runScenePostModelValidation({
         scene: normalized.scene,
         validators: normalized.rawHooks?.validators,
         tests: normalized.rawHooks?.tests,
         bodies,
+        model,
       });
       if (sceneValidation.summary.errorCount > 0) {
         errors.push(...sceneValidation.diagnostics.map((diag) => {
@@ -184,5 +187,6 @@ export async function evaluateModel(
     hints,
     camera,
     sceneValidation,
+    geometryValidation: geometryValidationConfig,
   });
 }

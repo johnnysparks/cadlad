@@ -235,4 +235,45 @@ describe("evaluateModel", () => {
     expect(result.sceneValidation?.summary.validatorFailures).toBe(1);
     expect(result.sceneValidation?.tests.find((entry) => entry.id === "wall.min-geometry")?.status).toBe("pass");
   });
+
+  it("applies scene geometry sanity config in layered validation", async () => {
+    const code = `
+      return defineScene({
+        meta: { name: "geometry-envelope" },
+        geometry: {
+          expectedVolume: { max: 500 },
+          expectedBoundingBox: { min: { x: 0 } },
+        },
+        features: [{ id: "base", kind: "primitive.box" }],
+        model: box(10, 10, 10),
+      });
+    `;
+
+    const result = await evaluateModel(code);
+    expect(result.errors.some((message) => message.includes("exceeds expected maximum 500"))).toBe(true);
+    expect(result.errors.some((message) => message.includes("bbox min.x"))).toBe(true);
+  });
+
+  it("passes built Solid into scene geometry validators", async () => {
+    const code = `
+      return defineScene({
+        meta: { name: "geometry-validator-model-context" },
+        features: [{ id: "base", kind: "primitive.box" }],
+        validators: [
+          {
+            id: "solid-context",
+            stage: "geometry",
+            run: ({ model }) => !(model instanceof Solid)
+              ? "Expected model to be a Solid."
+              : undefined,
+          },
+        ],
+        model: box(10, 10, 10),
+      });
+    `;
+
+    const result = await evaluateModel(code);
+    expect(result.errors).toHaveLength(0);
+    expect(result.sceneValidation?.validators.find((entry) => entry.id === "solid-context")?.status).toBe("pass");
+  });
 });

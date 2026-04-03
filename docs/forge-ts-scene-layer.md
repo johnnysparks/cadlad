@@ -10,6 +10,7 @@ A scene can declare:
 - `features` (stable IDs + semantic kinds + deterministic `refs`)
 - `validators` (author assertions at semantic and/or geometry stages)
 - `tests` (lightweight in-source checks run after model output exists)
+- `geometry` (optional sanity envelope for expected volume / bounding box / connectivity)
 
 The runtime normalizes this structure before geometry build and emits deterministic diagnostics for scene envelope errors and failed hooks. It also records a structured `sceneValidation` report that includes diagnostics, per-validator/per-test pass-fail status, and summary counts for downstream MCP/agent/UI surfaces.
 
@@ -27,6 +28,8 @@ The runtime normalizes this structure before geometry build and emits determinis
 3. **Geometry checks (post-model, pre-render surface use)**
    - empty scene output / empty mesh buffers
    - disconnected multi-body output warning
+   - near-zero volume and degenerate bounding boxes
+   - optional scene-level geometry envelope (`geometry.expectedVolume`, `geometry.expectedBoundingBox`)
    - scene geometry validators (`validators` with `stage: "geometry"`)
 4. **In-source tests (post-model)**
    - tests declared in `tests` with stable IDs
@@ -44,7 +47,7 @@ return defineScene({
   ],
   validators: [
     { id: "hole.fits", stage: "semantic", run: ({ params }) => ... },
-    { id: "result.one-body", stage: "geometry", run: ({ bodies }) => ... },
+    { id: "result.one-body", stage: "geometry", run: ({ bodies, model }) => ... },
   ],
   tests: [
     { id: "mesh.non-empty", run: ({ bodies }) => ... },
@@ -52,6 +55,16 @@ return defineScene({
   ],
   model: ({ params }) => ...
 });
+```
+
+Example geometry envelope:
+
+```ts
+geometry: {
+  allowDisconnectedComponents: false,
+  expectedVolume: { min: 100, max: 1000 },
+  expectedBoundingBox: { min: { z: 0 }, max: { x: 200, y: 200, z: 200 } },
+}
 ```
 
 ## Escape hatch retained

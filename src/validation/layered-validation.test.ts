@@ -62,4 +62,35 @@ describe("runLayeredValidation", () => {
 
     expect(text).toBe("[geometry] Body 1 has empty mesh data. (body:plate)");
   });
+
+  it("applies built-in geometry checks from computed stats", () => {
+    const result = runLayeredValidation({
+      runtimeErrors: [],
+      params: [],
+      bodies: [makeBody("plate")],
+    });
+
+    expect(result.haltedAt).toBe("geometry");
+    expect(result.diagnostics.some((diag) => diag.message.includes("near-zero volume"))).toBe(true);
+    expect(result.diagnostics.some((diag) => diag.message.includes("degenerate bounding box"))).toBe(true);
+  });
+
+  it("enforces configurable volume and bounding-box expectations", () => {
+    const result = runLayeredValidation({
+      runtimeErrors: [],
+      params: [],
+      bodies: [makeBody("plate")],
+      geometryValidation: {
+        expectedVolume: { min: 1, max: 2 },
+        expectedBoundingBox: {
+          min: { x: 0.1 },
+          max: { x: 0.8 },
+        },
+      },
+    });
+
+    expect(result.diagnostics.some((diag) => diag.message.includes("below expected minimum"))).toBe(true);
+    expect(result.diagnostics.some((diag) => diag.message.includes("below expected 0.1"))).toBe(true);
+    expect(result.diagnostics.some((diag) => diag.message.includes("exceeds expected 0.8"))).toBe(true);
+  });
 });

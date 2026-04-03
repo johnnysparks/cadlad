@@ -37,6 +37,11 @@ describe("scene contract validation", () => {
           stage: "geometry",
           run: ({ bodies }) => (bodies.length !== 1 ? "Expected exactly one body." : undefined),
         },
+        {
+          id: "model.available",
+          stage: "geometry",
+          run: ({ model }) => (model ? undefined : "Expected built model in geometry validator context."),
+        },
       ],
       tests: [
         {
@@ -54,10 +59,12 @@ describe("scene contract validation", () => {
       validators: scene.validators,
       tests: scene.tests,
       bodies: [makeBody("base")],
+      model: { id: "built-model" },
     });
 
     expect(report.summary.errorCount).toBe(0);
     expect(report.validators[0]).toMatchObject({ id: "body-count.one", status: "pass" });
+    expect(report.validators[1]).toMatchObject({ id: "model.available", status: "pass" });
     expect(report.tests[0]).toMatchObject({ id: "mesh.non-empty", status: "pass" });
   });
 

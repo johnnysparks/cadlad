@@ -1,5 +1,6 @@
 import type {
   Body,
+  GeometryValidationConfig,
   GeometryStats,
   ModelResult,
   ParamDef,
@@ -26,6 +27,7 @@ export function runLayeredValidation(input: {
   runtimeErrors: string[];
   params: ParamDef[];
   bodies: Body[];
+  geometryValidation?: GeometryValidationConfig;
 }): LayeredValidationResult {
   const diagnostics: ValidationDiagnostic[] = [];
   const stats = computeModelStats(input.bodies);
@@ -47,7 +49,7 @@ export function runLayeredValidation(input: {
     return { diagnostics, stats, haltedAt: "semantic" };
   }
 
-  const geometryDiagnostics = validateGeometry(input.bodies);
+  const geometryDiagnostics = validateGeometry(input.bodies, stats, input.geometryValidation);
   diagnostics.push(...geometryDiagnostics);
   if (geometryDiagnostics.some((diag) => diag.severity === "error")) {
     return { diagnostics, stats, haltedAt: "geometry" };
@@ -117,8 +119,14 @@ function validateParams(params: ParamDef[]): ValidationDiagnostic[] {
   return diagnostics;
 }
 
-function validateGeometry(bodies: Body[]): ValidationDiagnostic[] {
+function validateGeometry(
+  bodies: Body[],
+  stats: GeometryStats | undefined,
+  config: GeometryValidationConfig | undefined,
+): ValidationDiagnostic[] {
   const diagnostics: ValidationDiagnostic[] = [];
+  const epsilon = config?.epsilon ?? 1e-6;
+
   for (let i = 0; i < bodies.length; i += 1) {
     const body = bodies[i];
     const featureId = body.name?.trim() ? `body:${body.name.trim()}` : `body:${i + 1}`;
@@ -140,6 +148,83 @@ function validateGeometry(bodies: Body[]): ValidationDiagnostic[] {
         message: `Body ${i + 1} has malformed triangle indices (not divisible by 3).`,
         featureId,
       });
+    }
+  }
+
+  if (!stats) return diagnostics;
+
+  for (const part of stats.parts) {
+    if (part.volume < epsilon) {
+      diagnostics.push({
+        stage: "geometry",
+        severity: "error",
+        message: `Body "${part.name}" has near-zero volume (${part.volume.toExponential(3)}).`,
+        featureId: `body:${part.id}`,
+      });
+    }
+
+    if (part.extents.x < epsilon || part.extents.y < epsilon || part.extents.z < epsilon) {
+      diagnostics.push({
+        stage: "geometry",
+        severity: "error",
+        message: `Body "${part.name}" has a degenerate bounding box (${part.extents.x.toFixed(6)} × ${part.extents.y.toFixed(6)} × ${part.extents.z.toFixed(6)}).`,
+        featureId: `body:${part.id}`,
+      });
+    }
+  }
+
+  if (!config?.allowDisconnectedComponents && stats.componentCount > 1) {
+    diagnostics.push({
+      stage: "geometry",
+      severity: "warning",
+      message: `Model has ${stats.componentCount} disconnected components.`,
+      featureId: "model:components",
+    });
+  }
+
+  if (config?.expectedVolume) {
+    const { min, max } = config.expectedVolume;
+    if (typeof min === "number" && stats.volume < min) {
+      diagnostics.push({
+        stage: "geometry",
+        severity: "error",
+        message: `Model volume ${stats.volume.toFixed(6)} is below expected minimum ${min}.`,
+        featureId: "model:volume",
+      });
+    }
+    if (typeof max === "number" && stats.volume > max) {
+      diagnostics.push({
+        stage: "geometry",
+        severity: "error",
+        message: `Model volume ${stats.volume.toFixed(6)} exceeds expected maximum ${max}.`,
+        featureId: "model:volume",
+      });
+    }
+  }
+
+  if (config?.expectedBoundingBox) {
+    const { min, max } = config.expectedBoundingBox;
+    const axisByIndex = ["x", "y", "z"] as const;
+    for (let axisIndex = 0; axisIndex < 3; axisIndex += 1) {
+      const axis = axisByIndex[axisIndex];
+      const actualMin = stats.boundingBox.min[axisIndex];
+      const actualMax = stats.boundingBox.max[axisIndex];
+      if (typeof min?.[axis] === "number" && actualMin < min[axis]) {
+        diagnostics.push({
+          stage: "geometry",
+          severity: "error",
+          message: `Model bbox min.${axis} ${actualMin.toFixed(6)} is below expected ${min[axis]}.`,
+          featureId: "model:bbox",
+        });
+      }
+      if (typeof max?.[axis] === "number" && actualMax > max[axis]) {
+        diagnostics.push({
+          stage: "geometry",
+          severity: "error",
+          message: `Model bbox max.${axis} ${actualMax.toFixed(6)} exceeds expected ${max[axis]}.`,
+          featureId: "model:bbox",
+        });
+      }
     }
   }
 
@@ -173,11 +258,14 @@ export function formatValidationDiagnostic(diag: ValidationDiagnostic): string {
   return `[${diag.stage}] ${diag.message}${scope}`;
 }
 
-export function withLayeredValidation(result: Omit<ModelResult, "errors"> & { runtimeErrors: string[] }): ModelResult {
+export function withLayeredValidation(
+  result: Omit<ModelResult, "errors"> & { runtimeErrors: string[]; geometryValidation?: GeometryValidationConfig },
+): ModelResult {
   const validated = runLayeredValidation({
     runtimeErrors: result.runtimeErrors,
     params: result.params,
     bodies: result.bodies,
+    geometryValidation: result.geometryValidation,
   });
 
   return {
