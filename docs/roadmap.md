@@ -110,6 +110,87 @@ These encode the domain knowledge that's currently in CLAUDE.md's "hard-won less
 
 ---
 
+## Phase 1.5 — Design Intent & Parametric Intelligence
+
+**Goal: The system teaches and enforces "pro" CAD patterns — symmetry-first modeling, reference geometry, tool bodies, bulletproof sketches — so agents (and humans) produce robust, change-resilient models by default.**
+
+Today an agent can build any shape, but nothing in the system *encourages* design intent. A pro CAD engineer models the minimum unique geometry and lets symmetry/patterns do the rest; anchors features to reference planes so one change ripples correctly; collects boolean cuts into tool bodies; and tests sketches across the full parameter range. CadLad should make these patterns easy and reward them with feedback.
+
+### 1.5.1 Batch booleans & convenience methods on Solid
+
+- [ ] `Solid.subtractAll(...tools)` — subtract multiple solids in one call. Reduces verbose subtract chains.
+- [ ] `Solid.unionAll(...parts)` — union multiple solids in one call.
+- [ ] `Solid.intersectAll(...parts)` — intersect multiple solids in one call.
+- [ ] `Solid.quarterUnion(normal1, normal2)` — model one quadrant, mirror across two planes. Shorthand for `mirrorUnion(n1).mirrorUnion(n2)`.
+
+These are small, additive changes to `src/engine/solid.ts` with no architectural impact.
+
+### 1.5.2 Common sketch profiles
+
+- [ ] `Sketch.slot(width, height, endRadius)` — stadium/slot shape (rounded ends).
+- [ ] `Sketch.lShape(w1, h1, w2, h2)` — L-profile for angles and brackets.
+- [ ] `Sketch.channel(width, height, flangeWidth)` — C-channel profile.
+- [ ] `Sketch.tShape(w1, h1, w2, h2)` — T-profile for beams.
+
+These reduce boilerplate for the most common 2D-to-3D profiles. Added to `src/api/sketch.ts`.
+
+### 1.5.3 Reference geometry — Datums, Planes, Axes
+
+- [ ] `Plane` type: origin + normal. Pure data, no Manifold dependency.
+- [ ] `Axis` type: origin + direction. For circular patterns and revolve.
+- [ ] `Datum` type: named reference point, optionally derived from a solid's bbox.
+- [ ] Factory functions:
+  - `plane.XY(zOffset?)`, `plane.XZ(yOffset?)`, `plane.YZ(xOffset?)` — standard construction planes.
+  - `plane.midplane(solid, axis)` — derived plane at the center of a solid along an axis.
+  - `datum.fromBBox(solid, anchor)` — reference point at "center", "top", "bottom", etc. of a bbox.
+  - `axis.Z()`, `axis.X()`, `axis.Y()` — world axes through origin.
+- [ ] `Solid.translateTo(plane, offsets?)` — position relative to a reference plane instead of absolute coords.
+- [ ] Datums/planes register as features in `defineScene()` for dependency tracking.
+
+New file: `src/api/reference.ts`. This replaces fragile hard-coded `translate(30, 0, 50)` calls with self-updating references.
+
+### 1.5.4 Tool bodies
+
+- [ ] `toolBody(name, solid)` — marks a solid as construction-only geometry (not rendered in final output).
+- [ ] Tool bodies register as `kind: "tool-body"` features in `defineScene()`.
+- [ ] `Solid.subtractAll()` / `Solid.intersectAll()` accept `ToolBody` directly.
+- [ ] Studio viewport can optionally show tool bodies as wireframe for debugging.
+
+New file: `src/api/toolbody.ts`. Enables the "collect all cutouts, subtract once" pro pattern.
+
+### 1.5.5 Design intent hints & feedback
+
+Post-evaluation advisory hints (never blocking) added to `src/api/hints.ts`:
+
+- [ ] **Magic numbers**: warn when `translate()` / sketch coordinates use 3+ literal numbers with no `param()` or datum reference.
+- [ ] **Repeated geometry**: detect same primitive constructed 3+ times with offset only → suggest `linearPattern()` or `circularPattern()`.
+- [ ] **Missed symmetry**: if bbox is symmetric about X or Y but model wasn't built with `mirrorUnion()` → suggest it.
+- [ ] **Deep boolean chains**: 5+ sequential `.subtract()` calls → suggest `subtractAll()` with tool bodies.
+- [ ] **Unparameterized dimensions**: literal numbers in sketch coordinates → suggest deriving from params.
+
+These hints display in the studio's existing hint panel and are returned in the `ModelResult` for agents.
+
+### 1.5.6 Assembly-preserving patterns
+
+- [ ] `Solid.mirrorAssembly(normal, namePrefix?)` — mirrors into an Assembly (preserves individual part identity and color) instead of anonymous union.
+- [ ] `Solid.linearPatternAssembly(count, step, namePrefix?)` — pattern into Assembly.
+- [ ] `Solid.circularPatternAssembly(count, axis, angle, center, namePrefix?)` — pattern into Assembly.
+
+These complement the existing union-based patterns for cases where parts need distinct colors or names.
+
+### 1.5.7 Parametric robustness testing
+
+- [ ] `paramSweepTest(paramName, values)` — helper for `defineScene().tests` that evaluates the model at each param value and reports failures (empty geometry, self-intersection, validation errors).
+- [ ] Sketch `validate()` enhanced to report *why* validation failed (which edges intersect, where area goes to zero).
+
+### 1.5.8 Skills & workflow documentation
+
+- [ ] Add **"§2.5 Design Intent Patterns"** to `SKILLS.md`: symmetry decision tree, reference geometry patterns, tool body patterns, bulletproof sketch patterns.
+- [ ] New workflow file: `.claude/skills/workflow-design-intent.md` — step-by-step for agents: identify symmetry → establish datums → model minimum → pattern/mirror → tool bodies for cuts → parameterize everything → run design intent check → sweep params.
+- [ ] Update `CLAUDE.md` API tables and hard-won lessons with new methods.
+
+---
+
 ## Phase 2 — Agent memory: events, revisions, branches
 
 **Goal: An agent can pick up where it (or another agent) left off, explore alternatives, and compare approaches.**
@@ -190,14 +271,21 @@ The north star calls agent learning events "gold." Agreed — this is what makes
 
 **Goal: The system enforces design intent, so agents don't have to carry domain knowledge in their context window.**
 
-### 4.1 Declarative constraints
+### 4.1 Constraint-based sketch solver
+
+- [ ] `Sketch.constrained()` API: define sketches via geometric constraints (coincident, perpendicular, tangent, equal-length, fixed-distance) instead of explicit coordinates.
+- [ ] Constraint solver resolves concrete points from constraint graph + driving dimensions.
+- [ ] Sketches stay fully-constrained even when parameters change drastically — no broken geometry.
+- [ ] This is the highest-complexity item from the Design Intent initiative and depends on Phase 1.5 sketch profile work being stable.
+
+### 4.2 Declarative constraints
 
 - [ ] `constraint("wall_thickness", { min: mm(2) })` — checked after every geometry operation.
 - [ ] `constraint("symmetry", { axis: "X" })` — warn on asymmetry.
 - [ ] `constraint("clearance", { between: ["lid", "base"], min: mm(0.5) })` — inter-part spacing.
 - [ ] `constraint("max_overhang", { angle: 45 })` — 3D printing constraint.
 
-### 4.2 Manufacturing profiles
+### 4.3 Manufacturing profiles
 
 - [ ] `profile("fdm_printing", { layerHeight: 0.2, nozzle: 0.4 })` — activates relevant constraints automatically.
 - [ ] `profile("injection_molding", { material: "ABS" })` — draft angles, wall thickness, gate placement.
@@ -205,7 +293,7 @@ The north star calls agent learning events "gold." Agreed — this is what makes
 
 An agent says "I'm designing for FDM printing" and gets automatic wall thickness, overhang, and bridging checks. No domain knowledge required in the prompt.
 
-### 4.3 Constraint-aware suggestions
+### 4.4 Constraint-aware suggestions
 
 - [ ] When a constraint is violated, the system doesn't just report it — it suggests a fix.
 - [ ] "Wall thickness is 1.2mm at [x,y,z]. Minimum is 2mm. Suggested: increase shell thickness from 1.5 to 2.5."
@@ -224,7 +312,14 @@ This phase is last not because it's unimportant, but because agents don't export
 - [ ] OBJ — rendering pipelines.
 - [ ] STEP — industry interchange. Hard (mesh → BREP), but important for CNC workflows. Investigate Manifold's STEP support or external post-processing.
 
-### 5.2 Studio as review tool
+### 5.2 Design Intent studio UX
+
+- [ ] **Design Intent score badge** (0–100%) in studio toolbar — based on how many design intent hints fire (magic numbers, missed symmetry, deep boolean chains, etc.). Visual incentive for clean parametric modeling.
+- [ ] **Hint → line navigation**: clicking a design intent hint in the hint panel navigates Monaco to the offending line.
+- [ ] **Feature dependency graph**: for `defineScene()` models, visualize the feature tree and reference relationships in a side panel. Shows which features depend on which datums/planes.
+- [ ] **Tool body wireframe toggle**: show/hide tool bodies as translucent wireframe overlays in the viewport for debugging boolean operations.
+
+### 5.3 Studio as review tool
 
 Reposition the studio from "where you model" to "where you review what the agent built":
 
@@ -233,20 +328,20 @@ Reposition the studio from "where you model" to "where you review what the agent
 - [ ] Validation dashboard: see all diagnostics, constraints, and test results at a glance.
 - [ ] Approval workflow: human reviews agent's work, approves or sends back with feedback.
 
-### 5.3 Plugin / extension model
+### 5.4 Plugin / extension model
 
 - [ ] Custom primitives: gears, threads, bezier surfaces, sheet metal bends.
 - [ ] Custom validators: domain-specific rules packaged as plugins.
 - [ ] Custom exporters: additional output formats.
 - [ ] This enables the community to extend CadLad without core changes.
 
-### 5.4 Package registry
+### 5.5 Package registry
 
 - [ ] Publish and import reusable components (`cadlad add @cadlad/fasteners`).
 - [ ] Agents can discover and use community components via MCP tools.
 - [ ] Version-pinned dependencies in project config.
 
-### 5.5 Platform decoupling
+### 5.6 Platform decoupling
 
 - [ ] Define platform interfaces: `EventStore`, `ArtifactStore`, `EventBus`.
 - [ ] Local backend (SQLite + filesystem) for desktop/CLI.
@@ -287,10 +382,12 @@ Reposition the studio from "where you model" to "where you review what the agent
 
 2. **Semantic operations over raw code.** Every MCP tool that lets an agent express intent instead of writing implementation reduces error rate and speeds iteration. Phase 1 is the agent's primary interface improvement.
 
-3. **Memory enables learning.** An agent with revision history and branching explores design space more effectively than one that starts fresh each session. Phase 2 is the agent's long-term memory.
+3. **Design intent reduces iteration.** An agent that models half and mirrors, uses datums instead of magic numbers, and batch-subtracts with tool bodies produces models that survive parameter changes on the first try. Phase 1.5 teaches pro patterns through API affordances and advisory hints — the system rewards good modeling practice.
 
-4. **The system should encode domain knowledge, not the agent's prompt.** Manufacturing constraints, printability rules, and structural checks belong in the platform. The agent's context window should be spent on the user's design intent, not on "remember to oversize boolean cutters by 2mm." Phase 4 moves knowledge from CLAUDE.md into the runtime.
+4. **Memory enables learning.** An agent with revision history and branching explores design space more effectively than one that starts fresh each session. Phase 2 is the agent's long-term memory.
 
-5. **Human UX is the review layer, not the modeling layer.** The studio's job shifts from "where you model" to "where you approve." Design the human experience around reviewing, comparing, and redirecting agent work — not around manual modeling.
+5. **The system should encode domain knowledge, not the agent's prompt.** Manufacturing constraints, printability rules, and structural checks belong in the platform. The agent's context window should be spent on the user's design intent, not on "remember to oversize boolean cutters by 2mm." Phase 4 moves knowledge from CLAUDE.md into the runtime.
 
-6. **Don't break the 24 projects.** They're the test suite, the gallery, the proof, and (increasingly) the training corpus for agents. Every change must keep them working.
+6. **Human UX is the review layer, not the modeling layer.** The studio's job shifts from "where you model" to "where you approve." Design the human experience around reviewing, comparing, and redirecting agent work — not around manual modeling.
+
+7. **Don't break the 24 projects.** They're the test suite, the gallery, the proof, and (increasingly) the training corpus for agents. Every change must keep them working.
