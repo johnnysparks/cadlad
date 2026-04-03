@@ -53,7 +53,7 @@ Local `core.hooksPath` is set to `.git/hooks` (overrides global hooks).
 
 ### Type errors
 - New Solid methods need `_derive()` for color/name preservation — check return types
-- Runtime sandbox in `src/api/runtime.ts` must match what .forge.js code expects
+- Runtime sandbox in `src/api/runtime.ts` must match what .forge.ts code expects
 
 ### Lint errors
 - Auto-fix: `npx eslint src/ --fix`

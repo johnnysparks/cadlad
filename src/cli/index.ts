@@ -3,7 +3,7 @@
  * CadLad CLI.
  *
  * Usage:
- *   cadlad run <file.forge.js|file.forge.ts> [--json] — validate & evaluate a model
+ *   cadlad run <file.forge.ts> — validate & evaluate a model
  *   cadlad export <file> -o out.stl — export to STL
  *   cadlad studio                   — launch browser studio (dev server)
  */
@@ -38,7 +38,7 @@ async function cmdRun(args: string[]) {
   const file = args[0];
   const printJson = args.includes("--json");
   if (!file) {
-    console.error("Usage: cadlad run <file.forge.js|file.forge.ts> [--json]");
+    console.error("Usage: cadlad run <file.forge.ts>");
     process.exit(1);
   }
 
@@ -70,7 +70,7 @@ async function cmdExport(args: string[]) {
   const outFile = outIdx >= 0 ? args[outIdx + 1] : undefined;
 
   if (!file) {
-    console.error("Usage: cadlad export <file.forge.js|file.forge.ts> -o output.stl");
+    console.error("Usage: cadlad export <file.forge.ts> -o output.stl");
     process.exit(1);
   }
 
@@ -89,7 +89,7 @@ async function cmdExport(args: string[]) {
     process.exit(1);
   }
 
-  const outputPath = outFile ?? file.replace(/\.(forge\.)?(js|ts)$/, ".stl");
+  const outputPath = outFile ?? file.replace(/\.forge\.ts$/, ".stl");
   const body = result.bodies[0];
   const stl = meshToSTLBuffer(body.mesh);
   writeFileSync(resolve(outputPath), Buffer.from(stl));
@@ -140,7 +140,7 @@ function printUsage() {
 CadLad — Code-first parametric CAD
 
 Usage:
-  cadlad run <file.forge.js|file.forge.ts> [--json] Validate and evaluate a model
+  cadlad run <file.forge.ts> Validate and evaluate a model
   cadlad export <file> -o output.stl    Export model to STL
   cadlad studio                         Launch browser studio
 `);

@@ -80,7 +80,7 @@ Read model:
 Apply code change:
   POST ${apiBase}/api/live/session/${sessionId}/patch
   Authorization: Bearer <OAuth access token>
-  {"type":"source_replace","source":"<full .forge.js code>","summary":"<what changed>"}
+  {"type":"replace_source","source":"<full .forge.ts code>","summary":"<what changed>"}
 
 Update sliders:
   POST ${apiBase}/api/live/session/${sessionId}/patch
