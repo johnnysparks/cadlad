@@ -1,4 +1,5 @@
 import type { Body } from "../engine/types.js";
+import type { GeometryValidationConfig } from "../engine/types.js";
 
 export type SceneSourceRange = {
   startLine: number;
@@ -72,6 +73,7 @@ export type SceneValidatorContext<TParams extends SceneParamsShape | undefined =
   params: InferSceneParams<TParams>;
   features: readonly NormalizedSceneFeature[];
   bodies: readonly Body[];
+  model?: unknown;
 };
 
 export type SceneValidatorRun<TParams extends SceneParamsShape | undefined = SceneParamsShape | undefined> = (
@@ -101,6 +103,7 @@ export type SceneEnvelope<TModel = unknown, TParams extends SceneParamsShape | u
   features: readonly SceneFeatureDeclaration[];
   validators?: readonly SceneValidator<TParams>[];
   tests?: readonly SceneTest<TParams>[];
+  geometry?: GeometryValidationConfig;
 };
 
 export type NormalizedSceneFeature = {
@@ -135,6 +138,7 @@ export type NormalizedScene<TModel = unknown> = {
   model: TModel;
   params: Record<string, number | string | boolean>;
   features: NormalizedSceneFeature[];
+  geometryValidation?: GeometryValidationConfig;
   validation: SceneValidationReport;
 };
 
@@ -312,6 +316,7 @@ export function runScenePostModelValidation(input: {
   validators?: readonly SceneValidator<any>[];
   tests?: readonly SceneTest<any>[];
   bodies: Body[];
+  model?: unknown;
 }): SceneValidationReport {
   const diagnostics: SceneDiagnostic[] = [...input.scene.validation.diagnostics];
   const validators: SceneRuleResult[] = [...input.scene.validation.validators];
@@ -357,6 +362,7 @@ export function runScenePostModelValidation(input: {
           params: input.scene.params,
           features: input.scene.features,
           bodies: input.bodies,
+          model: input.model,
         });
         if (typeof message === "string" && message.trim().length > 0) {
           diagnostics.push({
@@ -388,6 +394,7 @@ export function runScenePostModelValidation(input: {
         params: input.scene.params,
         features: input.scene.features,
         bodies: input.bodies,
+        model: input.model,
       });
       if (typeof message === "string" && message.trim().length > 0) {
         diagnostics.push({
@@ -547,6 +554,7 @@ export function normalizeScene(
       model: sceneModel,
       params: resolvedParams,
       features,
+      geometryValidation: scene.geometry,
       validation,
     },
     diagnostics,

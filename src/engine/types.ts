@@ -128,6 +128,23 @@ export interface GeometryStats {
   checks: GeometryChecks;
 }
 
+export interface NumericRangeExpectation {
+  min?: number;
+  max?: number;
+}
+
+export interface BoundingBoxExpectation {
+  min?: Partial<Record<"x" | "y" | "z", number>>;
+  max?: Partial<Record<"x" | "y" | "z", number>>;
+}
+
+export interface GeometryValidationConfig {
+  epsilon?: number;
+  allowDisconnectedComponents?: boolean;
+  expectedVolume?: NumericRangeExpectation;
+  expectedBoundingBox?: BoundingBoxExpectation;
+}
+
 /** Result of evaluating a model script */
 export interface ModelResult {
   bodies: Body[];
