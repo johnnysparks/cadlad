@@ -63,6 +63,72 @@ export class Solid {
     return this._withManifold(this._manifold.mirror(normal));
   }
 
+  /**
+   * Create a union of this solid and its mirrored counterpart.
+   * Useful for symmetry-first workflows where only half (or quarter) is modeled directly.
+   */
+  mirrorUnion(normal: Vec3): Solid {
+    return this.union(this.mirror(normal));
+  }
+
+  /**
+   * Pattern this solid linearly and union all instances into one result.
+   *
+   * @param count Number of total instances, including the original.
+   * @param stepX X offset between consecutive instances.
+   * @param stepY Y offset between consecutive instances.
+   * @param stepZ Z offset between consecutive instances.
+   */
+  linearPattern(count: number, stepX = 0, stepY = 0, stepZ = 0): Solid {
+    if (!Number.isInteger(count) || count < 1) {
+      throw new Error("linearPattern count must be an integer >= 1");
+    }
+    let patterned = this._manifold;
+    for (let i = 1; i < count; i += 1) {
+      patterned = patterned.add(
+        this._manifold.translate(stepX * i, stepY * i, stepZ * i),
+      );
+    }
+    return this._withManifold(patterned);
+  }
+
+  /**
+   * Pattern this solid around a principal axis and union all instances into one result.
+   *
+   * @param count Number of total instances, including the original.
+   * @param axis Rotation axis: "x", "y", or "z". Default "z".
+   * @param totalAngleDeg Total sweep angle in degrees. Default 360 for full circular pattern.
+   * @param center Pivot point for the pattern.
+   */
+  circularPattern(
+    count: number,
+    axis: "x" | "y" | "z" = "z",
+    totalAngleDeg = 360,
+    center: Vec3 = [0, 0, 0],
+  ): Solid {
+    if (!Number.isInteger(count) || count < 1) {
+      throw new Error("circularPattern count must be an integer >= 1");
+    }
+    if (!Number.isFinite(totalAngleDeg)) {
+      throw new Error("circularPattern totalAngleDeg must be finite");
+    }
+    const stepDeg = totalAngleDeg / count;
+    let patterned = this._manifold;
+    for (let i = 1; i < count; i += 1) {
+      const angle = stepDeg * i;
+      const rotated = this._manifold
+        .translate(-center[0], -center[1], -center[2])
+        .rotate([
+          axis === "x" ? angle : 0,
+          axis === "y" ? angle : 0,
+          axis === "z" ? angle : 0,
+        ])
+        .translate(center[0], center[1], center[2]);
+      patterned = patterned.add(rotated);
+    }
+    return this._withManifold(patterned);
+  }
+
   // ── Smoothing & Edge Treatment ────────────────────────────
 
   /**
