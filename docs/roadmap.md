@@ -273,6 +273,7 @@ The north star calls agent learning events "gold." Agreed — this is what makes
 
 ### 4.1 Constraint-based sketch solver
 
+- [x] Initial `Sketch.constrained()` foundation with a lightweight iterative solver supporting coincident, fixed-distance, perpendicular, equal-length, and tangent constraints.
 - [ ] `Sketch.constrained()` API: define sketches via geometric constraints (coincident, perpendicular, tangent, equal-length, fixed-distance) instead of explicit coordinates.
 - [ ] Constraint solver resolves concrete points from constraint graph + driving dimensions.
 - [ ] Sketches stay fully-constrained even when parameters change drastically — no broken geometry.

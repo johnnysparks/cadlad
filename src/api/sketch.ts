@@ -50,6 +50,366 @@ export interface SketchWarning {
   message: string;
 }
 
+type ConstraintKind = "coincident" | "fixed-distance" | "perpendicular" | "equal-length" | "tangent";
+
+interface BaseConstraint {
+  kind: ConstraintKind;
+}
+
+interface CoincidentConstraint extends BaseConstraint {
+  kind: "coincident";
+  pointA: string;
+  pointB: string;
+}
+
+interface FixedDistanceConstraint extends BaseConstraint {
+  kind: "fixed-distance";
+  pointA: string;
+  pointB: string;
+  distance: number;
+}
+
+interface PerpendicularConstraint extends BaseConstraint {
+  kind: "perpendicular";
+  lineA: string;
+  lineB: string;
+}
+
+interface EqualLengthConstraint extends BaseConstraint {
+  kind: "equal-length";
+  lineA: string;
+  lineB: string;
+}
+
+interface TangentConstraint extends BaseConstraint {
+  kind: "tangent";
+  lineId: string;
+  circleId: string;
+}
+
+type SketchConstraint =
+  | CoincidentConstraint
+  | FixedDistanceConstraint
+  | PerpendicularConstraint
+  | EqualLengthConstraint
+  | TangentConstraint;
+
+interface ConstraintPoint {
+  id: string;
+  x: number;
+  y: number;
+  fixed: boolean;
+}
+
+interface ConstraintLine {
+  id: string;
+  start: string;
+  end: string;
+}
+
+interface ConstraintCircle {
+  id: string;
+  center: string;
+  radius: number;
+}
+
+function normalize2(v: Vec2): Vec2 {
+  const length = Math.hypot(v[0], v[1]);
+  if (length < 1e-10) return [1, 0];
+  return [v[0] / length, v[1] / length];
+}
+
+export interface ConstraintSolveOptions {
+  iterations?: number;
+  tolerance?: number;
+}
+
+/**
+ * Lightweight iterative 2D sketch constraint solver.
+ *
+ * This is intentionally minimal and deterministic: it solves practical
+ * geometric constraints (coincident, fixed-distance, perpendicular,
+ * equal-length, tangent) for line-and-point based sketches without adding a
+ * heavyweight symbolic math dependency.
+ */
+export class ConstrainedSketch {
+  private readonly points = new Map<string, ConstraintPoint>();
+  private readonly pointOrder: string[] = [];
+  private readonly lines = new Map<string, ConstraintLine>();
+  private readonly circles = new Map<string, ConstraintCircle>();
+  private readonly constraints: SketchConstraint[] = [];
+
+  point(id: string, x: number, y: number, opts?: { fixed?: boolean }): this {
+    if (this.points.has(id)) throw new Error(`ConstrainedSketch.point: duplicate point id "${id}"`);
+    this.points.set(id, { id, x, y, fixed: opts?.fixed ?? false });
+    this.pointOrder.push(id);
+    return this;
+  }
+
+  line(id: string, start: string, end: string): this {
+    if (this.lines.has(id)) throw new Error(`ConstrainedSketch.line: duplicate line id "${id}"`);
+    this.requirePoint(start);
+    this.requirePoint(end);
+    this.lines.set(id, { id, start, end });
+    return this;
+  }
+
+  circle(id: string, center: string, radius: number): this {
+    if (this.circles.has(id)) throw new Error(`ConstrainedSketch.circle: duplicate circle id "${id}"`);
+    this.requirePoint(center);
+    if (radius <= 0) throw new Error("ConstrainedSketch.circle: radius must be positive");
+    this.circles.set(id, { id, center, radius });
+    return this;
+  }
+
+  coincident(pointA: string, pointB: string): this {
+    this.requirePoint(pointA);
+    this.requirePoint(pointB);
+    this.constraints.push({ kind: "coincident", pointA, pointB });
+    return this;
+  }
+
+  fixedDistance(pointA: string, pointB: string, distance: number): this {
+    this.requirePoint(pointA);
+    this.requirePoint(pointB);
+    if (distance <= 0) throw new Error("ConstrainedSketch.fixedDistance: distance must be positive");
+    this.constraints.push({ kind: "fixed-distance", pointA, pointB, distance });
+    return this;
+  }
+
+  perpendicular(lineA: string, lineB: string): this {
+    this.requireLine(lineA);
+    this.requireLine(lineB);
+    this.constraints.push({ kind: "perpendicular", lineA, lineB });
+    return this;
+  }
+
+  equalLength(lineA: string, lineB: string): this {
+    this.requireLine(lineA);
+    this.requireLine(lineB);
+    this.constraints.push({ kind: "equal-length", lineA, lineB });
+    return this;
+  }
+
+  tangent(lineId: string, circleId: string): this {
+    this.requireLine(lineId);
+    this.requireCircle(circleId);
+    this.constraints.push({ kind: "tangent", lineId, circleId });
+    return this;
+  }
+
+  solve(options?: ConstraintSolveOptions): this {
+    const iterations = options?.iterations ?? 60;
+    const tolerance = options?.tolerance ?? 1e-4;
+    if (this.points.size < 2) {
+      throw new Error("ConstrainedSketch.solve: define at least two points before solving");
+    }
+
+    for (let i = 0; i < iterations; i++) {
+      let maxDelta = 0;
+      for (const constraint of this.constraints) {
+        const delta = this.applyConstraint(constraint);
+        if (delta > maxDelta) maxDelta = delta;
+      }
+      if (maxDelta < tolerance) return this;
+    }
+    return this;
+  }
+
+  pointsSnapshot(): Record<string, Vec2> {
+    const snapshot: Record<string, Vec2> = {};
+    for (const [id, pt] of this.points.entries()) {
+      snapshot[id] = [pt.x, pt.y];
+    }
+    return snapshot;
+  }
+
+  toSketch(pointOrder?: string[], close = true): Sketch {
+    const order = pointOrder ?? this.pointOrder;
+    if (order.length < 2) {
+      throw new Error("ConstrainedSketch.toSketch: need at least two points");
+    }
+    const first = this.getPoint(order[0]);
+    const sketch = Sketch.begin(first.x, first.y);
+    for (let i = 1; i < order.length; i++) {
+      const pt = this.getPoint(order[i]);
+      sketch.lineTo(pt.x, pt.y);
+    }
+    if (close) sketch.close();
+    return sketch;
+  }
+
+  private applyConstraint(constraint: SketchConstraint): number {
+    switch (constraint.kind) {
+      case "coincident":
+        return this.applyCoincident(constraint);
+      case "fixed-distance":
+        return this.applyFixedDistance(constraint);
+      case "perpendicular":
+        return this.applyPerpendicular(constraint);
+      case "equal-length":
+        return this.applyEqualLength(constraint);
+      case "tangent":
+        return this.applyTangent(constraint);
+      default:
+        return 0;
+    }
+  }
+
+  private applyCoincident(c: CoincidentConstraint): number {
+    const a = this.getPoint(c.pointA);
+    const b = this.getPoint(c.pointB);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    if (Math.abs(dx) < 1e-10 && Math.abs(dy) < 1e-10) return 0;
+    if (a.fixed && b.fixed) return 0;
+    if (a.fixed) return this.movePoint(b, -dx, -dy);
+    if (b.fixed) return this.movePoint(a, dx, dy);
+    const mx = dx * 0.5;
+    const my = dy * 0.5;
+    return Math.max(this.movePoint(a, mx, my), this.movePoint(b, -mx, -my));
+  }
+
+  private applyFixedDistance(c: FixedDistanceConstraint): number {
+    const a = this.getPoint(c.pointA);
+    const b = this.getPoint(c.pointB);
+    const current = Math.hypot(b.x - a.x, b.y - a.y);
+    const err = current - c.distance;
+    if (Math.abs(err) < 1e-10) return 0;
+
+    const direction = current < 1e-10 ? [1, 0] as Vec2 : normalize2([b.x - a.x, b.y - a.y]);
+    const adjust = err;
+    if (a.fixed && b.fixed) return Math.abs(err);
+    if (a.fixed) return this.movePoint(b, -direction[0] * adjust, -direction[1] * adjust);
+    if (b.fixed) return this.movePoint(a, direction[0] * adjust, direction[1] * adjust);
+
+    const half = adjust * 0.5;
+    return Math.max(
+      this.movePoint(a, direction[0] * half, direction[1] * half),
+      this.movePoint(b, -direction[0] * half, -direction[1] * half),
+    );
+  }
+
+  private applyPerpendicular(c: PerpendicularConstraint): number {
+    const lineA = this.getLine(c.lineA);
+    const lineB = this.getLine(c.lineB);
+    const a0 = this.getPoint(lineA.start);
+    const a1 = this.getPoint(lineA.end);
+    const b0 = this.getPoint(lineB.start);
+    const b1 = this.getPoint(lineB.end);
+
+    const va = normalize2([a1.x - a0.x, a1.y - a0.y]);
+    const vb = [b1.x - b0.x, b1.y - b0.y] as Vec2;
+    const lenB = Math.hypot(vb[0], vb[1]);
+    if (lenB < 1e-10) return 0;
+
+    const perpA = [-va[1], va[0]] as Vec2;
+    const target = [perpA[0] * lenB, perpA[1] * lenB] as Vec2;
+    const desiredB1 = [b0.x + target[0], b0.y + target[1]] as Vec2;
+    if (!b1.fixed) {
+      return this.movePoint(b1, desiredB1[0] - b1.x, desiredB1[1] - b1.y);
+    }
+    if (!b0.fixed) {
+      const desiredB0 = [b1.x - target[0], b1.y - target[1]] as Vec2;
+      return this.movePoint(b0, desiredB0[0] - b0.x, desiredB0[1] - b0.y);
+    }
+    return Math.abs(va[0] * vb[0] + va[1] * vb[1]);
+  }
+
+  private applyEqualLength(c: EqualLengthConstraint): number {
+    const lineA = this.getLine(c.lineA);
+    const lineB = this.getLine(c.lineB);
+    const a0 = this.getPoint(lineA.start);
+    const a1 = this.getPoint(lineA.end);
+    const b0 = this.getPoint(lineB.start);
+    const b1 = this.getPoint(lineB.end);
+
+    const lenA = Math.hypot(a1.x - a0.x, a1.y - a0.y);
+    const vb = [b1.x - b0.x, b1.y - b0.y] as Vec2;
+    const lenB = Math.hypot(vb[0], vb[1]);
+    if (lenB < 1e-10 || lenA < 1e-10) return 0;
+
+    const dirB = normalize2(vb);
+    const desired = [b0.x + dirB[0] * lenA, b0.y + dirB[1] * lenA] as Vec2;
+    if (!b1.fixed) {
+      return this.movePoint(b1, desired[0] - b1.x, desired[1] - b1.y);
+    }
+    if (!b0.fixed) {
+      const desiredStart = [b1.x - dirB[0] * lenA, b1.y - dirB[1] * lenA] as Vec2;
+      return this.movePoint(b0, desiredStart[0] - b0.x, desiredStart[1] - b0.y);
+    }
+    return Math.abs(lenA - lenB);
+  }
+
+  private applyTangent(c: TangentConstraint): number {
+    const line = this.getLine(c.lineId);
+    const circle = this.getCircle(c.circleId);
+    const center = this.getPoint(circle.center);
+    const p0 = this.getPoint(line.start);
+    const p1 = this.getPoint(line.end);
+
+    const lx = p1.x - p0.x;
+    const ly = p1.y - p0.y;
+    const lineLength = Math.hypot(lx, ly);
+    if (lineLength < 1e-10) return 0;
+
+    const nx = -ly / lineLength;
+    const ny = lx / lineLength;
+    const distToLine = Math.abs((center.x - p0.x) * nx + (center.y - p0.y) * ny);
+    const error = distToLine - circle.radius;
+    if (Math.abs(error) < 1e-10) return 0;
+
+    // Shift the line along its normal to satisfy tangency.
+    const direction = ((center.x - p0.x) * nx + (center.y - p0.y) * ny) >= 0 ? 1 : -1;
+    const shiftX = nx * error * direction;
+    const shiftY = ny * error * direction;
+
+    if (!p0.fixed && !p1.fixed) {
+      return Math.max(this.movePoint(p0, shiftX, shiftY), this.movePoint(p1, shiftX, shiftY));
+    }
+    if (!p0.fixed) return this.movePoint(p0, shiftX, shiftY);
+    if (!p1.fixed) return this.movePoint(p1, shiftX, shiftY);
+    return Math.abs(error);
+  }
+
+  private movePoint(point: ConstraintPoint, dx: number, dy: number): number {
+    if (point.fixed) return 0;
+    point.x += dx;
+    point.y += dy;
+    return Math.hypot(dx, dy);
+  }
+
+  private requirePoint(id: string): void {
+    if (!this.points.has(id)) throw new Error(`ConstrainedSketch: unknown point "${id}"`);
+  }
+
+  private requireLine(id: string): void {
+    if (!this.lines.has(id)) throw new Error(`ConstrainedSketch: unknown line "${id}"`);
+  }
+
+  private requireCircle(id: string): void {
+    if (!this.circles.has(id)) throw new Error(`ConstrainedSketch: unknown circle "${id}"`);
+  }
+
+  private getPoint(id: string): ConstraintPoint {
+    const point = this.points.get(id);
+    if (!point) throw new Error(`ConstrainedSketch: unknown point "${id}"`);
+    return point;
+  }
+
+  private getLine(id: string): ConstraintLine {
+    const line = this.lines.get(id);
+    if (!line) throw new Error(`ConstrainedSketch: unknown line "${id}"`);
+    return line;
+  }
+
+  private getCircle(id: string): ConstraintCircle {
+    const circle = this.circles.get(id);
+    if (!circle) throw new Error(`ConstrainedSketch: unknown circle "${id}"`);
+    return circle;
+  }
+}
+
 // ── Sketch class ──────────────────────────────────────────────
 
 export class Sketch {
@@ -83,6 +443,11 @@ export class Sketch {
   /** Create a T-profile sketch centred at origin. */
   static tShape(w1: number, h1: number, w2: number, h2: number): Sketch {
     return tShape(w1, h1, w2, h2);
+  }
+
+  /** Create a constrained sketch builder with a lightweight geometric solver. */
+  static constrained(): ConstrainedSketch {
+    return new ConstrainedSketch();
   }
 
   /** Move to absolute position, starting a new sub-path. */
