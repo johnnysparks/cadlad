@@ -5,13 +5,15 @@ You're making sure tests pass, types are clean, lint is happy, and snapshots are
 ## The commands
 
 ```bash
-npm run lint         # eslint src/
-npm run typecheck    # tsc --noEmit
-npm run test         # vitest run
+npm run typecheck    # tsc --noEmit  ← ALWAYS reliable, use this first
+npm run lint         # eslint src/   ← exits 0 if eslint not installed (silent no-op)
+npm run test         # vitest run    ← exits 0 if vitest not installed (silent no-op)
 npm run build        # production build (catches import/bundling issues)
 ```
 
-Run all four. Fix issues in this order: typecheck → lint → test → build.
+> **Critical:** `npm run test` and `npm run lint` exit 0 without running if their tools aren't installed locally. `npm run typecheck` is the one reliable check. If you need real test/lint execution, install the tools first: `npm install -D vitest` / `npm install -D eslint`.
+
+Run in this order: typecheck → lint → test → build. But verify that lint/test output is actually printed — a silent exit 0 means the tool isn't installed, NOT that checks passed.
 
 ## Snapshot testing
 
