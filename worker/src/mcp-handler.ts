@@ -7,7 +7,7 @@
  *
  * Endpoint: POST /mcp
  *
- * Tools: evaluate · get_stats · get_validation · compare · get_session_state ·
+ * Tools: evaluate · get_stats · get_validation · compare · compare_branches · get_session_state ·
  *        list_patch_history · replace_source · apply_patch · update_params ·
  *        revert_patch · get_latest_screenshot · get_model_stats · list_features ·
  *        check_printability · check_moldability · suggest_improvements
@@ -58,6 +58,50 @@ const TOOLS = [
         codeB: { type: 'string' },
       },
       required: [],
+    },
+  },
+  {
+    name: 'list_branches',
+    description: 'List all branches for the current session, including active branch and head revisions.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'create_branch',
+    description: 'Create a named branch from a revision (defaults to the current revision).',
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        fromRevision: { type: 'number' },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'checkout_branch',
+    description: 'Switch the live session cursor to a branch head revision.',
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        branchId: { type: 'string' },
+      },
+      required: ['branchId'],
+    },
+  },
+  {
+    name: 'compare_branches',
+    description: 'Compare two branch heads with structured geometry, params, and validation deltas.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        branchA: { type: 'string' },
+        branchB: { type: 'string' },
+      },
+      required: ['branchA', 'branchB'],
     },
   },
 
@@ -393,6 +437,29 @@ async function callTool(
       return { content: [{ type: 'text', text: formatHistory(history) }] };
     }
 
+    case 'list_branches': {
+      const resp = await stub.fetch(new Request(`${base}/branches`));
+      if (!resp.ok) throw new Error(`Branch list failed: ${resp.status}`);
+      const body = await resp.json();
+      return { content: [{ type: 'text', text: JSON.stringify(body, null, 2) }] };
+    }
+
+    case 'create_branch': {
+      const { name, fromRevision } = args as { name?: string; fromRevision?: number };
+      if (!name) throw new Error('name is required');
+      const resp = await doPost(stub, `${base}/branches`, writeToken, { name, fromRevision });
+      const body = await resp.json();
+      return { content: [{ type: 'text', text: JSON.stringify(body, null, 2) }] };
+    }
+
+    case 'checkout_branch': {
+      const { branchId } = args as { branchId?: string };
+      if (!branchId) throw new Error('branchId is required');
+      const resp = await doPost(stub, `${base}/branches/${encodeURIComponent(branchId)}/checkout`, writeToken, {});
+      const body = await resp.json();
+      return { content: [{ type: 'text', text: JSON.stringify(body, null, 2) }] };
+    }
+
     case 'replace_source': {
       const { source, summary, intent, approach } = args as {
         source?: string; summary?: string; intent?: string; approach?: string;
@@ -601,6 +668,18 @@ async function callTool(
           }, null, 2),
         }],
       };
+    }
+
+    case 'compare_branches': {
+      const { branchA, branchB } = args as { branchA?: string; branchB?: string };
+      if (!branchA || !branchB) throw new Error('branchA and branchB are required');
+      const resp = await stub.fetch(new Request(`${base}/compare-branches?a=${encodeURIComponent(branchA)}&b=${encodeURIComponent(branchB)}`));
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => String(resp.status));
+        throw new Error(`Compare branches failed (${resp.status}): ${text}`);
+      }
+      const body = await resp.json();
+      return { content: [{ type: 'text', text: JSON.stringify(body, null, 2) }] };
     }
 
     default:

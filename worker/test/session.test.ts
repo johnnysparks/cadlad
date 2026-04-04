@@ -261,6 +261,68 @@ describe('oauth-protected sessions', () => {
     expect(revisionBody.stats?.triangles).toBe(12);
     expect(revisionBody.validation?.summary.errorCount).toBe(0);
   });
+
+  it('supports branch creation, checkout, and branch-head comparison', async () => {
+    const token = await getAccessToken();
+    const created = await createSession(token);
+
+    const branchesResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/branches`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(branchesResp.status).toBe(200);
+    const branchesBody = await branchesResp.json() as {
+      activeBranchId: string;
+      branches: Array<{ id: string; name: string; headRevision: number }>;
+    };
+    const mainBranch = branchesBody.branches.find((branch) => branch.name === 'main');
+    expect(mainBranch).toBeTruthy();
+    expect(mainBranch?.headRevision).toBe(1);
+
+    const createBranchResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/branches`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ name: 'thicker-wall', fromRevision: 1 }),
+    });
+    expect(createBranchResp.status).toBe(201);
+    const createBody = await createBranchResp.json() as { branch: { id: string; name: string; headRevision: number } };
+    expect(createBody.branch.name).toBe('thicker-wall');
+    expect(createBody.branch.headRevision).toBe(1);
+
+    const checkoutResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/branches/${createBody.branch.id}/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({}),
+    });
+    expect(checkoutResp.status).toBe(200);
+
+    const patchResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/patch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        type: 'source_replace',
+        source: 'const b = box(55, 40, 20); return b;',
+        summary: 'Widen body on alternate branch',
+      }),
+    });
+    expect(patchResp.status).toBe(201);
+
+    const compareResp = await SELF.fetch(
+      `${BASE}/api/live/session/${created.sessionId}/compare-branches?a=${mainBranch?.id}&b=${createBody.branch.id}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    expect(compareResp.status).toBe(200);
+    const compareBody = await compareResp.json() as {
+      branches: { a: { name: string; headRevision: number }; b: { name: string; headRevision: number } };
+      revisions: { a: { revision: number }; b: { revision: number } };
+    };
+    expect(compareBody.branches.a.name).toBe('main');
+    expect(compareBody.branches.b.name).toBe('thicker-wall');
+    expect(compareBody.revisions.a.revision).toBe(1);
+    expect(compareBody.revisions.b.revision).toBe(2);
+  });
 });
 
 async function sha256Base64Url(input: string): Promise<string> {
