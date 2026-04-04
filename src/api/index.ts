@@ -41,3 +41,7 @@ export type { Vec2, Vec3, Color, ParamDef, Body } from "../engine/types.js";
 // Reference geometry
 export { plane, axis, datum, referenceFeature } from "./reference.js";
 export type { Plane, Axis, Datum, MidplaneAxis, BBoxAnchor } from "./reference.js";
+
+// Tool bodies (construction geometry)
+export { toolBody, toolBodyFeature } from "./toolbody.js";
+export type { ToolBody } from "./toolbody.js";

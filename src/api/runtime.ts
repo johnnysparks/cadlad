@@ -19,6 +19,7 @@ import { Sketch, rect, circle } from "./sketch.js";
 import { box, cylinder, sphere, roundedRect, roundedBox, taperedBox, sweep, loft } from "../engine/primitives.js";
 import { assembly } from "./assembly.js";
 import { plane, axis, datum, referenceFeature } from "./reference.js";
+import { isToolBody, toolBody, toolBodyFeature } from "./toolbody.js";
 import { withLayeredValidation } from "../validation/layered-validation.js";
 
 /**
@@ -67,6 +68,7 @@ export async function evaluateModel(
       "assembly", "Solid", "Assembly",
       "defineScene", "mm",
       "plane", "axis", "datum", "referenceFeature",
+      "toolBody", "toolBodyFeature",
     ];
     const apiValues = [
       param, Sketch, rect, circle,
@@ -75,6 +77,7 @@ export async function evaluateModel(
       assembly, Solid, Assembly,
       defineScene, mm,
       plane, axis, datum, referenceFeature,
+      toolBody, toolBodyFeature,
     ];
 
     // Wrap user code so it can use top-level return
@@ -143,6 +146,9 @@ export async function evaluateModel(
           collectSolid(item, `Model[${i}]`);
         } else if (item instanceof Assembly) {
           bodies.push(...item.toBodies());
+        } else if (isToolBody(item)) {
+          // Construction geometry: intentionally omitted from final render output.
+          continue;
         } else {
           const valueType = item === null ? "null" : typeof item;
           runtimeErrors.push(

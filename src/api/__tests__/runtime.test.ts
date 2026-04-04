@@ -51,6 +51,18 @@ describe("evaluateModel", () => {
     expect(result.bodies).toHaveLength(2);
   });
 
+  it("exposes toolBody and omits it from rendered output", async () => {
+    const code = `
+      const base = box(20, 20, 20);
+      const cut = toolBody("center-cut", box(6, 6, 30));
+      const final = base.subtractAll(cut);
+      return [final, cut];
+    `;
+    const result = await evaluateModel(code);
+    expect(result.errors).toHaveLength(0);
+    expect(result.bodies).toHaveLength(1);
+  });
+
   it("handles metadata object with camera", async () => {
     const result = await evaluateModel(
       "return { model: box(10,10,10), camera: [100, 200, 300] }",

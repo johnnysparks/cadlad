@@ -34,7 +34,8 @@ snapshots/   Visual regression test references
 - Primitives: `box()`, `cylinder()`, `sphere()`, `roundedRect()`, `roundedBox()`, `taperedBox()`
 - 2D → 3D: `Sketch.begin()`, `rect()`, `circle()`, `slot()`, `lShape()`, `channel()`, `tShape()` → `.extrude()` / `.extrudeAlong(dir, h)` / `.revolve()` / `.sweep(path)`
 - Standalone: `sweep(profile, path)`, `loft(profiles, heights)`
-- Booleans: `.union()`, `.subtract()`, `.intersect()`
+- Booleans: `.union()`, `.subtract()`, `.intersect()`, `.subtractAll()`, `.unionAll()`, `.intersectAll()`
+- Construction geometry: `toolBody("name", solid)` for non-rendered cutter/helper solids used in boolean ops
 - Edge treatment: `.fillet(subdivisions)`, `.chamfer(subdivisions)`, `.smooth(subdivisions, minSharpAngle)`
 - Shell: `.shell(thickness)` — hollow out a solid with uniform wall thickness
 - Draft: `.draft(angleDeg)` — taper walls for mold release (positive = inward going up)

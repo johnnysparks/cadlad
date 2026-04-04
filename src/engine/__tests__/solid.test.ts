@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { initManifold } from "../manifold-backend.js";
 import { box, cylinder } from "../primitives.js";
+import { toolBody } from "../../api/toolbody.js";
 
 beforeAll(async () => {
   await initManifold();
@@ -68,6 +69,17 @@ describe("booleans", () => {
     const rightCut = box(6, 12, 12).translate(8, 0, 0);
 
     const chained = base.subtract(leftCut).subtract(rightCut);
+    const batched = base.subtractAll(leftCut, rightCut);
+
+    expect(batched.volume()).toBeCloseTo(chained.volume(), 0);
+  });
+
+  it("subtractAll accepts tool bodies", () => {
+    const base = box(30, 10, 10);
+    const leftCut = toolBody("left-cut", box(6, 12, 12).translate(-8, 0, 0));
+    const rightCut = toolBody("right-cut", box(6, 12, 12).translate(8, 0, 0));
+
+    const chained = base.subtract(leftCut.solid).subtract(rightCut.solid);
     const batched = base.subtractAll(leftCut, rightCut);
 
     expect(batched.volume()).toBeCloseTo(chained.volume(), 0);
