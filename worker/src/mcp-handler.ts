@@ -166,6 +166,9 @@ const TOOLS = [
         minCount: { type: 'number', description: 'Only include gap signatures seen this many times (default 1).' },
       },
       required: [],
+    },
+  },
+  {
     name: 'report_capability_gap',
     description: 'Record an agent capability gap event (missing primitive/API/validation gap) for learning and prioritization.',
     annotations: { readOnlyHint: false, destructiveHint: false },
