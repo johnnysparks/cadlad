@@ -25,6 +25,7 @@ import { createLinkCode, saveScreenshot } from './oauth-store.js';
 import type { EventActor, EventEnvelope, EventType } from './event-store.js';
 import { SqliteEventStore } from './event-store.js';
 import { recordCapabilityGapEvent } from './capability-gap-reducer.js';
+import { buildApiImprovementReport } from './agent-learning.js';
 
 const MAX_PATCHES = 100;
 const HEARTBEAT_INTERVAL_MS = 25_000; // keep SSE connections alive
