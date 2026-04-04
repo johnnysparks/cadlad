@@ -12,6 +12,8 @@ import { _setParamValues, _resetParams, _getParamDefs } from "./params.js";
 import { collectHints } from "./hints.js";
 import type { ModelResult, Body, ParamDef, Hint, GeometryValidationConfig } from "../engine/types.js";
 import { normalizeScene, defineScene, mm, runScenePostModelValidation } from "./scene-contract.js";
+import { constraint } from "./constraints.js";
+import type { SceneConstraint } from "./constraints.js";
 
 // All API symbols that get injected into model scope
 import { param } from "./params.js";
@@ -45,6 +47,7 @@ export async function evaluateModel(
   let camera: [number, number, number] | undefined;
   let sceneValidation: ModelResult["sceneValidation"];
   let geometryValidationConfig: GeometryValidationConfig | undefined;
+  let sceneConstraints: SceneConstraint[] | undefined;
 
   const collectSolid = (solid: Solid, context: string): void => {
     const nComp = solid.numComponents();
@@ -65,7 +68,7 @@ export async function evaluateModel(
       "box", "cylinder", "sphere", "roundedRect", "roundedBox", "taperedBox",
       "sweep", "loft",
       "assembly", "Solid", "Assembly",
-      "defineScene", "mm",
+      "defineScene", "mm", "constraint",
       "plane", "axis", "datum", "referenceFeature",
     ];
     const apiValues = [
@@ -73,7 +76,7 @@ export async function evaluateModel(
       box, cylinder, sphere, roundedRect, roundedBox, taperedBox,
       sweep, loft,
       assembly, Solid, Assembly,
-      defineScene, mm,
+      defineScene, mm, constraint,
       plane, axis, datum, referenceFeature,
     ];
 
@@ -122,6 +125,7 @@ export async function evaluateModel(
         camera,
         sceneValidation,
         geometryValidation: geometryValidationConfig,
+        constraints: sceneConstraints,
       });
     }
     if (!normalized.scene && result && typeof result === "object" && !(result instanceof Solid) && !(result instanceof Assembly) && !Array.isArray(result)) {
@@ -166,6 +170,7 @@ export async function evaluateModel(
 
     if (normalized.scene) {
       geometryValidationConfig = normalized.scene.geometryValidation;
+      sceneConstraints = normalized.rawHooks?.constraints ? [...normalized.rawHooks.constraints] : undefined;
       sceneValidation = runScenePostModelValidation({
         scene: normalized.scene,
         validators: normalized.rawHooks?.validators,
@@ -199,5 +204,6 @@ export async function evaluateModel(
     camera,
     sceneValidation,
     geometryValidation: geometryValidationConfig,
+    constraints: sceneConstraints,
   });
 }

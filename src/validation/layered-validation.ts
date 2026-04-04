@@ -9,6 +9,7 @@ import type {
   ValidationDiagnostic,
   ValidationStage,
 } from "../engine/types.js";
+import type { SceneConstraint } from "../api/constraints.js";
 import { computeModelStats } from "../studio/model-stats.js";
 
 export const VALIDATION_STAGES = [
@@ -30,6 +31,7 @@ export function runLayeredValidation(input: {
   params: ParamDef[];
   bodies: Body[];
   geometryValidation?: GeometryValidationConfig;
+  constraints?: readonly SceneConstraint[];
 }): LayeredValidationResult {
   const diagnostics: ValidationDiagnostic[] = [];
   const stats = computeModelStats(input.bodies);
@@ -51,7 +53,7 @@ export function runLayeredValidation(input: {
     return { diagnostics, stats, haltedAt: "semantic" };
   }
 
-  const geometryDiagnostics = validateGeometry(input.bodies, stats, input.geometryValidation);
+  const geometryDiagnostics = validateGeometry(input.bodies, stats, input.geometryValidation, input.constraints);
   diagnostics.push(...geometryDiagnostics);
   if (geometryDiagnostics.some((diag) => diag.severity === "error")) {
     return { diagnostics, stats, haltedAt: "geometry" };
@@ -125,6 +127,7 @@ function validateGeometry(
   bodies: Body[],
   stats: GeometryStats | undefined,
   config: GeometryValidationConfig | undefined,
+  constraints: readonly SceneConstraint[] | undefined,
 ): ValidationDiagnostic[] {
   const diagnostics: ValidationDiagnostic[] = [];
   const epsilon = config?.epsilon ?? 1e-6;
@@ -230,6 +233,8 @@ function validateGeometry(
     }
   }
 
+  diagnostics.push(...validateDeclarativeConstraints(bodies, stats, constraints));
+
   return diagnostics;
 }
 
@@ -245,6 +250,113 @@ function validateRelations(stats?: GeometryStats): ValidationDiagnostic[] {
     }));
 }
 
+
+
+function validateDeclarativeConstraints(
+  bodies: Body[],
+  stats: GeometryStats | undefined,
+  constraints: readonly SceneConstraint[] | undefined,
+): ValidationDiagnostic[] {
+  if (!constraints || constraints.length === 0 || !stats) return [];
+
+  const diagnostics: ValidationDiagnostic[] = [];
+  const axisIndex: Record<"X" | "Y" | "Z", 0 | 1 | 2> = { X: 0, Y: 1, Z: 2 };
+
+  for (const rule of constraints) {
+    if (rule.kind === "wall_thickness") {
+      for (const part of stats.parts) {
+        const minExtent = Math.min(part.extents.x, part.extents.y, part.extents.z);
+        if (minExtent + 1e-6 < rule.min) {
+          diagnostics.push({
+            stage: "geometry",
+            severity: rule.severity ?? "error",
+            message: `Constraint wall_thickness failed for "${part.name}": minimum part extent ${minExtent.toFixed(3)}mm is below ${rule.min}mm.`,
+            featureId: `constraint:wall_thickness:${part.id}`,
+          });
+        }
+      }
+      continue;
+    }
+
+    if (rule.kind === "symmetry") {
+      const index = axisIndex[rule.axis];
+      const tolerance = rule.tolerance ?? 1e-3;
+      const symmetryError = Math.abs(stats.boundingBox.min[index] + stats.boundingBox.max[index]);
+      if (symmetryError > tolerance) {
+        diagnostics.push({
+          stage: "geometry",
+          severity: rule.severity ?? "warning",
+          message: `Constraint symmetry failed on ${rule.axis}: bbox is offset ${symmetryError.toFixed(3)}mm from the origin plane.`,
+          featureId: `constraint:symmetry:${rule.axis}`,
+        });
+      }
+      continue;
+    }
+
+    if (rule.kind === "clearance") {
+      const [partA, partB] = rule.between;
+      const pair = stats.pairwise.find((entry) =>
+        (entry.partA === partA && entry.partB === partB) ||
+        (entry.partA === partB && entry.partB === partA) ||
+        (entry.partAId === partA && entry.partBId === partB) ||
+        (entry.partAId === partB && entry.partBId === partA)
+      );
+      if (!pair) {
+        diagnostics.push({
+          stage: "geometry",
+          severity: "warning",
+          message: `Constraint clearance skipped: could not find pair "${partA}" and "${partB}" in model stats.`,
+          featureId: "constraint:clearance:missing-pair",
+        });
+      } else if (pair.minDistance + 1e-6 < rule.min) {
+        diagnostics.push({
+          stage: "geometry",
+          severity: rule.severity ?? "error",
+          message: `Constraint clearance failed between "${partA}" and "${partB}": ${pair.minDistance.toFixed(3)}mm < ${rule.min}mm.`,
+          featureId: `constraint:clearance:${pair.partAId}<->${pair.partBId}`,
+        });
+      }
+      continue;
+    }
+
+    if (rule.kind === "max_overhang") {
+      const maxRadians = (rule.angle * Math.PI) / 180;
+      const offendingBodies: string[] = [];
+
+      for (let bodyIndex = 0; bodyIndex < bodies.length; bodyIndex += 1) {
+        const body = bodies[bodyIndex];
+        const normals = body.mesh.normals;
+        let violatingTriangles = 0;
+        const totalTriangles = Math.floor(body.mesh.indices.length / 3);
+
+        for (let tri = 0; tri < totalTriangles; tri += 1) {
+          const base = tri * 9;
+          if (base + 8 >= normals.length) break;
+          const nz = (normals[base + 2] + normals[base + 5] + normals[base + 8]) / 3;
+          const angleFromVertical = Math.acos(Math.min(1, Math.max(-1, Math.abs(nz))));
+          if (nz < 0 && angleFromVertical > maxRadians) {
+            violatingTriangles += 1;
+          }
+        }
+
+        if (violatingTriangles > 0) {
+          offendingBodies.push(body.name ?? `body:${bodyIndex + 1}`);
+        }
+      }
+
+      if (offendingBodies.length > 0) {
+        diagnostics.push({
+          stage: "geometry",
+          severity: rule.severity ?? "warning",
+          message: `Constraint max_overhang failed: ${offendingBodies.join(", ")} exceed ${rule.angle}° overhang from vertical on downward faces.`,
+          featureId: "constraint:max_overhang",
+        });
+      }
+    }
+  }
+
+  return diagnostics;
+}
 function inferFeatureIdFromRuntimeError(message: string): string | undefined {
   const match = message.match(/^Model\[(\d+)\]/);
   if (!match) return undefined;
@@ -261,13 +373,14 @@ export function formatValidationDiagnostic(diag: ValidationDiagnostic): string {
 }
 
 export function withLayeredValidation(
-  result: Omit<ModelResult, "errors" | "evaluation"> & { runtimeErrors: string[]; geometryValidation?: GeometryValidationConfig },
+  result: Omit<ModelResult, "errors" | "evaluation"> & { runtimeErrors: string[]; geometryValidation?: GeometryValidationConfig; constraints?: readonly SceneConstraint[] },
 ): ModelResult {
   const validated = runLayeredValidation({
     runtimeErrors: result.runtimeErrors,
     params: result.params,
     bodies: result.bodies,
     geometryValidation: result.geometryValidation,
+    constraints: result.constraints,
   });
 
   return {

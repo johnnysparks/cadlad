@@ -281,10 +281,10 @@ The north star calls agent learning events "gold." Agreed — this is what makes
 
 ### 4.2 Declarative constraints
 
-- [ ] `constraint("wall_thickness", { min: mm(2) })` — checked after every geometry operation.
-- [ ] `constraint("symmetry", { axis: "X" })` — warn on asymmetry.
-- [ ] `constraint("clearance", { between: ["lid", "base"], min: mm(0.5) })` — inter-part spacing.
-- [ ] `constraint("max_overhang", { angle: 45 })` — 3D printing constraint.
+- [x] `constraint("wall_thickness", { min: mm(2) })` — checked after every geometry operation.
+- [x] `constraint("symmetry", { axis: "X" })` — warn on asymmetry.
+- [x] `constraint("clearance", { between: ["lid", "base"], min: mm(0.5) })` — inter-part spacing.
+- [x] `constraint("max_overhang", { angle: 45 })` — 3D printing constraint.
 
 ### 4.3 Manufacturing profiles
 
