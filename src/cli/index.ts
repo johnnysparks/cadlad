@@ -44,6 +44,7 @@ async function cmdRun(args: string[], options: { watchMode: boolean }) {
   const parsed = parseRunArgs(args);
   const file = parsed.file;
   const printJson = parsed.json;
+  const includeMesh = parsed.includeMesh;
   const mode = options.watchMode ? "validate" : "run";
   if (!file) {
     console.error(`Usage: cadlad ${mode} <file.forge.ts>`);
@@ -64,8 +65,8 @@ async function cmdRun(args: string[], options: { watchMode: boolean }) {
             file,
             mode,
             errors: result.errors,
-            diagnostics: result.diagnostics ?? [],
-            evaluation: result.evaluation,
+            modelResult: result,
+            includeMesh,
           }), null, 2));
         } else {
           console.error("Errors:");
@@ -86,9 +87,8 @@ async function cmdRun(args: string[], options: { watchMode: boolean }) {
           ok: true,
           file,
           mode,
-          report,
-          diagnostics: result.diagnostics ?? [],
-          evaluation: result.evaluation,
+          modelResult: result,
+          includeMesh,
         }), null, 2));
       } else {
         console.log(formatRunReportText(report));
@@ -222,20 +222,27 @@ function printUsage() {
 CadLad — Code-first parametric CAD
 
 Usage:
-  cadlad run <file.forge.ts>            Validate and evaluate a model once
-  cadlad validate <file.forge.ts>       Validate locally (use --watch for loop)
+  cadlad run <file.forge.ts> [--json] [--include-mesh]
+                                       Validate/evaluate once (JSON for agents/CI)
+  cadlad validate <file.forge.ts> [--watch] [--json]
+                                       Validate locally (watch loop optional)
   cadlad export <file> -o output.stl    Export model to STL
   cadlad studio                         Launch browser studio
 `);
 }
 
-function parseRunArgs(args: string[]): { file?: string; json: boolean } {
+function parseRunArgs(args: string[]): { file?: string; json: boolean; includeMesh: boolean } {
   let file: string | undefined;
   let json = false;
+  let includeMesh = false;
 
   for (const arg of args) {
     if (arg === "--json") {
       json = true;
+      continue;
+    }
+    if (arg === "--include-mesh") {
+      includeMesh = true;
       continue;
     }
     if (arg === "--watch") continue;
@@ -243,7 +250,7 @@ function parseRunArgs(args: string[]): { file?: string; json: boolean } {
     if (!file) file = arg;
   }
 
-  return { file, json };
+  return { file, json, includeMesh };
 }
 
 main().catch((err) => {
