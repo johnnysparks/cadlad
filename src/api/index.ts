@@ -9,7 +9,8 @@
 export { param } from "./params.js";
 
 // 2D Sketch
-export { Sketch, rect, circle, slot, lShape, channel, tShape } from "./sketch.js";
+export { Sketch, ConstrainedSketch, rect, circle, slot, lShape, channel, tShape } from "./sketch.js";
+export type { ConstraintSolveOptions } from "./sketch.js";
 
 // 3D Primitives
 export { box, cylinder, sphere, roundedRect, sweep, loft } from "../engine/primitives.js";

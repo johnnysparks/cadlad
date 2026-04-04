@@ -165,3 +165,56 @@ describe("extrudeAlong", () => {
     expect(() => rect(4, 4).extrudeAlong([0, 0, 0], 10)).toThrow("zero");
   });
 });
+
+describe("constrained sketch solver", () => {
+  it("solves a rectangle from fixed-distance and perpendicular constraints", () => {
+    const constrained = Sketch.constrained()
+      .point("a", 0, 0, { fixed: true })
+      .point("b", 22, 1)
+      .point("c", 19, 12)
+      .point("d", -3, 10)
+      .line("ab", "a", "b")
+      .line("bc", "b", "c")
+      .line("cd", "c", "d")
+      .line("da", "d", "a")
+      .fixedDistance("a", "b", 20)
+      .fixedDistance("b", "c", 10)
+      .equalLength("ab", "cd")
+      .equalLength("bc", "da")
+      .perpendicular("ab", "bc")
+      .solve();
+
+    const points = constrained.pointsSnapshot();
+    const ab = Math.hypot(points.b[0] - points.a[0], points.b[1] - points.a[1]);
+    const bc = Math.hypot(points.c[0] - points.b[0], points.c[1] - points.b[1]);
+    const cd = Math.hypot(points.d[0] - points.c[0], points.d[1] - points.c[1]);
+    const da = Math.hypot(points.a[0] - points.d[0], points.a[1] - points.d[1]);
+    const dot =
+      (points.b[0] - points.a[0]) * (points.c[0] - points.b[0]) +
+      (points.b[1] - points.a[1]) * (points.c[1] - points.b[1]);
+
+    expect(ab).toBeCloseTo(20, 2);
+    expect(bc).toBeCloseTo(10, 2);
+    expect(cd).toBeCloseTo(ab, 2);
+    expect(da).toBeCloseTo(bc, 2);
+    expect(dot).toBeCloseTo(0, 1);
+
+    const solid = constrained.toSketch(["a", "b", "c", "d"]).extrude(5);
+    expect(solid.volume()).toBeGreaterThan(900);
+  });
+
+  it("supports tangent line-circle constraints", () => {
+    const constrained = Sketch.constrained()
+      .point("center", 0, 0, { fixed: true })
+      .point("l0", -6, 4)
+      .point("l1", 6, 4)
+      .line("top", "l0", "l1")
+      .circle("c0", "center", 5)
+      .tangent("top", "c0")
+      .solve();
+
+    const pts = constrained.pointsSnapshot();
+    expect(pts.l0[1]).toBeCloseTo(5, 2);
+    expect(pts.l1[1]).toBeCloseTo(5, 2);
+  });
+});
