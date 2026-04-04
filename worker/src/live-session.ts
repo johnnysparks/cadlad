@@ -24,6 +24,7 @@ import type {
 import { createLinkCode, saveScreenshot } from './oauth-store.js';
 import type { EventActor, EventEnvelope, EventType } from './event-store.js';
 import { SqliteEventStore } from './event-store.js';
+import { recordCapabilityGapEvent } from './capability-gap-reducer.js';
 
 const MAX_PATCHES = 100;
 const HEARTBEAT_INTERVAL_MS = 25_000; // keep SSE connections alive
@@ -622,9 +623,12 @@ export class LiveSession implements DurableObject {
     const authErr = this.checkAuth(request);
     if (authErr) return authErr;
     const body = await request.json() as CapabilityGapRequest;
-    if (typeof body.message !== 'string' || body.message.trim().length === 0) {
+    const message = typeof body.message === 'string' ? body.message.trim() : '';
+    if (message.length === 0) {
       return err('message is required', 'INVALID_REQUEST', 400);
     }
+    const actor = this.resolveActor(request, { kind: 'agent' });
+    const context = typeof body.context === 'string' ? body.context : undefined;
     await this.appendEvents([
       this.makeEvent('agent.capability_gap', {
         message: body.message.trim(),
@@ -655,8 +659,18 @@ export class LiveSession implements DurableObject {
         impact: normalizeImpact(body.impact),
         patchId: cleanOptional(body.patchId),
         revision: this.revision,
-      }, this.resolveActor(request, { kind: 'agent' })),
+      }, actor),
     ]);
+    await recordCapabilityGapEvent(this.env.KV, {
+      projectId: this.id,
+      sessionId: this.id,
+      branchId: this.branch.id,
+      revision: this.revision,
+      actorId: actor.id,
+      message,
+      context,
+      timestamp: Date.now(),
+    });
     return ok({ ok: true }, 201);
   }
 

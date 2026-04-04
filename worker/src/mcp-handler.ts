@@ -17,6 +17,7 @@
 import type { Env, SessionState, Patch, RunResult, ModelStats, RenderStatus } from './types.js';
 import { resolveAccessToken, loadScreenshot } from './oauth-store.js';
 import { extractSceneFeatures } from './scene-features.js';
+import { getCapabilityGapSummary } from './capability-gap-reducer.js';
 
 // ── Tool definitions (no session/token in schemas) ────────────────────────────
 
@@ -155,6 +156,16 @@ const TOOLS = [
     },
   },
   {
+    name: 'get_capability_gap_summary',
+    description: 'Aggregate agent capability gaps across sessions to highlight recurring platform limitations and prioritization opportunities.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number', description: 'Maximum gaps to return (default 20, max 200).' },
+        minCount: { type: 'number', description: 'Only include gap signatures seen this many times (default 1).' },
+      },
+      required: [],
     name: 'report_capability_gap',
     description: 'Record an agent capability gap event (missing primitive/API/validation gap) for learning and prioritization.',
     annotations: { readOnlyHint: false, destructiveHint: false },
@@ -453,6 +464,14 @@ async function callTool(
       }
       const report = buildImprovementSuggestions(data.runResult.stats, data.runResult.diagnostics ?? [], args);
       return { content: [{ type: 'text', text: JSON.stringify(report, null, 2) }] };
+    }
+
+    case 'get_capability_gap_summary': {
+      const summary = await getCapabilityGapSummary(env.KV, {
+        limit: typeof args.limit === 'number' ? args.limit : undefined,
+        minCount: typeof args.minCount === 'number' ? args.minCount : undefined,
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }] };
     }
 
     case 'get_session_state': {
