@@ -197,6 +197,44 @@ export interface WorkaroundRecordedRequest {
   patchId?: string;
 }
 
+
+export interface ApiImprovementReportEnvelope {
+  branchId: string;
+  threshold: number;
+  eventSampleSize: number;
+  report: {
+    generatedAt: number;
+    totalWorkarounds: number;
+    groupedPatterns: number;
+    promotedCount: number;
+    candidates: Array<{
+      id: string;
+      pattern: string;
+      occurrences: number;
+      latestSummary: string;
+      limitations: string[];
+      sampleWorkarounds: string[];
+      proposedKind: 'primitive' | 'helper' | 'validator' | 'workflow';
+      suggestedName: string;
+      rationale: string;
+      promotion: {
+        ready: boolean;
+        threshold: number;
+        reason: string;
+      };
+      capabilityGapSignals: Array<{
+        id: string;
+        message: string;
+        category?: 'missing-primitive' | 'api-limitation' | 'validation-gap' | 'other';
+        blockedTask?: string;
+        workaroundSummary?: string;
+        count: number;
+        lastSeenAt: number;
+      }>;
+    }>;
+  };
+}
+
 export class SessionClient {
   private baseUrl: string;
   private sessionId: string;
@@ -233,6 +271,17 @@ export class SessionClient {
     const res = await fetch(this.sessionUrl(`/history${qs}`), { headers: this.headers(true) });
     if (!res.ok) throw new ApiError(res.status, await res.text());
     return res.json() as Promise<PatchHistory>;
+  }
+
+
+  async suggestApiImprovements(opts: { threshold?: number; limit?: number } = {}): Promise<ApiImprovementReportEnvelope> {
+    const params = new URLSearchParams();
+    if (opts.threshold !== undefined) params.set('threshold', String(opts.threshold));
+    if (opts.limit !== undefined) params.set('limit', String(opts.limit));
+    const qs = params.size ? `?${params}` : '';
+    const res = await fetch(this.sessionUrl(`/api-improvements${qs}`), { headers: this.headers(true) });
+    if (!res.ok) throw new ApiError(res.status, await res.text());
+    return res.json() as Promise<ApiImprovementReportEnvelope>;
   }
 
   async getRunResult(): Promise<RunResultEnvelope> {

@@ -352,6 +352,20 @@ const TOOLS = [
     },
   },
   {
+    name: "suggest_api_improvements",
+    description:
+      "Analyze recorded capability gaps/workarounds and propose recurring API additions that are ready for promotion.",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        threshold: { type: "number", description: "Minimum recurrence count to mark promotion-ready (default 2)." },
+        limit: { type: "number", description: "Recent telemetry event sample size to analyze (default 500, max 2000)." },
+      },
+      required: [],
+    },
+  },
+  {
     name: "get_part_stats",
     description:
       "Get named-part stats from the last run. Optionally pass partName for a single part.",
@@ -810,6 +824,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           patchId,
         });
         return { content: [{ type: "text" as const, text: "Workaround recorded." }] };
+      }
+
+      case "suggest_api_improvements": {
+        const threshold = Math.max(1, Math.floor(Number((args as { threshold?: number }).threshold ?? 2)));
+        const limit = Math.min(2000, Math.max(10, Math.floor(Number((args as { limit?: number }).limit ?? 500))));
+        const report = await client.suggestApiImprovements({ threshold, limit });
+        return { content: [{ type: "text" as const, text: JSON.stringify(report, null, 2) }] };
       }
 
       case "get_part_stats": {

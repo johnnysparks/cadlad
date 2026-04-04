@@ -92,6 +92,7 @@ export default {
           'POST /api/live/session',
           'GET  /api/live/session/:id',
           'GET  /api/live/session/:id/event-log',
+          'GET  /api/live/session/:id/api-improvements',
           'GET  /api/live/session/:id/revisions',
           'GET  /api/live/session/:id/revisions/:revision',
           'GET  /api/live/session/:id/branches',

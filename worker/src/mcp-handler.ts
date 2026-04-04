@@ -11,7 +11,7 @@
  *        list_patch_history · replace_source · apply_patch · update_params ·
  *        revert_patch · get_latest_screenshot · get_model_stats · list_features ·
  *        check_printability · check_moldability · suggest_improvements ·
- *        report_capability_gap · record_workaround
+ *        report_capability_gap · record_workaround · suggest_api_improvements
  */
 
 import type { Env, SessionState, Patch, RunResult, ModelStats, RenderStatus } from './types.js';
@@ -196,6 +196,19 @@ const TOOLS = [
         patchId: { type: 'string' },
       },
       required: ['summary', 'limitation', 'workaround'],
+    },
+  },
+  {
+    name: 'suggest_api_improvements',
+    description: 'Analyze recorded capability gaps and workaround patterns, then propose candidate first-class API additions ranked by recurrence.',
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        threshold: { type: 'number', description: 'Minimum recurring workaround count needed before a candidate is marked promotion-ready (default 2).' },
+        limit: { type: 'number', description: 'How many recent telemetry events to analyze (default 500, max 2000).' },
+      },
+      required: [],
     },
   },
   {
@@ -521,6 +534,15 @@ async function callTool(
         patchId,
       });
       return { content: [{ type: 'text', text: 'Workaround recorded.' }] };
+    }
+
+    case 'suggest_api_improvements': {
+      const threshold = Math.max(1, Math.floor(Number(args.threshold ?? 2)));
+      const limit = Math.min(2000, Math.max(10, Math.floor(Number(args.limit ?? 500))));
+      const resp = await stub.fetch(new Request(`${base}/api-improvements?threshold=${threshold}&limit=${limit}`));
+      if (!resp.ok) throw new Error(`API improvement analysis failed: ${resp.status}`);
+      const body = await resp.json();
+      return { content: [{ type: 'text', text: JSON.stringify(body, null, 2) }] };
     }
 
     case 'list_patch_history': {

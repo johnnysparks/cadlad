@@ -222,6 +222,63 @@ describe('oauth-protected sessions', () => {
     expect(branchBody.events.every((event) => event.branchId === `${created.sessionId}:main`)).toBe(true);
   });
 
+
+
+  it('generates API improvement candidates from recurring workaround telemetry', async () => {
+    const token = await getAccessToken();
+    const created = await createSession(token);
+
+    for (let i = 0; i < 2; i += 1) {
+      const workaroundResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/workaround`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'X-CadLad-Actor-Kind': 'agent',
+          'X-CadLad-Actor-Id': 'test-agent',
+        },
+        body: JSON.stringify({
+          summary: 'Manual slot via subtract chain',
+          limitation: 'No slot helper available',
+          workaround: 'Built slot using cylinders + bridge box subtraction',
+          impact: 'medium',
+        }),
+      });
+      expect(workaroundResp.status).toBe(201);
+    }
+
+    const capGapResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/capability-gap`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'X-CadLad-Actor-Kind': 'agent',
+        'X-CadLad-Actor-Id': 'test-agent',
+      },
+      body: JSON.stringify({
+        message: 'Need semantic slot API',
+        category: 'missing-primitive',
+        workaroundSummary: 'Manual slot via subtract chain',
+      }),
+    });
+    expect(capGapResp.status).toBe(201);
+
+    const reportResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/api-improvements?threshold=2`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(reportResp.status).toBe(200);
+    const body = await reportResp.json() as {
+      report: {
+        promotedCount: number;
+        candidates: Array<{ proposedKind: string; promotion: { ready: boolean } }>;
+      };
+    };
+
+    expect(body.report.promotedCount).toBeGreaterThanOrEqual(1);
+    expect(body.report.candidates[0]?.proposedKind).toBe('primitive');
+    expect(body.report.candidates[0]?.promotion.ready).toBe(true);
+  });
+
   it('creates addressable revisions with source hash and evaluation reference', async () => {
     const token = await getAccessToken();
     const created = await createSession(token);
