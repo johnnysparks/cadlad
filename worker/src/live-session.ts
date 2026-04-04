@@ -16,6 +16,7 @@ import type {
   RenderStatus,
   RunResult,
   CapabilityGapRequest,
+  WorkaroundRecordedRequest,
   RevisionSnapshot,
   RevisionEvaluationRef,
   Branch,
@@ -152,6 +153,7 @@ export class LiveSession implements DurableObject {
       if (request.method === 'POST' && sub === '/revert') return this.handleRevert(request);
       if (request.method === 'POST' && sub === '/run-result') return this.handlePostRunResult(request);
       if (request.method === 'POST' && sub === '/capability-gap') return this.handleCapabilityGap(request);
+      if (request.method === 'POST' && sub === '/workaround') return this.handleWorkaroundRecorded(request);
       // Studio calls this to generate a link code for OAuth authorization
       if (request.method === 'POST' && sub === '/link') return this.handleCreateLink(request);
 
@@ -627,6 +629,31 @@ export class LiveSession implements DurableObject {
       this.makeEvent('agent.capability_gap', {
         message: body.message.trim(),
         context: typeof body.context === 'string' ? body.context : undefined,
+        category: normalizeGapCategory(body.category),
+        blockedTask: cleanOptional(body.blockedTask),
+        attemptedApproach: cleanOptional(body.attemptedApproach),
+        workaroundSummary: cleanOptional(body.workaroundSummary),
+        revision: this.revision,
+      }, this.resolveActor(request, { kind: 'agent' })),
+    ]);
+    return ok({ ok: true }, 201);
+  }
+
+  private async handleWorkaroundRecorded(request: Request): Promise<Response> {
+    const authErr = this.checkAuth(request);
+    if (authErr) return authErr;
+    const body = await request.json() as WorkaroundRecordedRequest;
+    if (!isNonEmptyString(body.summary) || !isNonEmptyString(body.limitation) || !isNonEmptyString(body.workaround)) {
+      return err('summary, limitation, and workaround are required', 'INVALID_REQUEST', 400);
+    }
+
+    await this.appendEvents([
+      this.makeEvent('agent.workaround_recorded', {
+        summary: body.summary.trim(),
+        limitation: body.limitation.trim(),
+        workaround: body.workaround.trim(),
+        impact: normalizeImpact(body.impact),
+        patchId: cleanOptional(body.patchId),
         revision: this.revision,
       }, this.resolveActor(request, { kind: 'agent' })),
     ]);
@@ -941,4 +968,26 @@ function compareStats(
     surfaceArea: (b.surfaceArea ?? 0) - (a.surfaceArea ?? 0),
     componentCount: (b.componentCount ?? 0) - (a.componentCount ?? 0),
   };
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function cleanOptional(value: unknown): string | undefined {
+  return isNonEmptyString(value) ? value.trim() : undefined;
+}
+
+function normalizeGapCategory(
+  value: unknown,
+): 'missing-primitive' | 'api-limitation' | 'validation-gap' | 'other' | undefined {
+  if (value === 'missing-primitive' || value === 'api-limitation' || value === 'validation-gap' || value === 'other') {
+    return value;
+  }
+  return undefined;
+}
+
+function normalizeImpact(value: unknown): 'low' | 'medium' | 'high' | undefined {
+  if (value === 'low' || value === 'medium' || value === 'high') return value;
+  return undefined;
 }

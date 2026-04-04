@@ -35,6 +35,19 @@ export interface AgentIntentDeclaredPayload {
 export interface AgentCapabilityGapPayload {
   message: string;
   context?: string;
+  category?: 'missing-primitive' | 'api-limitation' | 'validation-gap' | 'other';
+  blockedTask?: string;
+  attemptedApproach?: string;
+  workaroundSummary?: string;
+  revision: number;
+}
+
+export interface AgentWorkaroundRecordedPayload {
+  summary: string;
+  limitation: string;
+  workaround: string;
+  impact?: 'low' | 'medium' | 'high';
+  patchId?: string;
   revision: number;
 }
 
@@ -44,6 +57,7 @@ export interface EventPayloadMap {
   'evaluation.completed': EvaluationCompletedPayload;
   'agent.intent_declared': AgentIntentDeclaredPayload;
   'agent.capability_gap': AgentCapabilityGapPayload;
+  'agent.workaround_recorded': AgentWorkaroundRecordedPayload;
 }
 
 export type EventType = keyof EventPayloadMap;

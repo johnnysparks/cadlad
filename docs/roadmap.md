@@ -243,9 +243,9 @@ The north star calls agent learning events "gold." Agreed — this is what makes
 
 ### 3.1 Structured agent telemetry
 
-- [ ] `agent.intent_declared` events record what the agent was trying to build and why.
-- [ ] `agent.capability_gap` events record what the agent couldn't do: missing primitives, API limitations, validation gaps.
-- [ ] `agent.workaround_recorded` events record hacks the agent used to work around limitations.
+- [x] `agent.intent_declared` events record what the agent was trying to build and why.
+- [x] `agent.capability_gap` events record what the agent couldn't do: missing primitives, API limitations, validation gaps.
+- [x] `agent.workaround_recorded` events record hacks the agent used to work around limitations.
 
 ### 3.2 Capability gap aggregation
 

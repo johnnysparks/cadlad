@@ -319,6 +319,39 @@ const TOOLS = [
     },
   },
   {
+    name: "report_capability_gap",
+    description:
+      "Record a structured agent capability gap (missing primitive/API/validation gap) so recurring friction can be aggregated and prioritized.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        message: { type: "string" },
+        context: { type: "string" },
+        category: { type: "string", enum: ["missing-primitive", "api-limitation", "validation-gap", "other"] },
+        blockedTask: { type: "string" },
+        attemptedApproach: { type: "string" },
+        workaroundSummary: { type: "string" },
+      },
+      required: ["message"],
+    },
+  },
+  {
+    name: "record_workaround",
+    description:
+      "Record a workaround hack the agent used (limitation + workaround steps + impact) for self-improvement telemetry.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        summary: { type: "string" },
+        limitation: { type: "string" },
+        workaround: { type: "string" },
+        impact: { type: "string", enum: ["low", "medium", "high"] },
+        patchId: { type: "string" },
+      },
+      required: ["summary", "limitation", "workaround"],
+    },
+  },
+  {
     name: "get_part_stats",
     description:
       "Get named-part stats from the last run. Optionally pass partName for a single part.",
@@ -735,6 +768,48 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           args as Record<string, unknown>,
         );
         return { content: [{ type: "text" as const, text: JSON.stringify(report, null, 2) }] };
+      }
+
+      case "report_capability_gap": {
+        const { message, context, category, blockedTask, attemptedApproach, workaroundSummary } = args as {
+          message?: string;
+          context?: string;
+          category?: "missing-primitive" | "api-limitation" | "validation-gap" | "other";
+          blockedTask?: string;
+          attemptedApproach?: string;
+          workaroundSummary?: string;
+        };
+        if (!message) return errorContent("message is required");
+        await client.reportCapabilityGap({
+          message,
+          context,
+          category,
+          blockedTask,
+          attemptedApproach,
+          workaroundSummary,
+        });
+        return { content: [{ type: "text" as const, text: "Capability gap recorded." }] };
+      }
+
+      case "record_workaround": {
+        const { summary, limitation, workaround, impact, patchId } = args as {
+          summary?: string;
+          limitation?: string;
+          workaround?: string;
+          impact?: "low" | "medium" | "high";
+          patchId?: string;
+        };
+        if (!summary || !limitation || !workaround) {
+          return errorContent("summary, limitation, and workaround are required");
+        }
+        await client.recordWorkaround({
+          summary,
+          limitation,
+          workaround,
+          impact,
+          patchId,
+        });
+        return { content: [{ type: "text" as const, text: "Workaround recorded." }] };
       }
 
       case "get_part_stats": {
