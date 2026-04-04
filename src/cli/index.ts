@@ -15,7 +15,7 @@ import { resolve } from "node:path";
 import { initManifold } from "../engine/manifold-backend.js";
 import { evaluateModel } from "../api/runtime.js";
 import { loadModelSource } from "./source-loader.js";
-import { buildRunReport, formatRunReportText } from "./run-output.js";
+import { buildRunJsonOutput, buildRunReport, formatRunReportText } from "./run-output.js";
 import { formatValidationDiagnostic } from "../validation/layered-validation.js";
 
 const [, , command, ...args] = process.argv;
@@ -41,10 +41,12 @@ async function main() {
 }
 
 async function cmdRun(args: string[], options: { watchMode: boolean }) {
-  const file = args[0];
-  const printJson = args.includes("--json");
+  const parsed = parseRunArgs(args);
+  const file = parsed.file;
+  const printJson = parsed.json;
+  const mode = options.watchMode ? "validate" : "run";
   if (!file) {
-    console.error(`Usage: cadlad ${options.watchMode ? "validate" : "run"} <file.forge.ts>`);
+    console.error(`Usage: cadlad ${mode} <file.forge.ts>`);
     process.exit(1);
   }
 
@@ -57,12 +59,14 @@ async function cmdRun(args: string[], options: { watchMode: boolean }) {
 
       if (result.errors.length > 0) {
         if (printJson) {
-          console.log(JSON.stringify({
+          console.log(JSON.stringify(buildRunJsonOutput({
             ok: false,
+            file,
+            mode,
             errors: result.errors,
             diagnostics: result.diagnostics ?? [],
             evaluation: result.evaluation,
-          }, null, 2));
+          }), null, 2));
         } else {
           console.error("Errors:");
           if (result.diagnostics && result.diagnostics.length > 0) {
@@ -78,7 +82,14 @@ async function cmdRun(args: string[], options: { watchMode: boolean }) {
 
       const report = buildRunReport(result);
       if (printJson) {
-        console.log(JSON.stringify({ ok: true, ...report, evaluation: result.evaluation }, null, 2));
+        console.log(JSON.stringify(buildRunJsonOutput({
+          ok: true,
+          file,
+          mode,
+          report,
+          diagnostics: result.diagnostics ?? [],
+          evaluation: result.evaluation,
+        }), null, 2));
       } else {
         console.log(formatRunReportText(report));
       }
@@ -86,7 +97,12 @@ async function cmdRun(args: string[], options: { watchMode: boolean }) {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (printJson) {
-        console.log(JSON.stringify({ ok: false, errors: [message] }, null, 2));
+        console.log(JSON.stringify(buildRunJsonOutput({
+          ok: false,
+          file,
+          mode,
+          errors: [message],
+        }), null, 2));
       } else {
         console.error(message);
       }
@@ -211,6 +227,23 @@ Usage:
   cadlad export <file> -o output.stl    Export model to STL
   cadlad studio                         Launch browser studio
 `);
+}
+
+function parseRunArgs(args: string[]): { file?: string; json: boolean } {
+  let file: string | undefined;
+  let json = false;
+
+  for (const arg of args) {
+    if (arg === "--json") {
+      json = true;
+      continue;
+    }
+    if (arg === "--watch") continue;
+    if (arg.startsWith("-")) continue;
+    if (!file) file = arg;
+  }
+
+  return { file, json };
 }
 
 main().catch((err) => {

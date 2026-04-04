@@ -43,7 +43,7 @@ This is the highest-leverage change. Every later phase compounds on it.
 
 - [x] Compute and return `GeometryStats` as part of every `ModelResult`: volume, surface area, bounding box, component count, per-body stats.
 - [x] Include derived checks: is volume zero? Is any bbox dimension degenerate? Are there disconnected components?
-- [ ] Return these from CLI (`cadlad run --json`) and MCP (`validate` tool) in a stable JSON schema.
+- [x] Return these from CLI (`cadlad run --json`) and MCP (`validate` tool) in a stable JSON schema.
 
 The pieces exist (`Solid.volume()`, `Solid.surfaceArea()`, `Solid.boundingBox()`, `Solid.numComponents()`, `model-stats.ts`). They just aren't wired into the standard evaluation output.
 
