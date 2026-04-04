@@ -249,7 +249,7 @@ The north star calls agent learning events "gold." Agreed — this is what makes
 
 ### 3.2 Capability gap aggregation
 
-- [ ] A reducer that aggregates capability gaps across all agent sessions.
+- [x] A reducer that aggregates capability gaps across all agent sessions.
 - [ ] "Agents hit the shell-on-concave-shape problem 47 times this month" → prioritize explicit inner-void subtraction helper.
 - [ ] "Agents keep trying to create threads/gears and falling back to crude approximations" → prioritize thread primitive.
 
