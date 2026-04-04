@@ -5,9 +5,11 @@ You're adding a new method to Solid, a new primitive function, or extending the 
 ## Pre-flight
 
 ```bash
-npm run test       # green baseline before you start
-npm run typecheck  # clean types
+npm run typecheck  # clean types ← ALWAYS reliable, use this
+npm run test       # green baseline (requires vitest installed locally)
 ```
+
+> **Note:** `npm run test` exits 0 silently if vitest isn't installed. `npm run typecheck` is the one check that always works. If you need real test execution, run `npm install -D vitest` first.
 
 ## Where things live
 
@@ -59,9 +61,11 @@ const sandbox = {
 ## Testing
 
 ```bash
-npm run test       # vitest — add a test in src/__tests__/ or co-located
-npm run typecheck  # ensure no type errors
+npm run typecheck  # ensure no type errors ← always works
+npm run test       # vitest — requires vitest installed (npm install -D vitest)
 ```
+
+> `npm run test` exits 0 silently if vitest isn't installed. Always verify test output is actually printed — don't trust a silent green exit.
 
 Write a test that exercises the new API. Then validate it works in practice by using it in an example model.
 

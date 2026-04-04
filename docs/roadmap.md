@@ -16,6 +16,7 @@ Each phase has its own detailed doc with implementation status, file references,
 | **2** | [roadmap-phase-2.md](./roadmap-phase-2.md) | ~90% done | Agent memory: events, revisions, branches |
 | **3** | [roadmap-phase-3.md](./roadmap-phase-3.md) | ~60% done | Agent learning & self-improvement |
 | **4** | [roadmap-phase-4.md](./roadmap-phase-4.md) | ~40% done | Design intent, constraints & manufacturing |
+| **5** | [roadmap-phase-5.md](./roadmap-phase-5.md) | not started | Export, ecosystem & human UX |
 
 ---
 
