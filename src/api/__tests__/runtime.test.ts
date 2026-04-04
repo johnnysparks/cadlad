@@ -279,4 +279,45 @@ describe("evaluateModel", () => {
     expect(result.errors).toHaveLength(0);
     expect(result.sceneValidation?.validators.find((entry) => entry.id === "solid-context")?.status).toBe("pass");
   });
+
+  it("enforces declarative wall_thickness constraints", async () => {
+    const code = `
+      return defineScene({
+        meta: { name: "constraint-wall-thickness" },
+        features: [{ id: "thin-wall", kind: "primitive.box" }],
+        constraints: [
+          constraint("wall_thickness", { min: mm(2) }),
+        ],
+        model: box(20, 20, 1),
+      });
+    `;
+
+    const result = await evaluateModel(code);
+    expect(result.errors.some((message) => message.includes("Constraint wall_thickness failed"))).toBe(true);
+    expect(result.evaluation.geometryValidation.status).toBe("fail");
+  });
+
+  it("checks declarative clearance and symmetry constraints", async () => {
+    const code = `
+      return defineScene({
+        meta: { name: "constraint-clearance-symmetry" },
+        features: [
+          { id: "base", kind: "primitive.box" },
+          { id: "lid", kind: "primitive.box", refs: ["base"] },
+        ],
+        constraints: [
+          constraint("clearance", { between: ["base", "lid"], min: mm(5) }),
+          constraint("symmetry", { axis: "X", tolerance: mm(0.1) }),
+        ],
+        model: [
+          box(10, 10, 10).translate(-6, 0, 0).named("base"),
+          box(10, 10, 10).translate(6.5, 0, 0).named("lid"),
+        ],
+      });
+    `;
+
+    const result = await evaluateModel(code);
+    expect(result.errors.some((message) => message.includes("Constraint clearance failed"))).toBe(true);
+    expect(result.diagnostics?.some((diag) => diag.message.includes("Constraint symmetry failed"))).toBe(true);
+  });
 });

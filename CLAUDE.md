@@ -46,6 +46,7 @@ snapshots/   Visual regression test references
 - Reference placement: `solid.translateTo(plane, [dx, dy, dz])`
 - Camera hint: `return { model: solid, camera: [x, y, z] }`
 - Must `return` a Solid, Assembly, array, or `{ model, camera }` object
+- Declarative constraints in scenes: `constraint("wall_thickness" | "symmetry" | "clearance" | "max_overhang", config)`
 
 ## 3D Tools API Contract
 

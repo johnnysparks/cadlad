@@ -1,5 +1,6 @@
 import type { Body } from "../engine/types.js";
 import type { GeometryValidationConfig } from "../engine/types.js";
+import type { SceneConstraint } from "./constraints.js";
 
 export type SceneSourceRange = {
   startLine: number;
@@ -104,6 +105,7 @@ export type SceneEnvelope<TModel = unknown, TParams extends SceneParamsShape | u
   validators?: readonly SceneValidator<TParams>[];
   tests?: readonly SceneTest<TParams>[];
   geometry?: GeometryValidationConfig;
+  constraints?: readonly SceneConstraint[];
 };
 
 export type NormalizedSceneFeature = {
@@ -448,6 +450,7 @@ export function normalizeScene(
   rawHooks?: {
     validators?: readonly SceneValidator[];
     tests?: readonly SceneTest[];
+    constraints?: readonly SceneConstraint[];
   };
 } {
   if (!isSceneEnvelope(value)) {
@@ -561,6 +564,7 @@ export function normalizeScene(
     rawHooks: {
       validators: scene.validators,
       tests: scene.tests,
+      constraints: scene.constraints,
     },
   };
 }

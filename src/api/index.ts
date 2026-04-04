@@ -24,6 +24,7 @@ export { Assembly, assembly } from "./assembly.js";
 // Typed scene contract
 export { defineScene } from "./scene-contract.js";
 export { mm } from "./scene-contract.js";
+export { constraint } from "./constraints.js";
 export type {
   SceneEnvelope,
   SceneFeatureDeclaration,
@@ -34,6 +35,13 @@ export type {
   SceneValidator,
   Millimeters,
 } from "./scene-contract.js";
+export type {
+  SceneConstraint,
+  WallThicknessConstraint,
+  SymmetryConstraint,
+  ClearanceConstraint,
+  MaxOverhangConstraint,
+} from "./constraints.js";
 
 // Types
 export type { Vec2, Vec3, Color, ParamDef, Body } from "../engine/types.js";
