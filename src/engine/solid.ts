@@ -16,6 +16,8 @@ export type PlaneLike = {
   normal: Vec3;
 };
 
+type BooleanOperand = Solid | { solid: Solid };
+
 export class Solid {
   /** @internal raw Manifold handle */
   _manifold: ManifoldInstance;
@@ -61,10 +63,10 @@ export class Solid {
    * Subtract multiple tool solids from this solid in one call.
    * Preserves this solid's metadata (color/name).
    */
-  subtractAll(...tools: Solid[]): Solid {
+  subtractAll(...tools: BooleanOperand[]): Solid {
     if (tools.length === 0) return this;
     const manifold = tools.reduce(
-      (result, tool) => result.subtract(tool._manifold),
+      (result, tool) => result.subtract(this._asSolid(tool)._manifold),
       this._manifold,
     );
     return this._withManifold(manifold);
@@ -78,13 +80,21 @@ export class Solid {
    * Intersect this solid with multiple parts in one call.
    * Preserves this solid's metadata (color/name).
    */
-  intersectAll(...parts: Solid[]): Solid {
+  intersectAll(...parts: BooleanOperand[]): Solid {
     if (parts.length === 0) return this;
     const manifold = parts.reduce(
-      (result, part) => result.intersect(part._manifold),
+      (result, part) => result.intersect(this._asSolid(part)._manifold),
       this._manifold,
     );
     return this._withManifold(manifold);
+  }
+
+  private _asSolid(operand: BooleanOperand): Solid {
+    if (operand instanceof Solid) return operand;
+    if (operand && typeof operand === "object" && "solid" in operand && operand.solid instanceof Solid) {
+      return operand.solid;
+    }
+    throw new Error("Boolean operands must be Solid or ToolBody");
   }
 
   // ── Transforms ─────────────────────────────────────────────

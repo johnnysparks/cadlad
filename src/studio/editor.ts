@@ -169,10 +169,17 @@ declare function cylinder(height: number, radiusBottom: number, radiusTop?: numb
 declare function sphere(radius: number, segments?: number): Solid;
 declare function roundedRect(width: number, depth: number, radius: number, height?: number): Solid;
 declare function assembly(name: string): Assembly;
+declare function toolBody(name: string, solid: Solid): ToolBody;
 type CameraView = "front" | "back" | "top" | "bottom" | "left" | "right" | "iso";
 type CrossSectionAxis = "x" | "y" | "z";
 type Vec3 = [number, number, number];
 type Body = { mesh: { positions: Float32Array; indices: Uint32Array } };
+type BooleanOperand = Solid | ToolBody;
+
+declare type ToolBody = {
+  name: string;
+  solid: Solid;
+};
 
 declare function rect(width: number, height: number): Sketch;
 declare function circle(radius: number, segments?: number): Sketch;
@@ -181,9 +188,9 @@ declare class Solid {
   union(other: Solid): Solid;
   unionAll(...parts: Solid[]): Solid;
   subtract(other: Solid): Solid;
-  subtractAll(...tools: Solid[]): Solid;
+  subtractAll(...tools: BooleanOperand[]): Solid;
   intersect(other: Solid): Solid;
-  intersectAll(...parts: Solid[]): Solid;
+  intersectAll(...parts: BooleanOperand[]): Solid;
   translate(x: number, y: number, z: number): Solid;
   rotate(x: number, y: number, z: number): Solid;
   scale(x: number, y?: number, z?: number): Solid;

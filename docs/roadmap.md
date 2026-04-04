@@ -151,9 +151,9 @@ New file: `src/api/reference.ts`. This replaces fragile hard-coded `translate(30
 
 ### 1.5.4 Tool bodies
 
-- [ ] `toolBody(name, solid)` — marks a solid as construction-only geometry (not rendered in final output).
+- [x] `toolBody(name, solid)` — marks a solid as construction-only geometry (not rendered in final output).
 - [ ] Tool bodies register as `kind: "tool-body"` features in `defineScene()`.
-- [ ] `Solid.subtractAll()` / `Solid.intersectAll()` accept `ToolBody` directly.
+- [x] `Solid.subtractAll()` / `Solid.intersectAll()` accept `ToolBody` directly.
 - [ ] Studio viewport can optionally show tool bodies as wireframe for debugging.
 
 New file: `src/api/toolbody.ts`. Enables the "collect all cutouts, subtract once" pro pattern.
