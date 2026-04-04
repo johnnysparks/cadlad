@@ -4,12 +4,36 @@ export interface SessionState {
   id: string;
   source: string;
   params: Record<string, number>;
+  branch: BranchState;
+  cursor: SessionCursorState;
   revision: number;
   lastSuccessfulRevision: number;
   latestRender: RenderStatus;
   patches: Patch[];
   createdAt: number;
   updatedAt: number;
+  observers: SessionObserverSummary[];
+}
+
+export interface BranchState {
+  id: string;
+  name: string;
+  headRevision: number;
+  createdFromRevision: number | null;
+  createdAt: number;
+}
+
+export interface SessionCursorState {
+  branchId: string;
+  baseRevision: number;
+  headRevision: number;
+  checkpointRevision: number;
+}
+
+export interface SessionObserverSummary {
+  kind: 'human' | 'agent';
+  id?: string;
+  connectedAt: number;
 }
 
 export interface RevisionEvaluationRef {
@@ -24,6 +48,7 @@ export interface RevisionEvaluationRef {
 export interface RevisionSnapshot {
   id: string;
   revision: number;
+  branchId: string;
   parentRevision: number | null;
   sourceHash: string;
   source: string;
