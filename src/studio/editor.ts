@@ -179,13 +179,17 @@ declare function circle(radius: number, segments?: number): Sketch;
 
 declare class Solid {
   union(other: Solid): Solid;
+  unionAll(...parts: Solid[]): Solid;
   subtract(other: Solid): Solid;
+  subtractAll(...tools: Solid[]): Solid;
   intersect(other: Solid): Solid;
+  intersectAll(...parts: Solid[]): Solid;
   translate(x: number, y: number, z: number): Solid;
   rotate(x: number, y: number, z: number): Solid;
   scale(x: number, y?: number, z?: number): Solid;
   mirror(normal: [number, number, number]): Solid;
   mirrorUnion(normal: [number, number, number]): Solid;
+  quarterUnion(normal1: [number, number, number], normal2: [number, number, number]): Solid;
   linearPattern(count: number, stepX?: number, stepY?: number, stepZ?: number): Solid;
   circularPattern(
     count: number,
