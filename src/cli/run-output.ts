@@ -1,4 +1,4 @@
-import type { Body, GeometryStats, ParamDef } from "../engine/types.js";
+import type { Body, EvaluationBundle, GeometryStats, ParamDef, ValidationDiagnostic } from "../engine/types.js";
 import { computeModelStats } from "../studio/model-stats.js";
 
 export interface RunReport {
@@ -9,6 +9,17 @@ export interface RunReport {
     triangles: number;
   }>;
   geometryStats?: GeometryStats;
+}
+
+export interface RunJsonOutput {
+  schemaVersion: "cadlad.run.v1";
+  ok: boolean;
+  file: string;
+  mode: "run" | "validate";
+  errors: string[];
+  diagnostics: ValidationDiagnostic[];
+  report?: RunReport;
+  evaluation?: EvaluationBundle;
 }
 
 export function buildRunReport(input: { bodies: Body[]; params: ParamDef[] }): RunReport {
@@ -29,4 +40,25 @@ export function formatRunReportText(report: RunReport): string {
     lines.push(`  ${part.name}: ${part.triangles} triangles`);
   }
   return lines.join("\n");
+}
+
+export function buildRunJsonOutput(input: {
+  file: string;
+  mode: "run" | "validate";
+  ok: boolean;
+  errors?: string[];
+  diagnostics?: ValidationDiagnostic[];
+  report?: RunReport;
+  evaluation?: EvaluationBundle;
+}): RunJsonOutput {
+  return {
+    schemaVersion: "cadlad.run.v1",
+    ok: input.ok,
+    file: input.file,
+    mode: input.mode,
+    errors: input.errors ?? [],
+    diagnostics: input.diagnostics ?? [],
+    report: input.report,
+    evaluation: input.evaluation,
+  };
 }

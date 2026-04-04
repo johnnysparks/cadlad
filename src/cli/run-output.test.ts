@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Body, ParamDef } from "../engine/types.js";
-import { buildRunReport, formatRunReportText } from "./run-output.js";
+import { buildRunJsonOutput, buildRunReport, formatRunReportText } from "./run-output.js";
 
 function makeBody(name: string | undefined, xOffset: number): Body {
   return {
@@ -43,5 +43,24 @@ describe("run-output", () => {
     });
 
     expect(text).toBe("Bodies: 1\nParams: 1\n  (unnamed): 12 triangles");
+  });
+
+  it("builds stable JSON output envelope for run/validate --json", () => {
+    const json = buildRunJsonOutput({
+      ok: false,
+      file: "projects/demo/demo.forge.ts",
+      mode: "run",
+      errors: ["Model failed"],
+      diagnostics: [],
+    });
+
+    expect(json).toMatchObject({
+      schemaVersion: "cadlad.run.v1",
+      ok: false,
+      file: "projects/demo/demo.forge.ts",
+      mode: "run",
+      errors: ["Model failed"],
+      diagnostics: [],
+    });
   });
 });
