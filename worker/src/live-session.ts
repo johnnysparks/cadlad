@@ -650,6 +650,9 @@ export class LiveSession implements DurableObject {
     if (!isNonEmptyString(body.summary) || !isNonEmptyString(body.limitation) || !isNonEmptyString(body.workaround)) {
       return err('summary, limitation, and workaround are required', 'INVALID_REQUEST', 400);
     }
+    const actor = this.resolveActor(request, { kind: 'agent' });
+    const message = body.limitation.trim();
+    const context = `summary=${body.summary.trim()}; workaround=${body.workaround.trim()}`;
 
     await this.appendEvents([
       this.makeEvent('agent.workaround_recorded', {
