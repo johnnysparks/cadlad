@@ -18,6 +18,7 @@ import { param } from "./params.js";
 import { Sketch, rect, circle } from "./sketch.js";
 import { box, cylinder, sphere, roundedRect, roundedBox, taperedBox, sweep, loft } from "../engine/primitives.js";
 import { assembly } from "./assembly.js";
+import { plane, axis, datum, referenceFeature } from "./reference.js";
 import { withLayeredValidation } from "../validation/layered-validation.js";
 
 /**
@@ -65,6 +66,7 @@ export async function evaluateModel(
       "sweep", "loft",
       "assembly", "Solid", "Assembly",
       "defineScene", "mm",
+      "plane", "axis", "datum", "referenceFeature",
     ];
     const apiValues = [
       param, Sketch, rect, circle,
@@ -72,6 +74,7 @@ export async function evaluateModel(
       sweep, loft,
       assembly, Solid, Assembly,
       defineScene, mm,
+      plane, axis, datum, referenceFeature,
     ];
 
     // Wrap user code so it can use top-level return

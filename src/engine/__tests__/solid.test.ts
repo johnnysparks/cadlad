@@ -102,3 +102,20 @@ describe("export", () => {
     expect(stl.byteLength).toBe(80 + 4 + numTris * 50);
   });
 });
+
+
+describe("reference transforms", () => {
+  it("translateTo aligns center to reference plane", () => {
+    const p = { origin: [0, 0, 25] as [number, number, number], normal: [0, 0, 1] as [number, number, number] };
+    const bb = box(10, 10, 10).translate(0, 0, 50).translateTo(p).boundingBox();
+    expect((bb.min[2] + bb.max[2]) / 2).toBeCloseTo(25, 6);
+  });
+
+  it("translateTo applies offsets after alignment", () => {
+    const p = { origin: [0, 10, 0] as [number, number, number], normal: [0, 1, 0] as [number, number, number] };
+    const bb = box(10, 10, 10).translate(0, -50, 0).translateTo(p, [3, 0, -2]).boundingBox();
+    expect((bb.min[1] + bb.max[1]) / 2).toBeCloseTo(10, 6);
+    expect((bb.min[0] + bb.max[0]) / 2).toBeCloseTo(3, 6);
+    expect((bb.min[2] + bb.max[2]) / 2).toBeCloseTo(-2, 6);
+  });
+});

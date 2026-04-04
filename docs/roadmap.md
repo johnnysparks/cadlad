@@ -136,16 +136,16 @@ These reduce boilerplate for the most common 2D-to-3D profiles. Added to `src/ap
 
 ### 1.5.3 Reference geometry — Datums, Planes, Axes
 
-- [ ] `Plane` type: origin + normal. Pure data, no Manifold dependency.
-- [ ] `Axis` type: origin + direction. For circular patterns and revolve.
-- [ ] `Datum` type: named reference point, optionally derived from a solid's bbox.
-- [ ] Factory functions:
-  - `plane.XY(zOffset?)`, `plane.XZ(yOffset?)`, `plane.YZ(xOffset?)` — standard construction planes.
-  - `plane.midplane(solid, axis)` — derived plane at the center of a solid along an axis.
-  - `datum.fromBBox(solid, anchor)` — reference point at "center", "top", "bottom", etc. of a bbox.
-  - `axis.Z()`, `axis.X()`, `axis.Y()` — world axes through origin.
-- [ ] `Solid.translateTo(plane, offsets?)` — position relative to a reference plane instead of absolute coords.
-- [ ] Datums/planes register as features in `defineScene()` for dependency tracking.
+- [x] `Plane` type: origin + normal. Pure data, no Manifold dependency.
+- [x] `Axis` type: origin + direction. For circular patterns and revolve.
+- [x] `Datum` type: named reference point, optionally derived from a solid's bbox.
+- [x] Factory functions:
+  - [x] `plane.XY(zOffset?)`, `plane.XZ(yOffset?)`, `plane.YZ(xOffset?)` — standard construction planes.
+  - [x] `plane.midplane(solid, axis)` — derived plane at the center of a solid along an axis.
+  - [x] `datum.fromBBox(solid, anchor)` — reference point at "center", "top", "bottom", etc. of a bbox.
+  - [x] `axis.Z()`, `axis.X()`, `axis.Y()` — world axes through origin.
+- [x] `Solid.translateTo(plane, offsets?)` — position relative to a reference plane instead of absolute coords.
+- [x] Datums/planes register as features in `defineScene()` for dependency tracking.
 
 New file: `src/api/reference.ts`. This replaces fragile hard-coded `translate(30, 0, 50)` calls with self-updating references.
 
