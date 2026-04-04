@@ -228,8 +228,8 @@ This is the north star's core architecture, but motivated by agent workflows rat
 
 ### 2.4 Session as cursor
 
-- [ ] `Session` becomes a cursor over a branch. It accrues events and periodically checkpoints to revisions.
-- [ ] Multiple agents (or an agent + a human) can observe the same branch. Write coordination comes later.
+- [x] `Session` becomes a cursor over a branch. It accrues events and periodically checkpoints to revisions.
+- [x] Multiple agents (or an agent + a human) can observe the same branch. Write coordination comes later.
 
 **Grounding the north star:** The north star's 3-layer model (events → revisions → sessions) is right, but the motivation here is concrete: agents need memory, agents need branching, agents need comparison. The event store is the implementation, not the product. If a simpler implementation (e.g., just saving source snapshots with metadata to SQLite) delivers the same agent UX, that's fine too.
 

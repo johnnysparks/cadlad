@@ -78,6 +78,10 @@ describe('oauth-protected sessions', () => {
     const session = await res.json() as SessionState;
     expect(session.source).toBe(SOURCE);
     expect(session.id).toBe(created.sessionId);
+    expect(session.branch.id).toBe(`${created.sessionId}:main`);
+    expect(session.cursor.branchId).toBe(session.branch.id);
+    expect(session.cursor.baseRevision).toBe(1);
+    expect(session.cursor.headRevision).toBe(session.revision);
   });
 
   it('stores latest render artifact and serves latest render', async () => {
@@ -179,6 +183,12 @@ describe('oauth-protected sessions', () => {
     expect(eventTypes).toContain('agent.intent_declared');
     expect(eventTypes).toContain('evaluation.completed');
     expect(eventTypes).toContain('agent.capability_gap');
+
+    const branchAware = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/event-log?limit=20`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const branchBody = await branchAware.json() as { events: Array<{ branchId?: string }> };
+    expect(branchBody.events.every((event) => event.branchId === `${created.sessionId}:main`)).toBe(true);
   });
 
   it('creates addressable revisions with source hash and evaluation reference', async () => {

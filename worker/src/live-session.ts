@@ -3,6 +3,9 @@
 import type {
   Env,
   InitPayload,
+  BranchState,
+  SessionCursorState,
+  SessionObserverSummary,
   Patch,
   SessionEvent,
   SessionState,
@@ -29,6 +32,8 @@ interface StoredSession {
   id: string;
   source: string;
   params: Record<string, number>;
+  branch: BranchState;
+  cursor: SessionCursorState;
   revision: number;
   lastSuccessfulRevision: number;
   patches: Patch[];
@@ -47,12 +52,28 @@ export class LiveSession implements DurableObject {
   private readonly env: Env;
 
   // In-memory SSE connections: connectionId → writer
-  private readonly sseClients: Map<string, WritableStreamDefaultWriter<Uint8Array>> = new Map();
+  private readonly sseClients: Map<string, {
+    writer: WritableStreamDefaultWriter<Uint8Array>;
+    observer: SessionObserverSummary;
+  }> = new Map();
 
   // Session state (loaded from storage in blockConcurrencyWhile)
   private id = '';
   private source = '';
   private params: Record<string, number> = {};
+  private branch: BranchState = {
+    id: '',
+    name: 'main',
+    headRevision: 0,
+    createdFromRevision: null,
+    createdAt: 0,
+  };
+  private cursor: SessionCursorState = {
+    branchId: '',
+    baseRevision: 0,
+    headRevision: 0,
+    checkpointRevision: 0,
+  };
   private revision = 0;
   private lastSuccessfulRevision = 0;
   private patches: Patch[] = [];
@@ -77,6 +98,8 @@ export class LiveSession implements DurableObject {
         this.id = stored.id;
         this.source = stored.source;
         this.params = stored.params;
+        this.branch = stored.branch ?? this.branch;
+        this.cursor = stored.cursor ?? this.cursor;
         this.revision = stored.revision;
         this.lastSuccessfulRevision = stored.lastSuccessfulRevision;
         this.patches = stored.patches ?? [];
@@ -86,6 +109,7 @@ export class LiveSession implements DurableObject {
         this.lastRunResult = stored.lastRunResult ?? null;
         this.lastRunRevision = stored.lastRunRevision ?? null;
         this.revisions = stored.revisions ?? [];
+        this.ensureCursorDefaults();
       }
     });
   }
@@ -135,6 +159,19 @@ export class LiveSession implements DurableObject {
     this.source = body.source ?? '';
     this.params = body.params ?? {};
     this.revision = 1;
+    this.branch = {
+      id: `${this.id}:main`,
+      name: 'main',
+      headRevision: this.revision,
+      createdFromRevision: null,
+      createdAt: Date.now(),
+    };
+    this.cursor = {
+      branchId: this.branch.id,
+      baseRevision: this.revision,
+      headRevision: this.revision,
+      checkpointRevision: this.revision,
+    };
     this.lastSuccessfulRevision = 0;
     this.writeToken = body.writeToken;
     this.createdAt = Date.now();
@@ -189,6 +226,7 @@ export class LiveSession implements DurableObject {
     const beforeTimestamp = parseInt(url.searchParams.get('before') ?? '', 10);
     const events = await this.eventStore.readStream({
       projectId: this.id,
+      branchId: this.branch.id,
       limit,
       types: type ? [type as EventType] : undefined,
       afterTimestamp: Number.isFinite(afterTimestamp) ? afterTimestamp : undefined,
@@ -224,7 +262,8 @@ export class LiveSession implements DurableObject {
     const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
     const writer = writable.getWriter();
 
-    this.sseClients.set(connectionId, writer);
+    const observer = this.resolveObserver(request);
+    this.sseClients.set(connectionId, { writer, observer });
 
     const cleanup = () => {
       this.sseClients.delete(connectionId);
@@ -286,6 +325,8 @@ export class LiveSession implements DurableObject {
     this.source = patch.sourceAfter;
     this.params = patch.paramsAfter;
     this.revision = newRevision;
+    this.branch.headRevision = newRevision;
+    this.cursor.headRevision = newRevision;
     if (body.runResult?.success) this.lastSuccessfulRevision = newRevision;
 
     this.addPatch(patch);
@@ -353,6 +394,8 @@ export class LiveSession implements DurableObject {
     this.source = revertPatch.sourceAfter;
     this.params = revertPatch.paramsAfter;
     this.revision = newRevision;
+    this.branch.headRevision = newRevision;
+    this.cursor.headRevision = newRevision;
 
     this.addPatch(revertPatch);
     this.updatedAt = Date.now();
@@ -495,6 +538,35 @@ export class LiveSession implements DurableObject {
     return id ? { kind, id } : { kind };
   }
 
+  private ensureCursorDefaults(): void {
+    if (!this.id) return;
+    if (!this.branch.id) {
+      this.branch = {
+        id: `${this.id}:main`,
+        name: this.branch.name || 'main',
+        headRevision: this.revision,
+        createdFromRevision: this.branch.createdFromRevision ?? null,
+        createdAt: this.branch.createdAt || this.createdAt || Date.now(),
+      };
+    }
+    this.branch.headRevision = this.revision;
+    this.cursor = {
+      branchId: this.branch.id,
+      baseRevision: this.cursor.baseRevision || 1,
+      headRevision: this.revision,
+      checkpointRevision: this.cursor.checkpointRevision || this.revision,
+    };
+  }
+
+  private resolveObserver(request: Request): SessionObserverSummary {
+    const actor = this.resolveActor(request);
+    return {
+      kind: actor.kind,
+      ...(actor.id ? { id: actor.id } : {}),
+      connectedAt: Date.now(),
+    };
+  }
+
   private makeEvent<T>(
     type: EventType,
     payload: T,
@@ -503,6 +575,8 @@ export class LiveSession implements DurableObject {
     return {
       id: crypto.randomUUID(),
       projectId: this.id,
+      branchId: this.branch.id,
+      sessionId: this.id,
       actor,
       type,
       payload,
@@ -520,6 +594,8 @@ export class LiveSession implements DurableObject {
       id: this.id,
       source: this.source,
       params: this.params,
+      branch: this.branch,
+      cursor: this.cursor,
       revision: this.revision,
       lastSuccessfulRevision: this.lastSuccessfulRevision,
       patches: this.patches,
@@ -539,8 +615,8 @@ export class LiveSession implements DurableObject {
   private broadcast(event: SessionEvent): void {
     const encoded = new TextEncoder().encode(sseMsg(event));
     const dead: string[] = [];
-    for (const [id, writer] of this.sseClients) {
-      writer.write(encoded).catch(() => dead.push(id));
+    for (const [id, client] of this.sseClients) {
+      client.writer.write(encoded).catch(() => dead.push(id));
     }
     for (const id of dead) this.sseClients.delete(id);
   }
@@ -550,12 +626,15 @@ export class LiveSession implements DurableObject {
       id: this.id,
       source: this.source,
       params: { ...this.params },
+      branch: { ...this.branch },
+      cursor: { ...this.cursor },
       revision: this.revision,
       lastSuccessfulRevision: this.lastSuccessfulRevision,
       latestRender: this.computeRenderStatus(),
       patches: [...this.patches],
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
+      observers: Array.from(this.sseClients.values()).map((client) => ({ ...client.observer })),
     };
   }
 
@@ -627,6 +706,7 @@ export class LiveSession implements DurableObject {
     const snapshot: RevisionSnapshot = {
       id: crypto.randomUUID(),
       revision: input.revision,
+      branchId: this.branch.id,
       parentRevision: previous?.revision ?? null,
       sourceHash,
       source: this.source,
@@ -644,6 +724,7 @@ export class LiveSession implements DurableObject {
       return;
     }
     this.revisions.push(snapshot);
+    this.cursor.checkpointRevision = input.revision;
   }
 
   private attachEvaluationToRevision(revision: number, evaluation: RevisionEvaluationRef): void {
