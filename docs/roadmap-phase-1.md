@@ -37,20 +37,58 @@ Every `evaluateModel()` call computes and returns `GeometryStats`:
 
 ### 0.1.1 CLI JSON output
 
-**Status: NOT DONE**
+**Status: DONE**
 
 `cadlad run --json` should return the full `ModelResult` (stats, diagnostics, evaluation bundle) as stable JSON to stdout. This is the primary interface for non-MCP agents and CI pipelines.
 
 **Why it matters:** Any agent running locally via CLI currently gets human-readable text output only. JSON output makes the CLI a first-class agent interface without requiring a live session or MCP server.
 
 **Implementation:**
-- [ ] Add `--json` flag to `src/cli/index.ts` `run` command
-- [ ] Serialize `ModelResult` to stable JSON schema via `src/cli/run-output.ts`
-- [ ] Include: evaluation bundle, geometry stats, diagnostics, param values
-- [ ] Exclude: raw mesh data (too large; use `--json --include-mesh` if needed)
-- [ ] Document the JSON schema in this file or a linked reference
+- [x] Add `--json` flag to `src/cli/index.ts` `run` command
+- [x] Serialize `ModelResult` to stable JSON schema via `src/cli/run-output.ts`
+- [x] Include: evaluation bundle, geometry stats, diagnostics, param values
+- [x] Exclude: raw mesh data by default; opt-in via `--json --include-mesh`
+- [x] Document the JSON schema in this file
 
 **Scope:** ~50 lines. `run-output.ts` already has `formatRunOutput()`; add a `formatRunOutputJSON()` path.
+
+**CLI JSON schema (`cadlad.run.v1`)**
+
+```json
+{
+  "schemaVersion": "cadlad.run.v1",
+  "ok": true,
+  "file": "projects/demo/demo.forge.ts",
+  "mode": "run",
+  "errors": [],
+  "modelResult": {
+    "params": [{ "name": "width", "value": 10 }],
+    "geometryStats": { "triangles": 12, "bodies": 1 },
+    "diagnostics": [],
+    "evaluation": { "summary": { "errorCount": 0, "warningCount": 0 } },
+    "sceneValidation": null,
+    "hints": [],
+    "camera": [200, -200, 160],
+    "bodies": [
+      {
+        "name": "Body 0",
+        "color": [0.7, 0.7, 0.7, 1],
+        "mesh": {
+          "positions": [0, 0, 0],
+          "normals": [0, 0, 1],
+          "indices": [0, 1, 2]
+        }
+      }
+    ]
+  }
+}
+```
+
+Notes:
+- `modelResult.bodies` is omitted by default (large payload).
+- `modelResult.bodies[].mesh` appears only when `--include-mesh` is passed with `--json`.
+- Numeric arrays are serialized as JSON arrays for cross-language consumers (CI/agents).
+
 
 ---
 

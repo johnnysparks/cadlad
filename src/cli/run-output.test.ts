@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Body, ParamDef } from "../engine/types.js";
+import type { Body, ModelResult, ParamDef } from "../engine/types.js";
 import { buildRunJsonOutput, buildRunReport, formatRunReportText } from "./run-output.js";
 
 function makeBody(name: string | undefined, xOffset: number): Body {
@@ -14,6 +14,26 @@ function makeBody(name: string | undefined, xOffset: number): Body {
       normals: new Float32Array(9),
       indices: new Uint32Array([0, 1, 2]),
     },
+  };
+}
+
+function makeModelResult(): ModelResult {
+  return {
+    bodies: [makeBody("plate", 0)],
+    params: [{ name: "width", value: 10 }],
+    errors: [],
+    diagnostics: [],
+    evaluation: {
+      summary: { errorCount: 0, warningCount: 0 },
+      typecheck: { status: "pass", errorCount: 0, warningCount: 0, diagnostics: [] },
+      semanticValidation: { status: "pass", errorCount: 0, warningCount: 0, diagnostics: [] },
+      geometryValidation: { status: "pass", errorCount: 0, warningCount: 0, diagnostics: [] },
+      relationValidation: { status: "pass", errorCount: 0, warningCount: 0, diagnostics: [] },
+      stats: { available: false },
+      tests: { status: "skipped", total: 0, failures: 0, results: [] },
+      render: { requested: false },
+    },
+    hints: [],
   };
 }
 
@@ -45,22 +65,38 @@ describe("run-output", () => {
     expect(text).toBe("Bodies: 1\nParams: 1\n  (unnamed): 12 triangles");
   });
 
-  it("builds stable JSON output envelope for run/validate --json", () => {
+  it("builds stable JSON output with model result and no mesh by default", () => {
     const json = buildRunJsonOutput({
-      ok: false,
+      ok: true,
       file: "projects/demo/demo.forge.ts",
       mode: "run",
-      errors: ["Model failed"],
-      diagnostics: [],
+      modelResult: makeModelResult(),
     });
 
     expect(json).toMatchObject({
       schemaVersion: "cadlad.run.v1",
-      ok: false,
+      ok: true,
       file: "projects/demo/demo.forge.ts",
       mode: "run",
-      errors: ["Model failed"],
-      diagnostics: [],
+      errors: [],
+      modelResult: {
+        params: [{ name: "width", value: 10 }],
+        diagnostics: [],
+      },
     });
+    expect(json.modelResult?.bodies).toBeUndefined();
+  });
+
+  it("includes mesh data when explicitly requested", () => {
+    const json = buildRunJsonOutput({
+      ok: true,
+      file: "projects/demo/demo.forge.ts",
+      mode: "run",
+      modelResult: makeModelResult(),
+      includeMesh: true,
+    });
+
+    expect(json.modelResult?.bodies?.[0].mesh?.positions).toEqual([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    expect(json.modelResult?.bodies?.[0].mesh?.indices).toEqual([0, 1, 2]);
   });
 });
