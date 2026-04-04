@@ -9,7 +9,7 @@
 export { param } from "./params.js";
 
 // 2D Sketch
-export { Sketch, rect, circle } from "./sketch.js";
+export { Sketch, rect, circle, slot, lShape, channel, tShape } from "./sketch.js";
 
 // 3D Primitives
 export { box, cylinder, sphere, roundedRect, sweep, loft } from "../engine/primitives.js";

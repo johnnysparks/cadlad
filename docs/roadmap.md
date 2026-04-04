@@ -127,10 +127,10 @@ These are small, additive changes to `src/engine/solid.ts` with no architectural
 
 ### 1.5.2 Common sketch profiles
 
-- [ ] `Sketch.slot(width, height, endRadius)` — stadium/slot shape (rounded ends).
-- [ ] `Sketch.lShape(w1, h1, w2, h2)` — L-profile for angles and brackets.
-- [ ] `Sketch.channel(width, height, flangeWidth)` — C-channel profile.
-- [ ] `Sketch.tShape(w1, h1, w2, h2)` — T-profile for beams.
+- [x] `Sketch.slot(width, height, endRadius)` — stadium/slot shape (rounded ends).
+- [x] `Sketch.lShape(w1, h1, w2, h2)` — L-profile for angles and brackets.
+- [x] `Sketch.channel(width, height, flangeWidth)` — C-channel profile.
+- [x] `Sketch.tShape(w1, h1, w2, h2)` — T-profile for beams.
 
 These reduce boilerplate for the most common 2D-to-3D profiles. Added to `src/api/sketch.ts`.
 
@@ -219,10 +219,10 @@ This is the north star's core architecture, but motivated by agent workflows rat
 
 ### 2.3 Branches
 
-- [ ] `Branch` type: named pointer to a head revision.
-- [ ] An agent can branch to explore an alternative approach without losing the current one.
-- [ ] `compare_branches(a, b)` → structured diff of geometry, params, validation at branch heads.
-- [ ] An agent (or human) can pick the better branch and continue from there.
+- [x] `Branch` type: named pointer to a head revision.
+- [x] An agent can branch to explore an alternative approach without losing the current one.
+- [x] `compare_branches(a, b)` → structured diff of geometry, params, validation at branch heads.
+- [x] An agent (or human) can pick the better branch and continue from there.
 
 **Why branches matter for agents:** Agents naturally explore. "Try a thicker wall" and "try a different handle shape" are parallel explorations. Without branches, the agent has to remember (or reconstruct) the alternative. With branches, it forks, evaluates both, and picks the winner — or asks the human to choose.
 

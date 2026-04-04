@@ -62,6 +62,19 @@ export interface RevisionSnapshot {
   evaluation?: RevisionEvaluationRef;
 }
 
+export interface Branch {
+  id: string;
+  name: string;
+  headRevision: number;
+  baseRevision: number | null;
+  createdAt: number;
+  updatedAt: number;
+  actor: {
+    kind: 'human' | 'agent';
+    id?: string;
+  };
+}
+
 export type RenderState = 'no_render' | 'render_pending' | 'render_failed' | 'screenshot_blocked' | 'ready';
 
 export interface RenderStatus {

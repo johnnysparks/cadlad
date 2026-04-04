@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { initManifold } from "../../engine/manifold-backend.js";
-import { Sketch, rect, circle } from "../sketch.js";
+import { Sketch, rect, circle, slot, lShape, channel, tShape } from "../sketch.js";
 
 beforeAll(async () => {
   await initManifold();
@@ -94,6 +94,41 @@ describe("circle", () => {
       const dist = Math.sqrt(x * x + y * y);
       expect(dist).toBeCloseTo(10, 0);
     }
+  });
+});
+
+describe("common profiles", () => {
+  it("slot creates a closed rounded profile with expected extents", () => {
+    const pts = slot(30, 10, 5).points();
+    expect(pts.length).toBeGreaterThan(20);
+    const xs = pts.map(([x]) => x);
+    const ys = pts.map(([, y]) => y);
+    expect(Math.min(...xs)).toBeCloseTo(-15, 1);
+    expect(Math.max(...xs)).toBeCloseTo(15, 1);
+    expect(Math.min(...ys)).toBeCloseTo(-5, 1);
+    expect(Math.max(...ys)).toBeCloseTo(5, 1);
+  });
+
+  it("lShape extrudes to positive volume", () => {
+    const solid = lShape(20, 20, 8, 8).extrude(5);
+    expect(solid.volume()).toBeGreaterThan(0);
+  });
+
+  it("channel extrudes to positive volume", () => {
+    const solid = channel(20, 16, 3).extrude(5);
+    expect(solid.volume()).toBeGreaterThan(0);
+  });
+
+  it("tShape extrudes to positive volume", () => {
+    const solid = tShape(20, 16, 6, 4).extrude(5);
+    expect(solid.volume()).toBeGreaterThan(0);
+  });
+
+  it("Sketch static constructors delegate to profile helpers", () => {
+    expect(Sketch.slot(30, 10, 5).points().length).toBe(slot(30, 10, 5).points().length);
+    expect(Sketch.lShape(20, 20, 8, 8).points()).toEqual(lShape(20, 20, 8, 8).points());
+    expect(Sketch.channel(20, 16, 3).points()).toEqual(channel(20, 16, 3).points());
+    expect(Sketch.tShape(20, 16, 6, 4).points()).toEqual(tShape(20, 16, 6, 4).points());
   });
 });
 
