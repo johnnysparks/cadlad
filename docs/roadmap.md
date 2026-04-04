@@ -127,10 +127,10 @@ These are small, additive changes to `src/engine/solid.ts` with no architectural
 
 ### 1.5.2 Common sketch profiles
 
-- [ ] `Sketch.slot(width, height, endRadius)` — stadium/slot shape (rounded ends).
-- [ ] `Sketch.lShape(w1, h1, w2, h2)` — L-profile for angles and brackets.
-- [ ] `Sketch.channel(width, height, flangeWidth)` — C-channel profile.
-- [ ] `Sketch.tShape(w1, h1, w2, h2)` — T-profile for beams.
+- [x] `Sketch.slot(width, height, endRadius)` — stadium/slot shape (rounded ends).
+- [x] `Sketch.lShape(w1, h1, w2, h2)` — L-profile for angles and brackets.
+- [x] `Sketch.channel(width, height, flangeWidth)` — C-channel profile.
+- [x] `Sketch.tShape(w1, h1, w2, h2)` — T-profile for beams.
 
 These reduce boilerplate for the most common 2D-to-3D profiles. Added to `src/api/sketch.ts`.
 

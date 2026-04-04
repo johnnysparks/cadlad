@@ -32,7 +32,7 @@ snapshots/   Visual regression test references
 
 - Use `param()` for slider-driven parameters with min/max/unit
 - Primitives: `box()`, `cylinder()`, `sphere()`, `roundedRect()`, `roundedBox()`, `taperedBox()`
-- 2D → 3D: `Sketch.begin()`, `rect()`, `circle()` → `.extrude()` / `.extrudeAlong(dir, h)` / `.revolve()` / `.sweep(path)`
+- 2D → 3D: `Sketch.begin()`, `rect()`, `circle()`, `slot()`, `lShape()`, `channel()`, `tShape()` → `.extrude()` / `.extrudeAlong(dir, h)` / `.revolve()` / `.sweep(path)`
 - Standalone: `sweep(profile, path)`, `loft(profiles, heights)`
 - Booleans: `.union()`, `.subtract()`, `.intersect()`
 - Edge treatment: `.fillet(subdivisions)`, `.chamfer(subdivisions)`, `.smooth(subdivisions, minSharpAngle)`

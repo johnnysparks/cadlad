@@ -65,6 +65,26 @@ export class Sketch {
     return s;
   }
 
+  /** Create a stadium/slot sketch centred at origin. */
+  static slot(width: number, height: number, endRadius: number): Sketch {
+    return slot(width, height, endRadius);
+  }
+
+  /** Create an L-profile sketch centred at origin. */
+  static lShape(w1: number, h1: number, w2: number, h2: number): Sketch {
+    return lShape(w1, h1, w2, h2);
+  }
+
+  /** Create a C-channel sketch centred at origin. */
+  static channel(width: number, height: number, flangeWidth: number): Sketch {
+    return channel(width, height, flangeWidth);
+  }
+
+  /** Create a T-profile sketch centred at origin. */
+  static tShape(w1: number, h1: number, w2: number, h2: number): Sketch {
+    return tShape(w1, h1, w2, h2);
+  }
+
   /** Move to absolute position, starting a new sub-path. */
   moveTo(x: number, y: number): this {
     this._cursor = [x, y];
@@ -305,4 +325,124 @@ export function circle(radius: number, segments = 32): Sketch {
   }
   s.close();
   return s;
+}
+
+function appendArc(
+  sketch: Sketch,
+  centerX: number,
+  centerY: number,
+  radius: number,
+  startAngle: number,
+  endAngle: number,
+  segments: number,
+): void {
+  for (let i = 1; i <= segments; i++) {
+    const t = i / segments;
+    const a = startAngle + (endAngle - startAngle) * t;
+    sketch.lineTo(centerX + radius * Math.cos(a), centerY + radius * Math.sin(a));
+  }
+}
+
+/** Create a slot/stadium profile with rounded ends, centred at origin. */
+export function slot(width: number, height: number, endRadius: number): Sketch {
+  if (width <= 0 || height <= 0 || endRadius <= 0) {
+    throw new Error("slot: width, height, and endRadius must be positive");
+  }
+  if (width < endRadius * 2) {
+    throw new Error("slot: width must be at least 2 * endRadius");
+  }
+  if (height < endRadius * 2) {
+    throw new Error("slot: height must be at least 2 * endRadius");
+  }
+
+  const hw = width / 2;
+  const hh = height / 2;
+  const segments = 12;
+  const rightCenterX = hw - endRadius;
+  const leftCenterX = -hw + endRadius;
+
+  const s = Sketch.begin(rightCenterX, hh);
+  appendArc(s, rightCenterX, 0, endRadius, Math.PI / 2, -Math.PI / 2, segments);
+  s.lineTo(leftCenterX, -hh);
+  appendArc(s, leftCenterX, 0, endRadius, -Math.PI / 2, -3 * Math.PI / 2, segments);
+  s.close();
+  return s;
+}
+
+/** Create an L-profile (angle) centred at origin. */
+export function lShape(w1: number, h1: number, w2: number, h2: number): Sketch {
+  if (w1 <= 0 || h1 <= 0 || w2 <= 0 || h2 <= 0) {
+    throw new Error("lShape: all dimensions must be positive");
+  }
+  if (w2 >= w1 || h2 >= h1) {
+    throw new Error("lShape: w2 < w1 and h2 < h1 are required");
+  }
+
+  const hw = w1 / 2;
+  const hh = h1 / 2;
+  const ix = -hw + w2;
+  const iy = hh - h2;
+
+  return Sketch.begin(-hw, -hh)
+    .lineTo(hw, -hh)
+    .lineTo(hw, iy)
+    .lineTo(ix, iy)
+    .lineTo(ix, hh)
+    .lineTo(-hw, hh)
+    .close();
+}
+
+/** Create a C-channel profile centred at origin. */
+export function channel(width: number, height: number, flangeWidth: number): Sketch {
+  if (width <= 0 || height <= 0 || flangeWidth <= 0) {
+    throw new Error("channel: width, height, and flangeWidth must be positive");
+  }
+  if (flangeWidth >= width / 2 || flangeWidth >= height / 2) {
+    throw new Error("channel: flangeWidth must be less than half of width and height");
+  }
+
+  const hw = width / 2;
+  const hh = height / 2;
+  const t = flangeWidth;
+  const innerLeftX = -hw + t;
+  const innerBottomY = -hh + t;
+  const innerTopY = hh - t;
+
+  return Sketch.begin(-hw, -hh)
+    .lineTo(hw, -hh)
+    .lineTo(hw, innerBottomY)
+    .lineTo(innerLeftX, innerBottomY)
+    .lineTo(innerLeftX, innerTopY)
+    .lineTo(hw, innerTopY)
+    .lineTo(hw, hh)
+    .lineTo(-hw, hh)
+    .close();
+}
+
+/** Create a T-profile centred at origin. */
+export function tShape(w1: number, h1: number, w2: number, h2: number): Sketch {
+  if (w1 <= 0 || h1 <= 0 || w2 <= 0 || h2 <= 0) {
+    throw new Error("tShape: all dimensions must be positive");
+  }
+  if (w2 > w1) {
+    throw new Error("tShape: w2 must be <= w1");
+  }
+  if (h2 >= h1) {
+    throw new Error("tShape: h2 must be < h1");
+  }
+
+  const hw1 = w1 / 2;
+  const hw2 = w2 / 2;
+  const hh = h1 / 2;
+  const stemTopY = hh - h2;
+
+  return Sketch.begin(-hw1, stemTopY)
+    .lineTo(-hw2, stemTopY)
+    .lineTo(-hw2, -hh)
+    .lineTo(hw2, -hh)
+    .lineTo(hw2, stemTopY)
+    .lineTo(hw1, stemTopY)
+    .lineTo(hw1, hh)
+    .lineTo(-hw1, hh)
+    .close();
 }
