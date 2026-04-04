@@ -51,6 +51,8 @@ export type EventType = keyof EventPayloadMap;
 export interface EventEnvelope<T = unknown> {
   id: string;
   projectId: string;
+  branchId?: string;
+  sessionId?: string;
   actor: EventActor;
   type: EventType;
   payload: T;
@@ -59,6 +61,7 @@ export interface EventEnvelope<T = unknown> {
 
 export interface StreamQuery {
   projectId: string;
+  branchId?: string;
   limit?: number;
   types?: EventType[];
   afterTimestamp?: number;
@@ -83,6 +86,7 @@ export class InMemoryEventStore implements EventStore {
     const limit = normalizeLimit(query.limit);
     const filtered = this.events.filter((event) => {
       if (event.projectId !== query.projectId) return false;
+      if (query.branchId && event.branchId !== query.branchId) return false;
       if (query.types && query.types.length > 0 && !query.types.includes(event.type)) return false;
       if (query.afterTimestamp !== undefined && event.timestamp <= query.afterTimestamp) return false;
       if (query.beforeTimestamp !== undefined && event.timestamp >= query.beforeTimestamp) return false;
@@ -110,10 +114,12 @@ export class SqliteEventStore implements EventStore {
     this.ensureSchema();
     for (const event of events) {
       this.sql.exec(
-        `INSERT INTO session_events (id, project_id, actor_kind, actor_id, type, payload_json, ts)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO session_events (id, project_id, branch_id, session_id, actor_kind, actor_id, type, payload_json, ts)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         event.id,
         event.projectId,
+        event.branchId ?? null,
+        event.sessionId ?? null,
         event.actor.kind,
         event.actor.id ?? null,
         event.type,
@@ -129,6 +135,10 @@ export class SqliteEventStore implements EventStore {
     const clauses = ['project_id = ?'];
     const bindings: unknown[] = [query.projectId];
 
+    if (query.branchId) {
+      clauses.push('branch_id = ?');
+      bindings.push(query.branchId);
+    }
     if (query.afterTimestamp !== undefined) {
       clauses.push('ts > ?');
       bindings.push(query.afterTimestamp);
@@ -145,7 +155,7 @@ export class SqliteEventStore implements EventStore {
     bindings.push(limit);
 
     const rows = this.sql.exec(
-      `SELECT id, project_id, actor_kind, actor_id, type, payload_json, ts
+      `SELECT id, project_id, branch_id, session_id, actor_kind, actor_id, type, payload_json, ts
        FROM session_events
        WHERE ${clauses.join(' AND ')}
        ORDER BY ts DESC, id DESC
@@ -157,6 +167,8 @@ export class SqliteEventStore implements EventStore {
       .map((row) => ({
         id: String(row.id),
         projectId: String(row.project_id),
+        ...(row.branch_id ? { branchId: String(row.branch_id) } : {}),
+        ...(row.session_id ? { sessionId: String(row.session_id) } : {}),
         actor: {
           kind: normalizeActorKind(row.actor_kind),
           ...(row.actor_id ? { id: String(row.actor_id) } : {}),
@@ -174,6 +186,8 @@ export class SqliteEventStore implements EventStore {
       `CREATE TABLE IF NOT EXISTS session_events (
         id TEXT PRIMARY KEY,
         project_id TEXT NOT NULL,
+        branch_id TEXT,
+        session_id TEXT,
         actor_kind TEXT NOT NULL,
         actor_id TEXT,
         type TEXT NOT NULL,
@@ -182,8 +196,19 @@ export class SqliteEventStore implements EventStore {
       )`,
     );
     this.sql.exec('CREATE INDEX IF NOT EXISTS idx_session_events_project_ts ON session_events(project_id, ts)');
+    this.tryAddColumn('branch_id TEXT');
+    this.tryAddColumn('session_id TEXT');
+    this.sql.exec('CREATE INDEX IF NOT EXISTS idx_session_events_project_branch_ts ON session_events(project_id, branch_id, ts)');
     this.sql.exec('CREATE INDEX IF NOT EXISTS idx_session_events_project_type_ts ON session_events(project_id, type, ts)');
     this.schemaReady = true;
+  }
+
+  private tryAddColumn(columnDef: string): void {
+    try {
+      this.sql.exec(`ALTER TABLE session_events ADD COLUMN ${columnDef}`);
+    } catch {
+      // no-op: column already exists
+    }
   }
 }
 
