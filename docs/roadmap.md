@@ -118,10 +118,10 @@ Today an agent can build any shape, but nothing in the system *encourages* desig
 
 ### 1.5.1 Batch booleans & convenience methods on Solid
 
-- [ ] `Solid.subtractAll(...tools)` — subtract multiple solids in one call. Reduces verbose subtract chains.
-- [ ] `Solid.unionAll(...parts)` — union multiple solids in one call.
-- [ ] `Solid.intersectAll(...parts)` — intersect multiple solids in one call.
-- [ ] `Solid.quarterUnion(normal1, normal2)` — model one quadrant, mirror across two planes. Shorthand for `mirrorUnion(n1).mirrorUnion(n2)`.
+- [x] `Solid.subtractAll(...tools)` — subtract multiple solids in one call. Reduces verbose subtract chains.
+- [x] `Solid.unionAll(...parts)` — union multiple solids in one call.
+- [x] `Solid.intersectAll(...parts)` — intersect multiple solids in one call.
+- [x] `Solid.quarterUnion(normal1, normal2)` — model one quadrant, mirror across two planes. Shorthand for `mirrorUnion(n1).mirrorUnion(n2)`.
 
 These are small, additive changes to `src/engine/solid.ts` with no architectural impact.
 

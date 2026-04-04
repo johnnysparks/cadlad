@@ -50,6 +50,46 @@ describe("booleans", () => {
     // Overlap is 5×10×10 = 500
     expect(i.volume()).toBeCloseTo(500, 0);
   });
+
+  it("unionAll unions multiple solids in one call", () => {
+    const a = box(10, 10, 10);
+    const b = box(10, 10, 10).translate(5, 0, 0);
+    const c = box(10, 10, 10).translate(-5, 0, 0);
+
+    const chained = a.union(b).union(c);
+    const batched = a.unionAll(b, c);
+
+    expect(batched.volume()).toBeCloseTo(chained.volume(), 0);
+  });
+
+  it("subtractAll subtracts multiple cutters in one call", () => {
+    const base = box(30, 10, 10);
+    const leftCut = box(6, 12, 12).translate(-8, 0, 0);
+    const rightCut = box(6, 12, 12).translate(8, 0, 0);
+
+    const chained = base.subtract(leftCut).subtract(rightCut);
+    const batched = base.subtractAll(leftCut, rightCut);
+
+    expect(batched.volume()).toBeCloseTo(chained.volume(), 0);
+  });
+
+  it("intersectAll intersects multiple solids in one call", () => {
+    const a = box(20, 20, 20);
+    const b = box(20, 20, 20).translate(5, 0, 0);
+    const c = box(20, 20, 20).translate(0, 5, 0);
+
+    const chained = a.intersect(b).intersect(c);
+    const batched = a.intersectAll(b, c);
+
+    expect(batched.volume()).toBeCloseTo(chained.volume(), 0);
+  });
+
+  it("quarterUnion matches two mirrorUnion operations", () => {
+    const seed = box(8, 6, 4).translate(10, 12, 0);
+    const explicit = seed.mirrorUnion([1, 0, 0]).mirrorUnion([0, 1, 0]);
+    const quarter = seed.quarterUnion([1, 0, 0], [0, 1, 0]);
+    expect(quarter.volume()).toBeCloseTo(explicit.volume(), 0);
+  });
 });
 
 describe("_derive preserves metadata", () => {

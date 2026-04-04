@@ -35,12 +35,51 @@ export class Solid {
     return this._withManifold(this._manifold.add(other._manifold));
   }
 
+  /**
+   * Union this solid with multiple parts in one call.
+   * Preserves this solid's metadata (color/name).
+   */
+  unionAll(...parts: Solid[]): Solid {
+    if (parts.length === 0) return this;
+    const manifold = parts.reduce(
+      (result, part) => result.add(part._manifold),
+      this._manifold,
+    );
+    return this._withManifold(manifold);
+  }
+
   subtract(other: Solid): Solid {
     return this._withManifold(this._manifold.subtract(other._manifold));
   }
 
+  /**
+   * Subtract multiple tool solids from this solid in one call.
+   * Preserves this solid's metadata (color/name).
+   */
+  subtractAll(...tools: Solid[]): Solid {
+    if (tools.length === 0) return this;
+    const manifold = tools.reduce(
+      (result, tool) => result.subtract(tool._manifold),
+      this._manifold,
+    );
+    return this._withManifold(manifold);
+  }
+
   intersect(other: Solid): Solid {
     return this._withManifold(this._manifold.intersect(other._manifold));
+  }
+
+  /**
+   * Intersect this solid with multiple parts in one call.
+   * Preserves this solid's metadata (color/name).
+   */
+  intersectAll(...parts: Solid[]): Solid {
+    if (parts.length === 0) return this;
+    const manifold = parts.reduce(
+      (result, part) => result.intersect(part._manifold),
+      this._manifold,
+    );
+    return this._withManifold(manifold);
   }
 
   // ── Transforms ─────────────────────────────────────────────
@@ -69,6 +108,14 @@ export class Solid {
    */
   mirrorUnion(normal: Vec3): Solid {
     return this.union(this.mirror(normal));
+  }
+
+  /**
+   * Model one quadrant, then mirror-union across two planes.
+   * Equivalent to: mirrorUnion(normal1).mirrorUnion(normal2)
+   */
+  quarterUnion(normal1: Vec3, normal2: Vec3): Solid {
+    return this.mirrorUnion(normal1).mirrorUnion(normal2);
   }
 
   /**
