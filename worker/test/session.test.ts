@@ -167,15 +167,41 @@ describe('oauth-protected sessions', () => {
         'X-CadLad-Actor-Kind': 'agent',
         'X-CadLad-Actor-Id': 'test-agent',
       },
-      body: JSON.stringify({ message: 'Need semantic hole-adding helper', context: 'Had to hand-write subtract() chain' }),
+      body: JSON.stringify({
+        message: 'Need semantic hole-adding helper',
+        context: 'Had to hand-write subtract() chain',
+        category: 'api-limitation',
+        blockedTask: 'Add three through-holes with consistent offsets',
+        attemptedApproach: 'Tried to use add_feature but no hole semantic operation exists',
+        workaroundSummary: 'Manual cylinder subtract chain',
+      }),
     });
     expect(capGapResp.status).toBe(201);
+
+    const workaroundResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/workaround`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'X-CadLad-Actor-Kind': 'agent',
+        'X-CadLad-Actor-Id': 'test-agent',
+      },
+      body: JSON.stringify({
+        summary: 'Manual slot via subtract chain',
+        limitation: 'No dedicated slot primitive for this context',
+        workaround: 'Created two cylinders + bridge box and subtracted from body',
+        impact: 'medium',
+      }),
+    });
+    expect(workaroundResp.status).toBe(201);
 
     const eventLogResp = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/event-log?limit=20`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(eventLogResp.status).toBe(200);
-    const body = await eventLogResp.json() as { events: Array<{ type: string }> };
+    const body = await eventLogResp.json() as {
+      events: Array<{ type: string; payload?: { category?: string; summary?: string } }>;
+    };
     const eventTypes = body.events.map((event) => event.type);
 
     expect(eventTypes).toContain('source.replaced');
@@ -183,6 +209,11 @@ describe('oauth-protected sessions', () => {
     expect(eventTypes).toContain('agent.intent_declared');
     expect(eventTypes).toContain('evaluation.completed');
     expect(eventTypes).toContain('agent.capability_gap');
+    expect(eventTypes).toContain('agent.workaround_recorded');
+    const capGapEvent = body.events.find((event) => event.type === 'agent.capability_gap');
+    expect(capGapEvent?.payload?.category).toBe('api-limitation');
+    const workaroundEvent = body.events.find((event) => event.type === 'agent.workaround_recorded');
+    expect(workaroundEvent?.payload?.summary).toBe('Manual slot via subtract chain');
 
     const branchAware = await SELF.fetch(`${BASE}/api/live/session/${created.sessionId}/event-log?limit=20`, {
       headers: { Authorization: `Bearer ${token}` },

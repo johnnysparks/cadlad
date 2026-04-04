@@ -180,6 +180,23 @@ export interface RevertRequest {
   summary?: string;
 }
 
+export interface CapabilityGapRequest {
+  message: string;
+  context?: string;
+  category?: 'missing-primitive' | 'api-limitation' | 'validation-gap' | 'other';
+  blockedTask?: string;
+  attemptedApproach?: string;
+  workaroundSummary?: string;
+}
+
+export interface WorkaroundRecordedRequest {
+  summary: string;
+  limitation: string;
+  workaround: string;
+  impact?: 'low' | 'medium' | 'high';
+  patchId?: string;
+}
+
 export class SessionClient {
   private baseUrl: string;
   private sessionId: string;
@@ -242,6 +259,26 @@ export class SessionClient {
     });
     if (!res.ok) throw new ApiError(res.status, await res.text());
     return res.json() as Promise<{ patch: Patch; session: SessionState }>;
+  }
+
+  async reportCapabilityGap(req: CapabilityGapRequest): Promise<{ ok: boolean }> {
+    const res = await fetch(this.sessionUrl('/capability-gap'), {
+      method: 'POST',
+      headers: this.headers(true),
+      body: JSON.stringify(req),
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.text());
+    return res.json() as Promise<{ ok: boolean }>;
+  }
+
+  async recordWorkaround(req: WorkaroundRecordedRequest): Promise<{ ok: boolean }> {
+    const res = await fetch(this.sessionUrl('/workaround'), {
+      method: 'POST',
+      headers: this.headers(true),
+      body: JSON.stringify(req),
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.text());
+    return res.json() as Promise<{ ok: boolean }>;
   }
 }
 
