@@ -337,6 +337,27 @@ export interface CapabilityGapRequest {
   message: string;
   /** Optional extra context, like attempted workaround details. */
   context?: string;
+  /** Optional high-level bucket used for aggregation and prioritization. */
+  category?: 'missing-primitive' | 'api-limitation' | 'validation-gap' | 'other';
+  /** Optional description of the blocked modeling task. */
+  blockedTask?: string;
+  /** Optional description of what the agent attempted before failing. */
+  attemptedApproach?: string;
+  /** Optional one-line workaround that was used. */
+  workaroundSummary?: string;
+}
+
+export interface WorkaroundRecordedRequest {
+  /** One-line name for the workaround pattern. */
+  summary: string;
+  /** Which platform limitation forced the workaround. */
+  limitation: string;
+  /** The concrete workaround steps/hack that were used. */
+  workaround: string;
+  /** Severity/impact estimate. */
+  impact?: 'low' | 'medium' | 'high';
+  /** Optional related patch ID for traceability. */
+  patchId?: string;
 }
 
 export interface ApiError {

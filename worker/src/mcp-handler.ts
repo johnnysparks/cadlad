@@ -10,7 +10,8 @@
  * Tools: evaluate · get_stats · get_validation · compare · compare_branches · get_session_state ·
  *        list_patch_history · replace_source · apply_patch · update_params ·
  *        revert_patch · get_latest_screenshot · get_model_stats · list_features ·
- *        check_printability · check_moldability · suggest_improvements · get_capability_gap_summary
+ *        check_printability · check_moldability · suggest_improvements ·
+ *        report_capability_gap · record_workaround
  */
 
 import type { Env, SessionState, Patch, RunResult, ModelStats, RenderStatus } from './types.js';
@@ -165,6 +166,36 @@ const TOOLS = [
         minCount: { type: 'number', description: 'Only include gap signatures seen this many times (default 1).' },
       },
       required: [],
+    name: 'report_capability_gap',
+    description: 'Record an agent capability gap event (missing primitive/API/validation gap) for learning and prioritization.',
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        context: { type: 'string' },
+        category: { type: 'string', enum: ['missing-primitive', 'api-limitation', 'validation-gap', 'other'] },
+        blockedTask: { type: 'string' },
+        attemptedApproach: { type: 'string' },
+        workaroundSummary: { type: 'string' },
+      },
+      required: ['message'],
+    },
+  },
+  {
+    name: 'record_workaround',
+    description: 'Record a workaround pattern the agent used so repeated hacks can be promoted into first-class APIs.',
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        summary: { type: 'string' },
+        limitation: { type: 'string' },
+        workaround: { type: 'string' },
+        impact: { type: 'string', enum: ['low', 'medium', 'high'] },
+        patchId: { type: 'string' },
+      },
+      required: ['summary', 'limitation', 'workaround'],
     },
   },
   {
@@ -448,6 +479,48 @@ async function callTool(
       if (!resp.ok) throw new Error(`Session read failed: ${resp.status}`);
       const session = await resp.json() as SessionState;
       return { content: [{ type: 'text', text: formatSession(session) }] };
+    }
+
+    case 'report_capability_gap': {
+      const { message, context, category, blockedTask, attemptedApproach, workaroundSummary } = args as {
+        message?: string;
+        context?: string;
+        category?: 'missing-primitive' | 'api-limitation' | 'validation-gap' | 'other';
+        blockedTask?: string;
+        attemptedApproach?: string;
+        workaroundSummary?: string;
+      };
+      if (!message) throw new Error('message is required');
+      await doPost(stub, `${base}/capability-gap`, writeToken, {
+        message,
+        context,
+        category,
+        blockedTask,
+        attemptedApproach,
+        workaroundSummary,
+      });
+      return { content: [{ type: 'text', text: 'Capability gap recorded.' }] };
+    }
+
+    case 'record_workaround': {
+      const { summary, limitation, workaround, impact, patchId } = args as {
+        summary?: string;
+        limitation?: string;
+        workaround?: string;
+        impact?: 'low' | 'medium' | 'high';
+        patchId?: string;
+      };
+      if (!summary || !limitation || !workaround) {
+        throw new Error('summary, limitation, and workaround are required');
+      }
+      await doPost(stub, `${base}/workaround`, writeToken, {
+        summary,
+        limitation,
+        workaround,
+        impact,
+        patchId,
+      });
+      return { content: [{ type: 'text', text: 'Workaround recorded.' }] };
     }
 
     case 'list_patch_history': {
