@@ -143,6 +143,61 @@ Today an agent modeling in CadLad hits these walls, in order of pain:
 
 ---
 
+## For agents implementing roadmap items
+
+### Before you start
+
+1. **Read the relevant phase doc** — it has exact file paths, line numbers, and implementation notes.
+2. **`npm run typecheck` works.** Use it. It's the one reliable local check.
+3. **`npm run test` and `npm run lint` require dependencies that aren't installed locally.** They exit 0 silently. Don't trust a green exit — if you need to run tests, install vitest first (`npm install -D vitest`), or validate by reading test output carefully.
+4. **Read the code before changing it.** Many "not implemented" items have partial infrastructure already in place (types, interfaces, plumbing). Build on what exists.
+
+### Task dependency graph
+
+Some items must be done in order. Others can be parallelized.
+
+```
+CLI --json output (Phase 1)          ← no deps, do anytime
+Tool bodies (Phase 4.1)              ← no deps, do anytime
+Design intent hints (Phase 4.2)      ← needs expanded HintContext first
+  └── HintContext expansion          ← wire source/features/stats into hints.ts
+  └── Individual hint detectors      ← can parallelize after HintContext
+Assembly-preserving patterns (Phase 4.3)  ← no deps, do anytime
+paramSweepTest (Phase 4.4)           ← no deps, do anytime
+Manufacturing profiles (Phase 4.5)   ← depends on constraint infrastructure (done)
+Constraint fix suggestions (Phase 4.6)   ← depends on constraint infrastructure (done)
+Feature edit MCP tools (Phase 1.2)   ← hard; needs code generation layer
+  └── add_feature                    ← do first, proves the pattern
+  └── modify_feature / remove_feature ← depend on add_feature pattern
+Local event store (Phase 2)          ← extract from worker, medium-large
+Cross-session workaround sharing (Phase 3.5) ← depends on gap aggregation (done)
+Model quality corpus (Phase 3.4)     ← needs approval event type first
+```
+
+**Best parallelization opportunities** (independent, can run simultaneously):
+- CLI `--json` + tool bodies + assembly-preserving patterns + `paramSweepTest`
+- Individual hint detectors (after HintContext is expanded)
+- Manufacturing profiles (one per agent — FDM, injection molding, CNC)
+
+### Implementation conventions
+
+- **New API files** go in `src/api/` (e.g., `src/api/toolbody.ts`)
+- **New engine methods** go on `Solid` in `src/engine/solid.ts` using `_derive()` pattern
+- **New constraint types** add a case to `src/api/constraints.ts` and enforcement in `src/validation/layered-validation.ts:validateDeclarativeConstraints()`
+- **New MCP tools** add to both `mcp/src/server.ts` (tool definition + handler) and the worker endpoint if needed
+- **Tests** go in `src/api/__tests__/` or `src/engine/__tests__/` — co-located with the module
+- **Runtime sandbox** — if you add a new standalone function agents should use in `.forge.ts`, expose it in `src/api/runtime.ts`'s sandbox object
+- **Don't break the 25 projects** — they're the implicit test suite. Run `npm run typecheck` after any API change.
+
+### Anti-patterns
+
+- **Don't add event types speculatively.** Only add a new event type when a tool or reducer actually emits/consumes it.
+- **Don't build MCP write tools that generate raw source code inline.** The code generation for `add_feature` should be a separate, testable module — not string concatenation inside the MCP handler.
+- **Don't add heavyweight dependencies.** The constrained sketch solver is deliberately simple (iterative, no symbolic math library). Manufacturing profiles should be lookup tables + constraint config, not simulation engines.
+- **Don't optimize for edge cases before the common case works.** The hints system should detect the 3 most common anti-patterns before worrying about false positive rates.
+
+---
+
 ## What the north star gets right
 
 1. **The big separation** (transport / persistence / source / artifacts / evaluation) is the correct decomposition.
