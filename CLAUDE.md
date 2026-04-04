@@ -42,6 +42,8 @@ snapshots/   Visual regression test references
 - Metadata: `.color("#hex")`, `.named("Part Name")`
 - Query: `.volume()`, `.surfaceArea()`, `.boundingBox()`
 - Multi-part: `assembly("name").add("part", solid, [x, y, z])`
+- Reference geometry: `plane.XY/XZ/YZ`, `plane.midplane(solid, axis)`, `axis.X/Y/Z()`, `datum.fromBBox(solid, anchor)`
+- Reference placement: `solid.translateTo(plane, [dx, dy, dz])`
 - Camera hint: `return { model: solid, camera: [x, y, z] }`
 - Must `return` a Solid, Assembly, array, or `{ model, camera }` object
 

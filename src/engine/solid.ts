@@ -11,6 +11,11 @@ import type { Manifold } from "manifold-3d";
 
 type ManifoldInstance = Manifold;
 
+export type PlaneLike = {
+  origin: Vec3;
+  normal: Vec3;
+};
+
 export class Solid {
   /** @internal raw Manifold handle */
   _manifold: ManifoldInstance;
@@ -86,6 +91,41 @@ export class Solid {
 
   translate(x: number, y: number, z: number): Solid {
     return this._withManifold(this._manifold.translate(x, y, z));
+  }
+
+  /**
+   * Move this solid so its bbox center sits on a reference plane.
+   *
+   * The solid is translated along the plane normal to land on the plane,
+   * then optional XYZ offsets are applied.
+   */
+  translateTo(plane: PlaneLike, offsets: Vec3 = [0, 0, 0]): Solid {
+    const bb = this.boundingBox();
+    const center: Vec3 = [
+      (bb.min[0] + bb.max[0]) / 2,
+      (bb.min[1] + bb.max[1]) / 2,
+      (bb.min[2] + bb.max[2]) / 2,
+    ];
+    const normal = plane.normal;
+    const normalLen = Math.hypot(normal[0], normal[1], normal[2]);
+    if (normalLen < 1e-10) {
+      throw new Error("translateTo requires a plane with a non-zero normal");
+    }
+
+    const nx = normal[0] / normalLen;
+    const ny = normal[1] / normalLen;
+    const nz = normal[2] / normalLen;
+
+    const signedDistance =
+      (center[0] - plane.origin[0]) * nx +
+      (center[1] - plane.origin[1]) * ny +
+      (center[2] - plane.origin[2]) * nz;
+
+    return this.translate(
+      -signedDistance * nx + offsets[0],
+      -signedDistance * ny + offsets[1],
+      -signedDistance * nz + offsets[2],
+    );
   }
 
   rotate(x: number, y: number, z: number): Solid {
