@@ -66,7 +66,7 @@ interface FixedDistanceConstraint extends BaseConstraint {
   kind: "fixed-distance";
   pointA: string;
   pointB: string;
-  distance: number;
+  distance: number | { dimension: string };
 }
 
 interface PerpendicularConstraint extends BaseConstraint {
@@ -124,6 +124,12 @@ export interface ConstraintSolveOptions {
   tolerance?: number;
 }
 
+export interface ConstraintSolveResult {
+  converged: boolean;
+  iterations: number;
+  maxResidual: number;
+}
+
 /**
  * Lightweight iterative 2D sketch constraint solver.
  *
@@ -138,6 +144,23 @@ export class ConstrainedSketch {
   private readonly lines = new Map<string, ConstraintLine>();
   private readonly circles = new Map<string, ConstraintCircle>();
   private readonly constraints: SketchConstraint[] = [];
+  private readonly dimensions = new Map<string, number>();
+  private solveResult: ConstraintSolveResult | null = null;
+
+  dimension(id: string, value: number): this {
+    if (!Number.isFinite(value) || value <= 0) {
+      throw new Error(`ConstrainedSketch.dimension: value for "${id}" must be a positive finite number`);
+    }
+    this.dimensions.set(id, value);
+    return this;
+  }
+
+  setDimension(id: string, value: number): this {
+    if (!this.dimensions.has(id)) {
+      throw new Error(`ConstrainedSketch.setDimension: unknown dimension "${id}"`);
+    }
+    return this.dimension(id, value);
+  }
 
   point(id: string, x: number, y: number, opts?: { fixed?: boolean }): this {
     if (this.points.has(id)) throw new Error(`ConstrainedSketch.point: duplicate point id "${id}"`);
@@ -169,10 +192,16 @@ export class ConstrainedSketch {
     return this;
   }
 
-  fixedDistance(pointA: string, pointB: string, distance: number): this {
+  fixedDistance(pointA: string, pointB: string, distance: number | { dimension: string }): this {
     this.requirePoint(pointA);
     this.requirePoint(pointB);
-    if (distance <= 0) throw new Error("ConstrainedSketch.fixedDistance: distance must be positive");
+    if (typeof distance === "number" && distance <= 0) {
+      throw new Error("ConstrainedSketch.fixedDistance: distance must be positive");
+    }
+    if (typeof distance !== "number") {
+      if (!distance.dimension) throw new Error("ConstrainedSketch.fixedDistance: dimension id is required");
+      this.requireDimension(distance.dimension);
+    }
     this.constraints.push({ kind: "fixed-distance", pointA, pointB, distance });
     return this;
   }
@@ -205,15 +234,25 @@ export class ConstrainedSketch {
       throw new Error("ConstrainedSketch.solve: define at least two points before solving");
     }
 
+    let finalDelta = Number.POSITIVE_INFINITY;
     for (let i = 0; i < iterations; i++) {
       let maxDelta = 0;
       for (const constraint of this.constraints) {
         const delta = this.applyConstraint(constraint);
         if (delta > maxDelta) maxDelta = delta;
       }
-      if (maxDelta < tolerance) return this;
+      finalDelta = maxDelta;
+      if (maxDelta < tolerance) {
+        this.solveResult = { converged: true, iterations: i + 1, maxResidual: maxDelta };
+        return this;
+      }
     }
+    this.solveResult = { converged: false, iterations, maxResidual: finalDelta };
     return this;
+  }
+
+  getSolveResult(): ConstraintSolveResult | null {
+    return this.solveResult;
   }
 
   pointsSnapshot(): Record<string, Vec2> {
@@ -274,7 +313,8 @@ export class ConstrainedSketch {
     const a = this.getPoint(c.pointA);
     const b = this.getPoint(c.pointB);
     const current = Math.hypot(b.x - a.x, b.y - a.y);
-    const err = current - c.distance;
+    const targetDistance = this.resolveDistance(c.distance);
+    const err = current - targetDistance;
     if (Math.abs(err) < 1e-10) return 0;
 
     const direction = current < 1e-10 ? [1, 0] as Vec2 : normalize2([b.x - a.x, b.y - a.y]);
@@ -389,6 +429,19 @@ export class ConstrainedSketch {
 
   private requireCircle(id: string): void {
     if (!this.circles.has(id)) throw new Error(`ConstrainedSketch: unknown circle "${id}"`);
+  }
+
+  private requireDimension(id: string): void {
+    if (!this.dimensions.has(id)) throw new Error(`ConstrainedSketch: unknown dimension "${id}"`);
+  }
+
+  private resolveDistance(distance: number | { dimension: string }): number {
+    if (typeof distance === "number") return distance;
+    const value = this.dimensions.get(distance.dimension);
+    if (value === undefined) {
+      throw new Error(`ConstrainedSketch: unknown dimension "${distance.dimension}"`);
+    }
+    return value;
   }
 
   private getPoint(id: string): ConstraintPoint {

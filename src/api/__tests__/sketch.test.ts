@@ -217,4 +217,43 @@ describe("constrained sketch solver", () => {
     expect(pts.l0[1]).toBeCloseTo(5, 2);
     expect(pts.l1[1]).toBeCloseTo(5, 2);
   });
+
+  it("supports driving dimensions and re-solves when dimensions change", () => {
+    const constrained = Sketch.constrained()
+      .point("a", 0, 0, { fixed: true })
+      .point("b", 12, 0)
+      .point("c", 12, 6)
+      .point("d", 0, 6)
+      .line("ab", "a", "b")
+      .line("bc", "b", "c")
+      .line("cd", "c", "d")
+      .line("da", "d", "a")
+      .dimension("width", 12)
+      .dimension("height", 6)
+      .fixedDistance("a", "b", { dimension: "width" })
+      .fixedDistance("b", "c", { dimension: "height" })
+      .equalLength("ab", "cd")
+      .equalLength("bc", "da")
+      .perpendicular("ab", "bc")
+      .solve();
+
+    const first = constrained.pointsSnapshot();
+    const firstWidth = Math.hypot(first.b[0] - first.a[0], first.b[1] - first.a[1]);
+    const firstHeight = Math.hypot(first.c[0] - first.b[0], first.c[1] - first.b[1]);
+    expect(firstWidth).toBeCloseTo(12, 2);
+    expect(firstHeight).toBeCloseTo(6, 2);
+    expect(constrained.getSolveResult()?.converged).toBe(true);
+
+    constrained
+      .setDimension("width", 40)
+      .setDimension("height", 2)
+      .solve({ iterations: 120 });
+
+    const second = constrained.pointsSnapshot();
+    const secondWidth = Math.hypot(second.b[0] - second.a[0], second.b[1] - second.a[1]);
+    const secondHeight = Math.hypot(second.c[0] - second.b[0], second.c[1] - second.b[1]);
+    expect(secondWidth).toBeCloseTo(40, 2);
+    expect(secondHeight).toBeCloseTo(2, 2);
+    expect(constrained.getSolveResult()?.converged).toBe(true);
+  });
 });
