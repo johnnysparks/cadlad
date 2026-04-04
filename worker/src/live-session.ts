@@ -24,6 +24,7 @@ import type {
 import { createLinkCode, saveScreenshot } from './oauth-store.js';
 import type { EventActor, EventEnvelope, EventType } from './event-store.js';
 import { SqliteEventStore } from './event-store.js';
+import { buildApiImprovementReport } from './agent-learning.js';
 
 const MAX_PATCHES = 100;
 const HEARTBEAT_INTERVAL_MS = 25_000; // keep SSE connections alive
@@ -139,6 +140,7 @@ export class LiveSession implements DurableObject {
       if (request.method === 'GET' && (sub === '' || sub === '/')) return this.handleGetSession();
       if (request.method === 'GET' && sub === '/history') return this.handleGetHistory(url);
       if (request.method === 'GET' && sub === '/event-log') return this.handleGetEventLog(url);
+      if (request.method === 'GET' && sub === '/api-improvements') return this.handleGetApiImprovements(url);
       if (request.method === 'GET' && sub === '/revisions') return this.handleGetRevisions(url);
       const revisionMatch = sub.match(/^\/revisions\/(\d+)$/);
       if (request.method === 'GET' && revisionMatch) return this.handleGetRevision(Number(revisionMatch[1]));
@@ -258,6 +260,25 @@ export class LiveSession implements DurableObject {
       beforeTimestamp: Number.isFinite(beforeTimestamp) ? beforeTimestamp : undefined,
     });
     return ok({ events, total: events.length, limit });
+  }
+
+
+  private async handleGetApiImprovements(url: URL): Promise<Response> {
+    const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '500', 10), 2000);
+    const threshold = Math.max(parseInt(url.searchParams.get('threshold') ?? '2', 10), 1);
+    const events = await this.eventStore.readStream({
+      projectId: this.id,
+      branchId: this.branch.id,
+      limit,
+      types: ['agent.capability_gap', 'agent.workaround_recorded'],
+    });
+    const report = buildApiImprovementReport(events, { promotionThreshold: threshold });
+    return ok({
+      branchId: this.branch.id,
+      threshold,
+      eventSampleSize: events.length,
+      report,
+    });
   }
 
   private handleGetRevisions(url: URL): Response {

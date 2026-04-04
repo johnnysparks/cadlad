@@ -255,9 +255,9 @@ The north star calls agent learning events "gold." Agreed — this is what makes
 
 ### 3.3 Auto-generated API improvements
 
-- [ ] When a workaround pattern appears repeatedly, flag it for promotion to a first-class API method.
-- [ ] Example: if agents repeatedly do `box(...).subtract(box(...).translate(...))` to create slots, that suggests a `slot()` primitive.
-- [ ] The system proposes new primitives/helpers based on observed agent behavior.
+- [x] When a workaround pattern appears repeatedly, flag it for promotion to a first-class API method.
+- [x] Example: if agents repeatedly do `box(...).subtract(box(...).translate(...))` to create slots, that suggests a `slot()` primitive.
+- [x] The system proposes new primitives/helpers based on observed agent behavior.
 
 ### 3.4 Model quality corpus
 
