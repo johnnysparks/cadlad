@@ -219,10 +219,10 @@ This is the north star's core architecture, but motivated by agent workflows rat
 
 ### 2.3 Branches
 
-- [ ] `Branch` type: named pointer to a head revision.
-- [ ] An agent can branch to explore an alternative approach without losing the current one.
-- [ ] `compare_branches(a, b)` → structured diff of geometry, params, validation at branch heads.
-- [ ] An agent (or human) can pick the better branch and continue from there.
+- [x] `Branch` type: named pointer to a head revision.
+- [x] An agent can branch to explore an alternative approach without losing the current one.
+- [x] `compare_branches(a, b)` → structured diff of geometry, params, validation at branch heads.
+- [x] An agent (or human) can pick the better branch and continue from there.
 
 **Why branches matter for agents:** Agents naturally explore. "Try a thicker wall" and "try a different handle shape" are parallel explorations. Without branches, the agent has to remember (or reconstruct) the alternative. With branches, it forks, evaluates both, and picks the winner — or asks the human to choose.
 

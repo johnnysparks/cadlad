@@ -15,6 +15,7 @@ import type {
   CapabilityGapRequest,
   RevisionSnapshot,
   RevisionEvaluationRef,
+  Branch,
 } from './types.js';
 import { createLinkCode, saveScreenshot } from './oauth-store.js';
 import type { EventActor, EventEnvelope, EventType } from './event-store.js';
@@ -38,6 +39,8 @@ interface StoredSession {
   lastRunResult?: RunResult | null;
   lastRunRevision?: number | null;
   revisions?: RevisionSnapshot[];
+  branches?: Branch[];
+  activeBranchId?: string;
 }
 
 // ── Durable Object ────────────────────────────────────────────────────────────
@@ -64,6 +67,8 @@ export class LiveSession implements DurableObject {
   /** Revision associated with lastRunResult */
   private lastRunRevision: number | null = null;
   private revisions: RevisionSnapshot[] = [];
+  private branches: Branch[] = [];
+  private activeBranchId = '';
   private readonly eventStore: SqliteEventStore;
 
   constructor(state: DurableObjectState, env: Env) {
@@ -86,6 +91,8 @@ export class LiveSession implements DurableObject {
         this.lastRunResult = stored.lastRunResult ?? null;
         this.lastRunRevision = stored.lastRunRevision ?? null;
         this.revisions = stored.revisions ?? [];
+        this.branches = stored.branches ?? [];
+        this.activeBranchId = stored.activeBranchId ?? '';
       }
     });
   }
@@ -110,6 +117,11 @@ export class LiveSession implements DurableObject {
       if (request.method === 'GET' && sub === '/revisions') return this.handleGetRevisions(url);
       const revisionMatch = sub.match(/^\/revisions\/(\d+)$/);
       if (request.method === 'GET' && revisionMatch) return this.handleGetRevision(Number(revisionMatch[1]));
+      if (request.method === 'GET' && sub === '/branches') return this.handleGetBranches();
+      if (request.method === 'POST' && sub === '/branches') return this.handleCreateBranch(request);
+      const branchCheckoutMatch = sub.match(/^\/branches\/([^/]+)\/checkout$/);
+      if (request.method === 'POST' && branchCheckoutMatch) return this.handleCheckoutBranch(request, branchCheckoutMatch[1]);
+      if (request.method === 'GET' && sub === '/compare-branches') return this.handleCompareBranches(url);
       if (request.method === 'GET' && sub === '/events') return this.handleSSE(request);
       if (request.method === 'GET' && sub === '/run-result') return this.handleGetRunResult();
       if (request.method === 'POST' && sub === '/patch') return this.handlePatch(request);
@@ -139,6 +151,17 @@ export class LiveSession implements DurableObject {
     this.writeToken = body.writeToken;
     this.createdAt = Date.now();
     this.updatedAt = Date.now();
+    const mainBranch: Branch = {
+      id: crypto.randomUUID(),
+      name: 'main',
+      headRevision: 1,
+      baseRevision: null,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      actor: { kind: 'human' },
+    };
+    this.branches = [mainBranch];
+    this.activeBranchId = mainBranch.id;
 
     const initial: Patch = {
       id: crypto.randomUUID(),
@@ -215,6 +238,113 @@ export class LiveSession implements DurableObject {
       params: snapshot.params,
       stats: patch?.runResult?.stats ?? null,
       validation: patch?.runResult?.evaluation ?? null,
+    });
+  }
+
+  private handleGetBranches(): Response {
+    return ok({
+      activeBranchId: this.activeBranchId || null,
+      branches: this.branches,
+    });
+  }
+
+  private async handleCreateBranch(request: Request): Promise<Response> {
+    const authErr = this.checkAuth(request);
+    if (authErr) return authErr;
+
+    const body = await request.json() as { name?: string; fromRevision?: number };
+    const name = body.name?.trim();
+    if (!name) return err('name is required', 'INVALID_REQUEST', 400);
+    if (this.branches.some((branch) => branch.name === name)) {
+      return err('Branch name already exists', 'BRANCH_NAME_CONFLICT', 409);
+    }
+
+    const fromRevision = typeof body.fromRevision === 'number' ? body.fromRevision : this.revision;
+    const snapshot = this.revisions.find((entry) => entry.revision === fromRevision);
+    if (!snapshot) return err('fromRevision not found', 'REVISION_NOT_FOUND', 404);
+
+    const actor = this.resolveActor(request);
+    const now = Date.now();
+    const branch: Branch = {
+      id: crypto.randomUUID(),
+      name,
+      headRevision: fromRevision,
+      baseRevision: fromRevision,
+      createdAt: now,
+      updatedAt: now,
+      actor,
+    };
+    this.branches.push(branch);
+    await this.persist();
+    return ok({ branch }, 201);
+  }
+
+  private async handleCheckoutBranch(request: Request, branchId: string): Promise<Response> {
+    const authErr = this.checkAuth(request);
+    if (authErr) return authErr;
+
+    const branch = this.branches.find((entry) => entry.id === branchId);
+    if (!branch) return err('Branch not found', 'BRANCH_NOT_FOUND', 404);
+    const head = this.revisions.find((entry) => entry.revision === branch.headRevision);
+    if (!head) return err('Branch head revision not found', 'REVISION_NOT_FOUND', 404);
+
+    this.activeBranchId = branch.id;
+    this.source = head.source;
+    this.params = { ...head.params };
+    this.revision = head.revision;
+    this.updatedAt = Date.now();
+    await this.persist();
+    return ok({
+      branch,
+      session: this.fullState(),
+      message: `Checked out branch "${branch.name}" at revision ${branch.headRevision}.`,
+    });
+  }
+
+  private handleCompareBranches(url: URL): Response {
+    const branchAId = url.searchParams.get('a');
+    const branchBId = url.searchParams.get('b');
+    if (!branchAId || !branchBId) {
+      return err('Query params "a" and "b" are required', 'INVALID_REQUEST', 400);
+    }
+    const branchA = this.branches.find((entry) => entry.id === branchAId);
+    const branchB = this.branches.find((entry) => entry.id === branchBId);
+    if (!branchA || !branchB) return err('One or both branches not found', 'BRANCH_NOT_FOUND', 404);
+    const revisionA = this.revisions.find((entry) => entry.revision === branchA.headRevision);
+    const revisionB = this.revisions.find((entry) => entry.revision === branchB.headRevision);
+    if (!revisionA || !revisionB) return err('One or both branch heads are missing revisions', 'REVISION_NOT_FOUND', 404);
+    const patchA = this.patches.find((entry) => entry.revision === branchA.headRevision);
+    const patchB = this.patches.find((entry) => entry.revision === branchB.headRevision);
+    return ok({
+      branches: {
+        a: { id: branchA.id, name: branchA.name, headRevision: branchA.headRevision },
+        b: { id: branchB.id, name: branchB.name, headRevision: branchB.headRevision },
+      },
+      revisions: {
+        a: {
+          revision: revisionA.revision,
+          sourceHash: revisionA.sourceHash,
+          params: revisionA.params,
+          evaluation: revisionA.evaluation ?? null,
+        },
+        b: {
+          revision: revisionB.revision,
+          sourceHash: revisionB.sourceHash,
+          params: revisionB.params,
+          evaluation: revisionB.evaluation ?? null,
+        },
+      },
+      diff: {
+        stats: compareStats(patchA?.runResult?.stats, patchB?.runResult?.stats),
+        validation: {
+          errorCountDelta:
+            (patchB?.runResult?.evaluation?.summary.errorCount ?? 0)
+            - (patchA?.runResult?.evaluation?.summary.errorCount ?? 0),
+          warningCountDelta:
+            (patchB?.runResult?.evaluation?.summary.warningCount ?? 0)
+            - (patchA?.runResult?.evaluation?.summary.warningCount ?? 0),
+        },
+      },
     });
   }
 
@@ -320,6 +450,7 @@ export class LiveSession implements DurableObject {
       eventIds: events.map((event) => event.id),
       actor,
     });
+    this.updateActiveBranchHead(this.revision);
     await this.persist();
 
     const event: SessionEvent = { type: 'patch_applied', patch, session: this.summary() };
@@ -370,6 +501,7 @@ export class LiveSession implements DurableObject {
       eventIds: revertEvents.map((event) => event.id),
       actor,
     });
+    this.updateActiveBranchHead(this.revision);
     await this.persist();
 
     const event: SessionEvent = { type: 'patch_reverted', patch: revertPatch, session: this.summary() };
@@ -532,6 +664,8 @@ export class LiveSession implements DurableObject {
         : null,
       lastRunRevision: this.lastRunRevision,
       revisions: this.revisions,
+      branches: this.branches,
+      activeBranchId: this.activeBranchId,
     };
     await this.state.storage.put('session', stored);
   }
@@ -651,6 +785,17 @@ export class LiveSession implements DurableObject {
     if (!target) return;
     target.evaluation = evaluation;
   }
+
+  private updateActiveBranchHead(revision: number): void {
+    if (!this.activeBranchId) return;
+    const idx = this.branches.findIndex((branch) => branch.id === this.activeBranchId);
+    if (idx < 0) return;
+    this.branches[idx] = {
+      ...this.branches[idx],
+      headRevision: revision,
+      updatedAt: Date.now(),
+    };
+  }
 }
 
 // ── SSE / response utilities ──────────────────────────────────────────────────
@@ -685,4 +830,34 @@ async function hashText(input: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
   const bytes = new Uint8Array(digest);
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+type ComparableStats = {
+  triangles: number;
+  bodies: number;
+  volume?: number;
+  surfaceArea?: number;
+  componentCount?: number;
+};
+
+function compareStats(
+  a: ComparableStats | undefined,
+  b: ComparableStats | undefined,
+): Record<string, number | null> {
+  if (!a || !b) {
+    return {
+      triangles: null,
+      bodies: null,
+      volume: null,
+      surfaceArea: null,
+      componentCount: null,
+    };
+  }
+  return {
+    triangles: b.triangles - a.triangles,
+    bodies: b.bodies - a.bodies,
+    volume: (b.volume ?? 0) - (a.volume ?? 0),
+    surfaceArea: (b.surfaceArea ?? 0) - (a.surfaceArea ?? 0),
+    componentCount: (b.componentCount ?? 0) - (a.componentCount ?? 0),
+  };
 }
