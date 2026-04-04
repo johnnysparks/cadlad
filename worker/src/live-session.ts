@@ -23,7 +23,7 @@ import type {
 } from './types.js';
 import { createLinkCode, saveScreenshot } from './oauth-store.js';
 import type { EventActor, EventEnvelope, EventType } from './event-store.js';
-import { SqliteEventStore } from './event-store.js';
+import { SqliteEventStore, createDurableObjectSqliteRunner } from './event-store.js';
 import { recordCapabilityGapEvent } from './capability-gap-reducer.js';
 import { buildApiImprovementReport } from './agent-learning.js';
 
@@ -98,7 +98,7 @@ export class LiveSession implements DurableObject {
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
-    this.eventStore = new SqliteEventStore(this.state.storage.sql);
+    this.eventStore = new SqliteEventStore(createDurableObjectSqliteRunner(this.state.storage.sql));
 
     this.state.blockConcurrencyWhile(async () => {
       const stored = await this.state.storage.get<StoredSession>('session');
