@@ -303,7 +303,7 @@ async function cmdExport(args: string[]) {
 async function cmdEval(args: string[]) {
   const parsed = parseEvalArgs(args);
   if (!parsed.taskPath) {
-    console.error("Usage: cadlad eval <task.yaml|task-dir> [--model <provider://model|http://host/model>]");
+    console.error("Usage: cadlad eval <task.yaml|task-dir> [--model <provider://model|http://host/model>] [--judge <provider://model|http://host/model>] [--no-judge]");
     process.exit(1);
   }
 
@@ -319,7 +319,8 @@ async function cmdEval(args: string[]) {
   for (const taskFile of taskFiles) {
     try {
       const task = loadTaskFile(taskFile);
-      const result = await runEval(task, modelConfig);
+      const judgeConfig = parsed.noJudge || !parsed.judgeModelRef ? undefined : parseModelConfig(parsed.judgeModelRef);
+      const result = await runEval(task, modelConfig, { judgeConfig });
       if (!result.pass) {
         allPass = false;
       }
@@ -327,9 +328,10 @@ async function cmdEval(args: string[]) {
       const status = result.pass ? "PASS" : "FAIL";
       const seconds = (result.duration_ms / 1000).toFixed(1);
       const tokens = result.total_tokens.toLocaleString("en-US");
+      const judgeSuffix = result.judge !== undefined ? ` (judge:${Math.round(result.judge)})` : "";
       const reasonSuffix = result.pass ? "" : `  reason: ${result.reason ?? "score below threshold"}`;
       console.log(
-        `[eval] ${task.id.padEnd(14)} ${status.padEnd(4)}  score=${Math.round(result.score)}  iterations=${result.iterations}  tokens=${tokens}  time=${seconds}s${reasonSuffix}`,
+        `[eval] ${task.id.padEnd(14)} ${status.padEnd(4)}  score=${Math.round(result.score)}${judgeSuffix}  iterations=${result.iterations}  tokens=${tokens}  time=${seconds}s${reasonSuffix}`,
       );
     } catch (error) {
       allPass = false;
@@ -419,7 +421,7 @@ Usage:
   cadlad history --file <file.forge.ts> [--limit N] [--offset N] [--json]
                                        Show local revision history
   cadlad export <file> -o output.stl    Export model to STL
-  cadlad eval <task.yaml|dir> [--model <provider://model|http://host/model>]
+  cadlad eval <task.yaml|dir> [--model <provider://model|http://host/model>] [--judge <provider://model|http://host/model>] [--no-judge]
                                        Run one or many eval tasks
   cadlad studio                         Launch browser studio
 `);
@@ -573,10 +575,12 @@ function parseHistoryArgs(args: string[]): { file?: string; limit: number; offse
   return parsed;
 }
 
-function parseEvalArgs(args: string[]): { taskPath?: string; modelRef: string } {
+function parseEvalArgs(args: string[]): { taskPath?: string; modelRef: string; judgeModelRef?: string; noJudge: boolean } {
   const parsed = {
     taskPath: undefined as string | undefined,
     modelRef: "ollama://llama3.2",
+    judgeModelRef: undefined as string | undefined,
+    noJudge: false,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -584,6 +588,15 @@ function parseEvalArgs(args: string[]): { taskPath?: string; modelRef: string } 
     if (arg === "--model") {
       parsed.modelRef = args[index + 1] ?? parsed.modelRef;
       index += 1;
+      continue;
+    }
+    if (arg === "--judge") {
+      parsed.judgeModelRef = args[index + 1] ?? parsed.judgeModelRef;
+      index += 1;
+      continue;
+    }
+    if (arg === "--no-judge") {
+      parsed.noJudge = true;
       continue;
     }
     if (arg.startsWith("-")) {
