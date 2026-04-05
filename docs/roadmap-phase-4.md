@@ -176,13 +176,13 @@ interface HintContext {
 
 ### 4.3 Assembly-preserving patterns
 
-**Status: NOT IMPLEMENTED**
+**Status: DONE**
 
 The existing pattern methods (`linearPattern`, `circularPattern`, `mirrorUnion`) produce anonymous unions. When parts need distinct colors or names, you need assembly-preserving variants.
 
-- [ ] `Solid.mirrorAssembly(normal, namePrefix?)` — mirrors into an Assembly (preserves part identity/color)
-- [ ] `Solid.linearPatternAssembly(count, step, namePrefix?)` — pattern into Assembly
-- [ ] `Solid.circularPatternAssembly(count, axis, angle, center, namePrefix?)` — pattern into Assembly
+- [x] `Solid.mirrorAssembly(normal, namePrefix?)` — mirrors into an Assembly (preserves part identity/color)
+- [x] `Solid.linearPatternAssembly(count, step, namePrefix?)` — pattern into Assembly
+- [x] `Solid.circularPatternAssembly(count, axis, angle, center, namePrefix?)` — pattern into Assembly
 
 **Scope:** Small. Each method is ~15 lines — create N transformed copies, add to an Assembly with prefixed names.
 
@@ -258,7 +258,7 @@ Suggested: increase shell thickness parameter from 1.5 to 2.5mm.
 |---|---|---|---|
 | Tool bodies (4.1) | not started | S-M | **high** — enables pro boolean patterns |
 | Design intent hints (4.2) | stub only | M | **high** — teaches agents good patterns |
-| Assembly-preserving patterns (4.3) | not started | S | medium |
+| Assembly-preserving patterns (4.3) | done | S | medium |
 | Parametric robustness testing (4.4) | not started | M | medium |
 | Manufacturing profiles (4.5) | not started | M per profile | medium — FDM first |
 | Constraint-aware suggestions (4.6) | not started | S per constraint | medium |

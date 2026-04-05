@@ -454,12 +454,35 @@ describe("transforms", () => {
     expect(bb.max[0]).toBeCloseTo(25);
   });
 
+  it("mirrorAssembly preserves separate part identities", () => {
+    const mirrored = box(10, 10, 10)
+      .translate(20, 0, 0)
+      .color("#ff0000")
+      .mirrorAssembly([1, 0, 0], "leg");
+    const bodies = mirrored.toBodies();
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0].name).toBe("mirror-pattern/leg-0");
+    expect(bodies[1].name).toBe("mirror-pattern/leg-1");
+    expect(bodies[0].color).toEqual(bodies[1].color);
+  });
+
   it("linearPattern repeats instances along axis", () => {
     const patterned = box(10, 10, 10).linearPattern(3, 20, 0, 0);
     const bb = patterned.boundingBox();
     expect(bb.min[0]).toBeCloseTo(-5);
     expect(bb.max[0]).toBeCloseTo(45);
     expect(patterned.volume()).toBeCloseTo(3000, 0);
+  });
+
+  it("linearPatternAssembly returns positioned parts with generated names", () => {
+    const patterned = box(10, 10, 10)
+      .linearPatternAssembly(3, [20, 0, 0], "tooth")
+      .toBodies();
+    expect(patterned).toHaveLength(3);
+    expect(patterned[0].name).toBe("linear-pattern/tooth-0");
+    expect(patterned[1].name).toBe("linear-pattern/tooth-1");
+    expect(patterned[2].name).toBe("linear-pattern/tooth-2");
+    expect(patterned[0].mesh.positions[0]).not.toBeCloseTo(patterned[1].mesh.positions[0]);
   });
 
   it("circularPattern creates copies around Z axis", () => {
@@ -471,6 +494,16 @@ describe("transforms", () => {
     expect(bb.min[1]).toBeCloseTo(-25, 0);
     expect(bb.max[1]).toBeCloseTo(25, 0);
     expect(patterned.volume()).toBeCloseTo(seed.volume() * 4, 0);
+  });
+
+  it("circularPatternAssembly returns separate parts", () => {
+    const seed = box(10, 10, 10).translate(20, 0, 0).color("#00ff00");
+    const patterned = seed.circularPatternAssembly(4, "z", 360, [0, 0, 0], "spoke");
+    const bodies = patterned.toBodies();
+    expect(bodies).toHaveLength(4);
+    expect(bodies[0].name).toBe("circular-pattern/spoke-0");
+    expect(bodies[3].name).toBe("circular-pattern/spoke-3");
+    expect(bodies[0].color).toEqual(bodies[1].color);
   });
 
   it("color survives all transforms", () => {
@@ -488,6 +521,8 @@ describe("transforms", () => {
   it("patterns validate count", () => {
     expect(() => box(10, 10, 10).linearPattern(0, 10, 0, 0)).toThrow(">= 1");
     expect(() => box(10, 10, 10).circularPattern(0, "z", 360)).toThrow(">= 1");
+    expect(() => box(10, 10, 10).linearPatternAssembly(0)).toThrow(">= 1");
+    expect(() => box(10, 10, 10).circularPatternAssembly(0)).toThrow(">= 1");
   });
 });
 

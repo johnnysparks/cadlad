@@ -51,6 +51,7 @@ The roadmap is split into per-phase docs in `docs/`. Read [docs/roadmap.md](docs
 - Shell: `.shell(thickness)` — hollow out a solid with uniform wall thickness
 - Draft: `.draft(angleDeg)` — taper walls for mold release (positive = inward going up)
 - Transforms: `.translate()`, `.rotate()`, `.scale()`, `.mirror()`
+- Assembly-preserving patterns: `.mirrorAssembly()`, `.linearPatternAssembly()`, `.circularPatternAssembly()`
 - Metadata: `.color("#hex")`, `.named("Part Name")`
 - Query: `.volume()`, `.surfaceArea()`, `.boundingBox()`
 - Multi-part: `assembly("name").add("part", solid, [x, y, z])`
