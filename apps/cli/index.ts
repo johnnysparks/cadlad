@@ -668,10 +668,11 @@ async function fetchJsonWithTimeout(url: string, timeoutMs: number, headers?: Re
       headers,
       signal: controller.signal,
     });
-    const payload = await response.json().catch(() => undefined);
+    const payload: Record<string, unknown> | undefined = await response.json().catch(() => undefined);
     if (!response.ok) {
-      const detail = typeof payload?.error?.message === "string"
-        ? payload.error.message
+      const err = typeof payload?.error === "object" ? payload?.error as Record<string, unknown> : undefined;
+      const detail = typeof err?.message === "string"
+        ? err.message
         : typeof payload?.error === "string"
           ? payload.error
           : JSON.stringify(payload);
@@ -821,7 +822,7 @@ function parseBranchArgs(args: string[]): {
   json: boolean;
 } {
   const first = args[0];
-  const subcommand = first === 'create' || first === 'checkout' ? first : 'list';
+  const subcommand: 'list' | 'create' | 'checkout' = first === 'create' || first === 'checkout' ? first : 'list';
   const parsed = {
     subcommand,
     file: undefined as string | undefined,
