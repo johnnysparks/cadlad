@@ -20,6 +20,7 @@ import { formatValidationDiagnostic } from "../validation/layered-validation.js"
 import { LocalHistoryStore } from "./local-history-store.js";
 import { RevisionBranchError } from "../core/revision-branch.js";
 import { runEval } from "../eval/runner.js";
+import { buildAdhocTask, getAdhocPassThreshold } from "../eval/adhoc.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -301,17 +302,38 @@ async function cmdExport(args: string[]) {
 
 async function cmdEval(args: string[]) {
   const parsed = parseEvalArgs(args);
-  if (!parsed.taskPath) {
-    console.error("Usage: cadlad eval <task.yaml> [--model <provider://model|http://host/model>] [--pass-threshold <number>]");
+
+  if (!parsed.taskDescription && !parsed.taskPath) {
+    console.error("Usage: cadlad eval <task.yaml> [--model <provider://model>] [--pass-threshold <number>]");
+    console.error("       cadlad eval --task \"<description>\" [--model <provider://model>]");
     process.exit(1);
   }
 
   try {
-    const result = await runEval({
-      taskPath: parsed.taskPath,
-      modelRef: parsed.modelRef,
-      passThreshold: parsed.passThreshold,
-    });
+    let runOptions: Parameters<typeof runEval>[0];
+
+    if (parsed.taskDescription) {
+      const adhocOpts = {
+        difficulty: parsed.taskDifficulty,
+        max_iterations: parsed.taskMaxIter,
+      };
+      const task = buildAdhocTask(parsed.taskDescription, adhocOpts);
+      const passThreshold = parsed.passThreshold ?? getAdhocPassThreshold();
+      const maxIter = task.max_iterations ?? 5;
+
+      console.log(`[eval] Ad-hoc task: ${task.id}`);
+      console.log(`[eval] Inferred API surface: ${task.api_surface.join(", ")}`);
+      const ac = task.acceptance;
+      const bodyPart = ac.body_count_min !== undefined ? `body_count_min=${ac.body_count_min}` : `body_count=${ac.body_count ?? 1}`;
+      console.log(`[eval] Acceptance: ${bodyPart}, validation_errors=${ac.validation_errors ?? 0}, volume_min=${ac.volume_min ?? 100}`);
+      console.log(`[eval] Running with ${parsed.modelRef} (max ${maxIter} iterations, pass threshold ${passThreshold})...`);
+
+      runOptions = { task, modelRef: parsed.modelRef, passThreshold };
+    } else {
+      runOptions = { taskPath: parsed.taskPath, modelRef: parsed.modelRef, passThreshold: parsed.passThreshold };
+    }
+
+    const result = await runEval(runOptions);
 
     const icon = result.pass ? "PASS" : "FAIL";
     console.log(`[cadlad eval] ${icon} task=${result.task.id} score=${result.score.score.toFixed(2)} run=${result.runId}`);
@@ -388,6 +410,12 @@ Usage:
   cadlad export <file> -o output.stl    Export model to STL
   cadlad eval <task.yaml> [--model <provider://model|http://host/model>] [--pass-threshold <number>]
                                        Run one eval task end-to-end
+  cadlad eval --task "A dice with rounded edges" --model ollama://qwen3:8b
+                                       Ad-hoc eval from description (synthesizes TaskSpec)
+  cadlad eval --task "Phone stand with cable slot" --judge anthropic://claude-sonnet-4-6
+                                       Ad-hoc eval with custom judge
+  cadlad eval --task "..." [--task-difficulty <n>] [--task-max-iter <n>]
+                                       Override ad-hoc difficulty or iteration count
   cadlad studio                         Launch browser studio
 `);
 }
@@ -540,15 +568,40 @@ function parseHistoryArgs(args: string[]): { file?: string; limit: number; offse
   return parsed;
 }
 
-function parseEvalArgs(args: string[]): { taskPath?: string; modelRef: string; passThreshold?: number } {
+function parseEvalArgs(args: string[]): {
+  taskPath?: string;
+  taskDescription?: string;
+  taskDifficulty?: number;
+  taskMaxIter?: number;
+  modelRef: string;
+  passThreshold?: number;
+} {
   const parsed = {
     taskPath: undefined as string | undefined,
+    taskDescription: undefined as string | undefined,
+    taskDifficulty: undefined as number | undefined,
+    taskMaxIter: undefined as number | undefined,
     modelRef: "ollama://llama3.2",
     passThreshold: undefined as number | undefined,
   };
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+    if (arg === "--task") {
+      parsed.taskDescription = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === "--task-difficulty") {
+      parsed.taskDifficulty = Number(args[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (arg === "--task-max-iter") {
+      parsed.taskMaxIter = Number(args[index + 1]);
+      index += 1;
+      continue;
+    }
     if (arg === "--model") {
       parsed.modelRef = args[index + 1] ?? parsed.modelRef;
       index += 1;

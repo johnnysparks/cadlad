@@ -10,7 +10,8 @@ import { generateCode, parseModelConfig } from "./model-adapter.js";
 import type { EvalEvent, EvalResult, PrimitiveName, RunSummary, TaskAcceptanceCriteria, TaskSpec } from "./types.js";
 
 export interface EvalRunnerOptions {
-  taskPath: string;
+  taskPath?: string;
+  task?: TaskSpec;
   modelRef: string;
   passThreshold?: number;
 }
@@ -26,7 +27,10 @@ export interface EvalRunResult {
 }
 
 export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult> {
-  const task = loadTaskSpec(options.taskPath);
+  if (!options.task && !options.taskPath) {
+    throw new Error("runEval requires either task or taskPath.");
+  }
+  const task = options.task ?? loadTaskSpec(options.taskPath!);
   const model = parseModelConfig(options.modelRef);
   const runId = randomUUID();
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
