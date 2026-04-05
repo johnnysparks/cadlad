@@ -5,8 +5,8 @@ import type {
   ModelResult,
   ParamDef,
   ValidationDiagnostic,
-} from "../cad-kernel/types.js";
-import { computeModelStats } from "./model-stats.js";
+} from "@cadlad/kernel/types.js";
+import { computeModelStats } from "@cadlad/rendering/model-stats.js";
 
 export interface RunReport {
   bodies: number;

@@ -8,9 +8,9 @@ import type {
   SceneValidationReport,
   ValidationDiagnostic,
   ValidationStage,
-} from "../cad-kernel/types.js";
-import type { SceneConstraint } from "../api/constraints.js";
-import { computeModelStats } from "../studio/model-stats.js";
+} from "@cadlad/kernel/types.js";
+import type { SceneConstraint } from "@cadlad/api/constraints.js";
+import { computeModelStats } from "@cadlad/rendering/model-stats.js";
 
 export const VALIDATION_STAGES = [
   "types/schema",

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import type { ModelResult } from '../cad-kernel/types.js';
+import type { ModelResult } from '@cadlad/kernel/types.js';
 import { LocalHistoryStore } from './local-history-store.js';
 
 function makeModelResult(): ModelResult {

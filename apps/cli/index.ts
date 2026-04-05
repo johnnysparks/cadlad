@@ -12,17 +12,17 @@
 import { readdirSync, statSync, watch } from "node:fs";
 import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { initManifold } from "../../packages/cad-kernel/manifold-backend.js";
-import { evaluateModel } from "../../packages/cad-api/runtime.js";
+import { initManifold } from "@cadlad/kernel/manifold-backend.js";
+import { evaluateModel } from "@cadlad/api/runtime.js";
 import { loadModelSource } from "./source-loader.js";
 import { buildRunJsonOutput, buildRunReport, formatRunReportText } from "./run-output.js";
-import { formatValidationDiagnostic } from "../../packages/validation/layered-validation.js";
+import { formatValidationDiagnostic } from "@cadlad/validation/layered-validation.js";
 import { LocalHistoryStore } from "./local-history-store.js";
-import { RevisionBranchError } from "../../packages/session-core/revision-branch.js";
-import { loadTaskFile, runEval } from "../../packages/eval/runner.js";
-import { parseModelConfig } from "../../packages/eval/model-adapter.js";
-import { formatBatchSummaryTable, runBatch } from "../../packages/eval/batch.js";
-import { aggregateLogs, generateDeadweightReport, generateIssuesReport } from "../../packages/eval/report.js";
+import { RevisionBranchError } from "@cadlad/session-core/revision-branch.js";
+import { loadTaskFile, runEval } from "@cadlad/eval/runner.js";
+import { parseModelConfig } from "@cadlad/eval/model-adapter.js";
+import { formatBatchSummaryTable, runBatch } from "@cadlad/eval/batch.js";
+import { aggregateLogs, generateDeadweightReport, generateIssuesReport } from "@cadlad/eval/report.js";
 
 const [, , command, ...args] = process.argv;
 

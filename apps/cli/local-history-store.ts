@@ -1,9 +1,9 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import type { ModelResult } from '../cad-kernel/types.js';
-import type { EventActor, EventEnvelope, EventStore, StreamQuery } from '../core/event-store.js';
-import { checkpointRevision, compareBranchHeads, createBranch, checkoutBranch, updateBranchHead, type BranchLike, type BranchHeadComparisonResult, type RevisionSnapshotLike, RevisionBranchError } from '../core/revision-branch.js';
+import type { ModelResult } from '@cadlad/kernel/types.js';
+import type { EventActor, EventEnvelope, EventStore, StreamQuery } from '@cadlad/session-core/event-store.js';
+import { checkpointRevision, compareBranchHeads, createBranch, checkoutBranch, updateBranchHead, type BranchLike, type BranchHeadComparisonResult, type RevisionSnapshotLike, RevisionBranchError } from '@cadlad/session-core/revision-branch.js';
 
 interface RevisionRuntimeInfo {
   stats: ModelResult['evaluation']['stats']['data'] | null;

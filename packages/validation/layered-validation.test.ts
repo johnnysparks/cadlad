@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runLayeredValidation, diagnosticsToErrors, formatValidationDiagnostic } from "./layered-validation.js";
-import type { Body } from "../cad-kernel/types.js";
+import type { Body } from "@cadlad/kernel/types.js";
 
 function makeBody(name?: string, indices: number[] = [0, 1, 2]): Body {
   return {

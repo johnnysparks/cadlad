@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Body, ModelResult, ParamDef } from "../cad-kernel/types.js";
+import type { Body, ModelResult, ParamDef } from "@cadlad/kernel/types.js";
 import { buildRunJsonOutput, buildRunReport, formatRunReportText } from "./run-output.js";
 
 function makeBody(name: string | undefined, xOffset: number): Body {

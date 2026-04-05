@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { box } from "../cad-kernel/primitives.js";
-import { initManifold } from "../cad-kernel/manifold-backend.js";
+import { box } from "@cadlad/kernel/primitives.js";
+import { initManifold } from "@cadlad/kernel/manifold-backend.js";
 import { computeModelStats } from "./model-stats.js";
 
 describe("computeModelStats", () => {

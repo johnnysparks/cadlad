@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getCapabilityGapSummary, recordCapabilityGapEvent } from '../src/capability-gap-reducer.js';
+import { getCapabilityGapSummary, recordCapabilityGapEvent } from '../capability-gap-reducer.js';
 
 class InMemoryKv {
   private readonly store = new Map<string, string>();

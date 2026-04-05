@@ -4,8 +4,8 @@
  * Groups multiple Solids with relative positioning.
  */
 
-import { Solid } from "../cad-kernel/solid.js";
-import type { Body } from "../cad-kernel/types.js";
+import { Solid } from "@cadlad/kernel/solid.js";
+import type { Body } from "@cadlad/kernel/types.js";
 
 export interface AssemblyPart {
   name: string;

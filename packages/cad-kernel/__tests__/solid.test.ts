@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { initManifold } from "../manifold-backend.js";
 import { box, cylinder } from "../primitives.js";
-import { toolBody } from "../../api/toolbody.js";
+import { toolBody } from "@cadlad/api/toolbody.js";
 
 beforeAll(async () => {
   await initManifold();

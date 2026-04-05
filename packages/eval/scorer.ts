@@ -1,4 +1,4 @@
-import type { EvaluationBundle, GeometryStats } from "../cad-kernel/types.js";
+import type { EvaluationBundle, GeometryStats } from "@cadlad/kernel/types.js";
 import type { ScoreBreakdown, TaskSpec } from "./types.js";
 
 const BASE_WEIGHTS = {

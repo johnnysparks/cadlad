@@ -1,4 +1,4 @@
-import type { ModelResult } from "../cad-kernel/types.js";
+import type { ModelResult } from "@cadlad/kernel/types.js";
 
 export type CameraView = "front" | "back" | "top" | "bottom" | "left" | "right" | "iso";
 export type CrossSectionAxis = "x" | "y" | "z";

@@ -1,4 +1,4 @@
-import type { EvaluationBundle } from "../cad-kernel/types.js";
+import type { EvaluationBundle } from "@cadlad/kernel/types.js";
 
 export type PrimitiveName =
   | "box"

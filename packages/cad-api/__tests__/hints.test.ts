@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { collectHints } from "../hints.js";
-import type { GeometryStats } from "../../engine/types.js";
+import type { GeometryStats } from "@cadlad/kernel/types.js";
 
 function buildStats(overrides?: Partial<GeometryStats>): GeometryStats {
   return {

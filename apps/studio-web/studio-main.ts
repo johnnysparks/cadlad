@@ -13,12 +13,12 @@ import {
   type LiveSessionState,
   type SessionPatchPayload,
 } from "./live-session-client.js";
-import { evaluateModel } from "../../packages/cad-api/runtime.js";
+import { evaluateModel } from "@cadlad/api/runtime.js";
 import { EditorDecorations } from "./editor-decorations.js";
 import { PatchHistoryPanel } from "./patch-history.js";
 import type { PatchEvent } from "./types/live-session.js";
 import type { CadladAutomationApi } from "./automation-types.js";
-import { formatValidationDiagnostic } from "../../packages/validation/layered-validation.js";
+import { formatValidationDiagnostic } from "@cadlad/validation/layered-validation.js";
 
 const REMOTE_RUN_DEBOUNCE_MS = 150;
 

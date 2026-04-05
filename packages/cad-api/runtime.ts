@@ -5,12 +5,12 @@
  * and collects the returned Solid(s) + param definitions.
  */
 
-import { initManifold } from "../cad-kernel/manifold-backend.js";
-import { Solid } from "../cad-kernel/solid.js";
+import { initManifold } from "@cadlad/kernel/manifold-backend.js";
+import { Solid } from "@cadlad/kernel/solid.js";
 import { Assembly } from "./assembly.js";
 import { _setParamValues, _resetParams, _getParamDefs } from "./params.js";
 import { collectHints } from "./hints.js";
-import type { ModelResult, Body, ParamDef, Hint, GeometryValidationConfig } from "../cad-kernel/types.js";
+import type { ModelResult, Body, ParamDef, Hint, GeometryValidationConfig } from "@cadlad/kernel/types.js";
 import { normalizeScene, defineScene, mm, runScenePostModelValidation, paramSweepTest } from "./scene-contract.js";
 import { constraint } from "./constraints.js";
 import type { SceneConstraint } from "./constraints.js";
@@ -18,12 +18,12 @@ import type { SceneConstraint } from "./constraints.js";
 // All API symbols that get injected into model scope
 import { param } from "./params.js";
 import { Sketch, rect, circle } from "./sketch.js";
-import { box, cylinder, sphere, roundedRect, roundedBox, taperedBox, sweep, loft } from "../cad-kernel/primitives.js";
+import { box, cylinder, sphere, roundedRect, roundedBox, taperedBox, sweep, loft } from "@cadlad/kernel/primitives.js";
 import { assembly } from "./assembly.js";
 import { plane, axis, datum } from "./reference.js";
 import { isToolBody, toolBody } from "./toolbody.js";
-import { withLayeredValidation } from "../validation/layered-validation.js";
-import { computeModelStats } from "../studio/model-stats.js";
+import { withLayeredValidation } from "@cadlad/validation/layered-validation.js";
+import { computeModelStats } from "@cadlad/rendering/model-stats.js";
 
 /**
  * Evaluate a model script string and return the result.

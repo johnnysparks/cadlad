@@ -11,7 +11,7 @@ import {
   box, cylinder, sphere, roundedRect,
   extrudePolygon, revolve, sweep, loft,
 } from "../primitives.js";
-import { Sketch, rect, circle } from "../../api/sketch.js";
+import { Sketch, rect, circle } from "@cadlad/api/sketch.js";
 
 beforeAll(async () => {
   await initManifold();

@@ -13,9 +13,9 @@
  * Mesh ArrayBuffers are transferred (zero-copy) rather than copied.
  */
 
-import { initManifold } from "../cad-kernel/manifold-backend.js";
-import { evaluateModel } from "../../packages/cad-api/runtime.js";
-import type { Color } from "../cad-kernel/types.js";
+import { initManifold } from "@cadlad/kernel/manifold-backend.js";
+import { evaluateModel } from "@cadlad/api/runtime.js";
+import type { Color } from "@cadlad/kernel/types.js";
 
 await initManifold();
 

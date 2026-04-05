@@ -46,8 +46,8 @@ if (hasLocal) {
 }
 
 const [cmd, args] = hasLocal
-  ? ['node', [localBin, 'apps/ packages/ infra/']]
-  : ['eslint', ['apps/ packages/ infra/']];
+  ? ['node', [localBin, 'apps/', 'packages/', 'infra/']]
+  : ['eslint', ['apps/', 'packages/', 'infra/']];
 
 const result = spawnSync(cmd, args, { stdio: 'inherit' });
 process.exit(result.status ?? 1);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { scoreEval } from "../scorer.js";
 import type { TaskSpec } from "../types.js";
-import type { EvaluationBundle } from "../../engine/types.js";
+import type { EvaluationBundle } from "@cadlad/kernel/types.js";
 
 function makeBundle(overrides?: Partial<EvaluationBundle>): EvaluationBundle {
   return {

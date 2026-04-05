@@ -10,12 +10,12 @@ export {
   Sketch, rect, circle,
   Solid,
   Assembly, assembly,
-} from "./api/index.js";
+} from "./index.js";
 
-export { evaluateModel } from "./api/runtime.js";
-export { initManifold } from "./engine/manifold-backend.js";
+export { evaluateModel } from "./runtime.js";
+export { initManifold } from "@cadlad/kernel/manifold-backend.js";
 
 export type {
   Vec2, Vec3, Color,
   ParamDef, Body, TriMesh, ModelResult, EvaluationBundle, BBox,
-} from "./engine/types.js";
+} from "@cadlad/kernel/types.js";

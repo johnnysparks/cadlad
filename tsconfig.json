@@ -14,7 +14,24 @@
     "declarationMap": true,
     "sourceMap": true,
     "jsx": "preserve",
-    "types": ["vite/client"]
+    "types": ["vite/client", "@cloudflare/workers-types"],
+    "baseUrl": ".",
+    "paths": {
+      "@cadlad/api": ["packages/cad-api/index-library.ts"],
+      "@cadlad/api/*.js": ["packages/cad-api/*"],
+      "@cadlad/api/*": ["packages/cad-api/*"],
+      "@cadlad/kernel": ["packages/cad-kernel/index.ts"],
+      "@cadlad/kernel/*.js": ["packages/cad-kernel/*"],
+      "@cadlad/kernel/*": ["packages/cad-kernel/*"],
+      "@cadlad/rendering/*.js": ["packages/rendering/*"],
+      "@cadlad/rendering/*": ["packages/rendering/*"],
+      "@cadlad/validation/*.js": ["packages/validation/*"],
+      "@cadlad/validation/*": ["packages/validation/*"],
+      "@cadlad/session-core/*.js": ["packages/session-core/*"],
+      "@cadlad/session-core/*": ["packages/session-core/*"],
+      "@cadlad/eval/*.js": ["packages/eval/*"],
+      "@cadlad/eval/*": ["packages/eval/*"]
+    }
   },
   "include": ["apps/**/*", "packages/**/*", "infra/**/*"],
   "exclude": ["node_modules", "dist"]

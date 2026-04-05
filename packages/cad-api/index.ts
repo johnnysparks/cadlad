@@ -13,10 +13,10 @@ export { Sketch, ConstrainedSketch, rect, circle, slot, lShape, channel, tShape 
 export type { ConstraintSolveOptions } from "./sketch.js";
 
 // 3D Primitives
-export { box, cylinder, sphere, roundedRect, sweep, loft } from "../cad-kernel/primitives.js";
+export { box, cylinder, sphere, roundedRect, sweep, loft } from "@cadlad/kernel/primitives.js";
 
 // Solid class (for type annotations in user scripts)
-export { Solid } from "../cad-kernel/solid.js";
+export { Solid } from "@cadlad/kernel/solid.js";
 
 // Assembly
 export { Assembly, assembly } from "./assembly.js";
@@ -44,7 +44,7 @@ export type {
 } from "./constraints.js";
 
 // Types
-export type { Vec2, Vec3, Color, ParamDef, Body } from "../cad-kernel/types.js";
+export type { Vec2, Vec3, Color, ParamDef, Body } from "@cadlad/kernel/types.js";
 
 // Reference geometry
 export { plane, axis, datum } from "./reference.js";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defineScene, normalizeScene, runScenePostModelValidation } from "../scene-contract.js";
-import type { Body } from "../../engine/types.js";
+import type { Body } from "@cadlad/kernel/types.js";
 
 function makeBody(name?: string, indices: number[] = [0, 1, 2]): Body {
   return {

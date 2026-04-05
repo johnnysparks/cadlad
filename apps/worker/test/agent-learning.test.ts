@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { EventEnvelope } from '../src/event-store.js';
-import { buildApiImprovementReport } from '../src/agent-learning.js';
+import type { EventEnvelope } from '../event-store.js';
+import { buildApiImprovementReport } from '../agent-learning.js';
 
 function event<T>(type: EventEnvelope<T>['type'], payload: T, timestamp: number): EventEnvelope<T> {
   return {

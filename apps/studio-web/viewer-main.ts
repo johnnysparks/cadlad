@@ -18,7 +18,7 @@
 import { EvalWorkerClient } from "./eval-worker-client.js";
 import { Viewport } from "./viewport.js";
 import type { CadladAutomationApi, CameraView } from "./automation-types.js";
-import type { ModelResult } from "../cad-kernel/types.js";
+import type { ModelResult } from "@cadlad/kernel/types.js";
 
 const urlParams = new URLSearchParams(location.search);
 const style = urlParams.get("style") === "high-contrast" ? "high-contrast" : "default";

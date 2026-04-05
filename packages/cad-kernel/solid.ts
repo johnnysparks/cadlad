@@ -8,7 +8,7 @@
 import { getManifold } from "./manifold-backend.js";
 import type { Color, TriMesh, Vec3, Body, BBox } from "./types.js";
 import type { Manifold } from "manifold-3d";
-import { assembly, type Assembly } from "../api/assembly.js";
+import { assembly, type Assembly } from "@cadlad/api/assembly.js";
 
 type ManifoldInstance = Manifold;
 

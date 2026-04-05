@@ -4,7 +4,7 @@ export {
   createDurableObjectSqliteRunner,
   createPreparedStatementSqliteRunner,
   createSqlJsSqliteRunner,
-} from '../../src/core/event-store.js';
+} from '@cadlad/session-core/event-store.js';
 export type {
   AgentCapabilityGapPayload,
   AgentIntentDeclaredPayload,
@@ -20,4 +20,4 @@ export type {
   SourceReplacedPayload,
   SqliteQueryRunner,
   StreamQuery,
-} from '../../src/core/event-store.js';
+} from '@cadlad/session-core/event-store.js';

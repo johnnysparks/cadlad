@@ -6,7 +6,7 @@
  */
 
 import * as THREE from "three";
-import type { Body } from "../cad-kernel/types.js";
+import type { Body } from "@cadlad/kernel/types.js";
 
 export type RenderStyle = "default" | "high-contrast";
 

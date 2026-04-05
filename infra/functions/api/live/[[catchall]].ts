@@ -36,7 +36,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       method: request.method,
       headers: request.headers,
       body: request.method !== "GET" && request.method !== "HEAD" ? request.body : undefined,
-      // @ts-ignore — CF-specific option: don't follow redirects across workers
+      // @ts-expect-error — CF-specific option: don't follow redirects across workers
       redirect: "manual",
     });
   }

@@ -7,8 +7,8 @@
  */
 
 import EvalWorker from "./eval.worker.ts?worker";
-import type { ModelResult, Body, ParamDef, Hint } from "../cad-kernel/types.js";
-import type { EvaluationBundle } from "../cad-kernel/types.js";
+import type { ModelResult, Body, ParamDef, Hint } from "@cadlad/kernel/types.js";
+import type { EvaluationBundle } from "@cadlad/kernel/types.js";
 import type { Vec3 } from "./automation-types.js";
 
 interface WorkerResult {

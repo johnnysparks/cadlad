@@ -6,7 +6,7 @@
  * just calls param() and gets a number back.
  */
 
-import type { ParamDef } from "../cad-kernel/types.js";
+import type { ParamDef } from "@cadlad/kernel/types.js";
 
 /** Current parameter values injected by the runtime before evaluation. */
 let _paramValues: Map<string, number> = new Map();

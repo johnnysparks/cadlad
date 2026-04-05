@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { initManifold } from "../../engine/manifold-backend.js";
-import { Sketch, rect, circle, slot, lShape, channel, tShape } from "../sketch.js";
+import { initManifold } from "@cadlad/kernel/manifold-backend.js";
+import { Sketch, rect, circle, slot, lShape, channel, tShape } from "@cadlad/api/sketch.js";
 
 beforeAll(async () => {
   await initManifold();

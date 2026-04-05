@@ -1,4 +1,4 @@
-import { Solid } from "../cad-kernel/solid.js";
+import { Solid } from "@cadlad/kernel/solid.js";
 
 export class ToolBody {
   readonly _isToolBody = true as const;

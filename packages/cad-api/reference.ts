@@ -1,5 +1,5 @@
-import type { Vec3 } from "../cad-kernel/types.js";
-import { Solid } from "../cad-kernel/solid.js";
+import type { Vec3 } from "@cadlad/kernel/types.js";
+import { Solid } from "@cadlad/kernel/solid.js";
 
 export type Plane = {
   origin: Vec3;

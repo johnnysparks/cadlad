@@ -2,7 +2,7 @@
  * Parameter panel — renders sliders for live params.
  */
 
-import type { ParamDef } from "../cad-kernel/types.js";
+import type { ParamDef } from "@cadlad/kernel/types.js";
 
 export type ParamChangeCallback = (name: string, value: number) => void;
 

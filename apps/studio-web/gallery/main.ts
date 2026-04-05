@@ -7,14 +7,14 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { evaluateModel } from "../../../packages/cad-api/runtime.js";
+import { evaluateModel } from "@cadlad/api/runtime.js";
 import {
   createLighting,
   createGrid,
   buildBodyGroup,
   type RenderStyle,
-} from "../../../packages/rendering/scene-builder.js";
-import type { Body } from "../../../packages/cad-kernel/types.js";
+} from "@cadlad/rendering/scene-builder.js";
+import type { Body } from "@cadlad/kernel/types.js";
 
 interface Example {
   name: string;

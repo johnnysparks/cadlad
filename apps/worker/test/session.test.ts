@@ -1,6 +1,6 @@
 import { SELF } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
-import type { CreateSessionResponse, SessionState } from '../src/types.js';
+import type { CreateSessionResponse, SessionState } from '../types.js';
 
 const BASE = 'http://localhost';
 const SOURCE = 'const b = box(40, 40, 20); return b;';

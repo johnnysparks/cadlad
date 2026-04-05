@@ -5,7 +5,7 @@
  * stronger CAD patterns without preventing valid geometry from evaluating.
  */
 
-import type { GeometryStats, Hint, ParamDef } from "../cad-kernel/types.js";
+import type { GeometryStats, Hint, ParamDef } from "@cadlad/kernel/types.js";
 
 export interface HintContext {
   /** Number of bodies with zero vertices after evaluation */

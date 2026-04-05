@@ -4,8 +4,8 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { createLighting, createGrid, buildBodyGroup, type RenderStyle } from "../../packages/rendering/scene-builder.js";
-import type { Body } from "../cad-kernel/types.js";
+import { createLighting, createGrid, buildBodyGroup, type RenderStyle } from "@cadlad/rendering/scene-builder.js";
+import type { Body } from "@cadlad/kernel/types.js";
 import type { CameraView, CrossSectionAxis } from "./automation-types.js";
 
 export class Viewport {

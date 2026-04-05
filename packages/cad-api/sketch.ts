@@ -5,9 +5,9 @@
  * a silent empty 3D solid. Validates profiles on extrude/revolve.
  */
 
-import type { Vec2, Vec3 } from "../cad-kernel/types.js";
-import { extrudePolygon, revolve as revolveEngine, sweep as sweepEngine, alignZToDirection } from "../cad-kernel/primitives.js";
-import { Solid } from "../cad-kernel/solid.js";
+import type { Vec2, Vec3 } from "@cadlad/kernel/types.js";
+import { extrudePolygon, revolve as revolveEngine, sweep as sweepEngine, alignZToDirection } from "@cadlad/kernel/primitives.js";
+import { Solid } from "@cadlad/kernel/solid.js";
 
 // ── Geometry helpers ──────────────────────────────────────────
 

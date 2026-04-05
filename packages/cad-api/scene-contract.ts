@@ -1,10 +1,10 @@
 import { Assembly } from "./assembly.js";
-import type { Body, ValidationDiagnostic } from "../cad-kernel/types.js";
-import type { GeometryValidationConfig } from "../cad-kernel/types.js";
-import { Solid } from "../cad-kernel/solid.js";
+import type { Body, ValidationDiagnostic } from "@cadlad/kernel/types.js";
+import type { GeometryValidationConfig } from "@cadlad/kernel/types.js";
+import { Solid } from "@cadlad/kernel/solid.js";
 import { isToolBody } from "./toolbody.js";
 import type { SceneConstraint } from "./constraints.js";
-import { runLayeredValidation } from "../validation/layered-validation.js";
+import { runLayeredValidation } from "@cadlad/validation/layered-validation.js";
 
 export type SceneSourceRange = {
   startLine: number;

@@ -33,7 +33,7 @@ import {
   checkoutBranch,
   updateBranchHead,
   RevisionBranchError,
-} from '../../src/core/revision-branch.js';
+} from '@cadlad/session-core/revision-branch.js';
 
 const MAX_PATCHES = 100;
 const HEARTBEAT_INTERVAL_MS = 25_000; // keep SSE connections alive

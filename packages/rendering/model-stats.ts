@@ -1,4 +1,4 @@
-import type { Body, GeometryBounds, GeometryPartStats, GeometryPairwisePartStats, GeometryStats } from "../cad-kernel/types.js";
+import type { Body, GeometryBounds, GeometryPartStats, GeometryPairwisePartStats, GeometryStats } from "@cadlad/kernel/types.js";
 
 export function computeModelStats(bodies: Body[]): GeometryStats | undefined {
   if (bodies.length === 0) return undefined;

@@ -1,8 +1,8 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
-import { evaluateModel } from "../api/runtime.js";
-import { initManifold } from "../cad-kernel/manifold-backend.js";
+import { evaluateModel } from "@cadlad/api/runtime.js";
+import { initManifold } from "@cadlad/kernel/manifold-backend.js";
 import { applyJudgeScore, scoreEval } from "./scorer.js";
 import { buildSystemPrompt, buildUserPrompt, buildRetryPrompt } from "./prompts.js";
 import { createModelAdapter, extractCode } from "./model-adapter.js";

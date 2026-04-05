@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { initManifold } from "../../engine/manifold-backend.js";
-import { evaluateModel } from "../runtime.js";
+import { initManifold } from "@cadlad/kernel/manifold-backend.js";
+import { evaluateModel } from "@cadlad/api/runtime.js";
 
 beforeAll(async () => {
   await initManifold();

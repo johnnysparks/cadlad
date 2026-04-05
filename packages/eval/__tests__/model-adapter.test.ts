@@ -49,7 +49,7 @@ describe("parseModelConfig", () => {
     const config = parseModelConfig("lmstudio://google/gemma-4-26b-a4b");
     expect(config).toEqual({
       provider: "openai",
-      model: "google/gemma-4-26b-a4b",
+      model: "google/gemma-4-26b-a4b", supportsVision: true,
       endpoint: "http://localhost:1234",
       requiresApiKey: false,
     });
@@ -229,7 +229,7 @@ describe("generateCode", () => {
     const result = await generateCode(
       {
         provider: "openai",
-        model: "google/gemma-4-26b-a4b",
+        model: "google/gemma-4-26b-a4b", supportsVision: true,
         endpoint: "http://localhost:1234",
         requiresApiKey: false,
       },
