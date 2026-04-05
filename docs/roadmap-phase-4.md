@@ -146,17 +146,9 @@ Tool bodies are construction-only solids (not rendered in final output) used for
 
 ### 4.2 Design intent hints
 
-**Status: STUB — only empty-body detection exists**
+**Status: PARTIAL — implemented heuristic hints, can be refined with richer feature context**
 
-**Current state:** `src/api/hints.ts` (31 lines) has a single check:
-```ts
-export function collectHints(ctx: HintContext): Hint[] {
-  if (ctx.emptyBodies > 0) { /* warn */ }
-  return hints;
-}
-```
-
-`HintContext` only has `emptyBodies: number`. No access to source code, AST, features, or geometry stats.
+**Current state:** `src/api/hints.ts` now runs heuristic advisory checks for empty bodies, deep boolean chains, magic numbers, repeated geometry signatures, bbox symmetry opportunities, and unparameterized sketch dimensions. `HintContext` now accepts source text, geometry stats, and params so hinting can combine source-level + geometry-level signals.
 
 **5 planned hints (all unstarted):**
 
