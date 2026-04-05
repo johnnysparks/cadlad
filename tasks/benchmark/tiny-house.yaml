@@ -1,0 +1,25 @@
+id: tiny-house
+difficulty: 10
+description: |
+  The "Systems Integration" Masterpiece: A complete, structurally and mechanically detailed Tiny House (approx. 2.5m x 6m).
+  This model tests the engine's ability to handle massive hierarchies, repetitive part instancing, and multi-system integration.
+
+  1. **Structural Framing**: A full timber-frame skeleton. Floor joists (every 400mm), wall studs (every 600mm), and a pitched roof with rafters. All studs must be accurate 2x4 (approx. 38x89mm) profiles.
+  2. **Envelope**: External sheathing, a gabled roof with a 30-degree pitch, one functional front door (with handle), and two double-pane windows with frames.
+  3. **Bathroom & Plumbing**: A compact bathroom featuring a toilet (bowl, tank, and seat) and a shower tray. Model the plumbing as a network of 50mm (waste) and 15mm (supply) pipes connecting the bathroom and kitchen to an external port.
+  4. **Kitchenette**: A base cabinet, a countertop, and a kitchen sink with a faucet.
+  5. **Electrical & HVAC**: Small rectangular boxes representing electrical outlets on the walls, connected by thin wire-run conduits. Include two circular roof vents for ventilation.
+  6. **Assembly Hierarchy**: Use nested assemblies (e.g., `assembly("Structure")`, `assembly("Plumbing")`, `assembly("Fixtures")`) and unite them into a final `assembly("TinyHouse")`. Use realistic colors (Wood brown, White porcelain, Metallic silver, Glass blue).
+
+  This task demands extreme precision in relative positioning and explores the limits of the engine's assembly performance.
+reference_prompt: "A professional 3D CAD architectural render of a detailed Tiny House. Shows the timber framing (studs and rafters), a gabled roof, a small kitchen and bathroom inside, plumbing pipes, and electrical outlets. One side of the house is 'cut away' or transparent to show the internal systems and structural skeleton. Studio lighting, technical engineering aesthetic, high detail."
+reference_images: ["tasks/benchmark/references/tiny-house.png"]
+acceptance:
+  body_count_min: 800 # High count due to dozens of studs, joists, and rafters
+  body_count_max: 5000
+  assembly: true
+  validation_errors: 0
+  has_subtraction: true
+api_surface: [assembly, box, cylinder, sketch, extrude, union, subtract, translate, rotate, color]
+max_iterations: 15
+pass_threshold: 90
