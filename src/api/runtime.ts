@@ -11,7 +11,7 @@ import { Assembly } from "./assembly.js";
 import { _setParamValues, _resetParams, _getParamDefs } from "./params.js";
 import { collectHints } from "./hints.js";
 import type { ModelResult, Body, ParamDef, Hint, GeometryValidationConfig } from "../engine/types.js";
-import { normalizeScene, defineScene, mm, runScenePostModelValidation } from "./scene-contract.js";
+import { normalizeScene, defineScene, mm, runScenePostModelValidation, paramSweepTest } from "./scene-contract.js";
 import { constraint } from "./constraints.js";
 import type { SceneConstraint } from "./constraints.js";
 
@@ -70,6 +70,7 @@ export async function evaluateModel(
       "sweep", "loft",
       "assembly", "Solid", "Assembly",
       "defineScene", "mm", "constraint",
+      "paramSweepTest",
       "plane", "axis", "datum",
       "toolBody",
     ];
@@ -79,6 +80,7 @@ export async function evaluateModel(
       sweep, loft,
       assembly, Solid, Assembly,
       defineScene, mm, constraint,
+      paramSweepTest,
       plane, axis, datum,
       toolBody,
     ];
@@ -179,6 +181,9 @@ export async function evaluateModel(
         scene: normalized.scene,
         validators: normalized.rawHooks?.validators,
         tests: normalized.rawHooks?.tests,
+        modelFactory: normalized.rawHooks?.modelFactory,
+        geometryValidation: geometryValidationConfig,
+        constraints: sceneConstraints,
         bodies,
         model,
       });

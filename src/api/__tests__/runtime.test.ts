@@ -279,4 +279,25 @@ describe("evaluateModel", () => {
     expect(result.errors.some((message) => message.includes("Constraint clearance failed"))).toBe(true);
     expect(result.diagnostics?.some((diag) => diag.message.includes("Constraint symmetry failed"))).toBe(true);
   });
+
+  it("supports paramSweepTest for fragility checks across parameter values", async () => {
+    const code = `
+      return defineScene({
+        meta: { name: "param-sweep-robustness" },
+        params: {
+          width: { value: 10, min: 0, max: 20 },
+        },
+        tests: [
+          paramSweepTest("width", [0, 10, 20]),
+        ],
+        model: ({ params }) => box(params.width, 10, 10),
+      });
+    `;
+
+    const result = await evaluateModel(code);
+    const sweep = result.sceneValidation?.tests.find((entry) => entry.id === "param-sweep.width");
+    expect(sweep?.status).toBe("fail");
+    expect(sweep?.message).toContain("width=0");
+    expect(sweep?.message).toContain("near-zero volume");
+  });
 });

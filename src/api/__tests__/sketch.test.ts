@@ -69,6 +69,16 @@ describe("validate", () => {
     const s = Sketch.begin(0, 0).lineTo(10, 10).lineTo(10, 0).lineTo(0, 10).close();
     const issues = s.validate();
     expect(issues.some(i => i.type === "error" && i.message.includes("Self-intersection"))).toBe(true);
+    expect(issues.find((i) => i.code === "self-intersection")?.details).toBeDefined();
+    expect(issues.find((i) => i.code === "self-intersection")?.message).toContain("at (");
+  });
+
+  it("reports near-zero area diagnostics with structured details", () => {
+    const s = Sketch.begin(0, 0).lineTo(10, 0).lineTo(20, 0).close();
+    const issues = s.validate();
+    const nearZero = issues.find((issue) => issue.code === "near-zero-area");
+    expect(nearZero?.type).toBe("error");
+    expect(nearZero?.details).toMatchObject({ epsilon: 0.01 });
   });
 });
 
