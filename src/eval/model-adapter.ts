@@ -27,6 +27,29 @@ const DEFAULT_OPENAI_ENDPOINT = "https://api.openai.com";
 const DEFAULT_ANTHROPIC_ENDPOINT = "https://api.anthropic.com";
 const DEFAULT_LMSTUDIO_ENDPOINT = "http://localhost:1234";
 
+
+export interface ModelAdapter {
+  supportsVision: boolean;
+  generate(request: GenerateCodeRequest): Promise<GenerateCodeResponse>;
+}
+
+export function createModelAdapter(config: ModelConfig): ModelAdapter {
+  return {
+    supportsVision: config.provider !== "ollama" || config.model.includes("vision"),
+    generate(request: GenerateCodeRequest) {
+      return generateCode(config, request);
+    },
+  };
+}
+
+export function extractCode(text: string): string {
+  const match = text.match(/```(?:typescript|ts)?\s*([\s\S]*?)```/i);
+  if (!match) {
+    return text.trim();
+  }
+  return match[1].trim();
+}
+
 export async function generateCode(config: ModelConfig, request: GenerateCodeRequest): Promise<GenerateCodeResponse> {
   switch (config.provider) {
     case "ollama":
