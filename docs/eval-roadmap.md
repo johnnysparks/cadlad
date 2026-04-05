@@ -892,6 +892,170 @@ Run `npm run typecheck`. Commit. Push.
 
 ---
 
-## Next Steps (not written yet)
+## Step 10: CI Integration (`scripts/ci-eval.sh`)
 
-- Step 10: CI integration (`scripts/ci-eval.sh`)
+```
+You are working on the CadLad project (code-first parametric 3D CAD in TypeScript).
+Branch: claude/agent-evaluation-loop-GXddC
+
+Pull latest from origin first.
+
+Read these files:
+- scripts/ci-check-bg.sh (existing CI pattern — follow its style: logging, notify(), lockfile)
+- src/eval/runner.ts (runEval — what the CLI calls)
+- src/eval/batch.ts (runBatch — for multi-task runs)
+- src/eval/report.ts (aggregateLogs, generateIssuesReport — for the regression check)
+- src/cli/index.ts (cmdEval — to understand the CLI flags the script will invoke)
+
+CONTEXT: We need a CI script that runs the eval benchmarks and fails if results
+regress. It should work in GitHub Actions (Linux, no GPU, no ollama) using only
+API-based models, and also locally with ollama. It stores a baseline and diffs
+against it.
+
+TASK A: Create `scripts/ci-eval.sh` (~90 lines)
+
+Follow the pattern from ci-check-bg.sh: shebang, REPO_ROOT detection, PATH setup,
+logging to /tmp, notify() function.
+
+```bash
+#!/usr/bin/env bash
+# ci-eval.sh — Run eval benchmarks and check for regressions
+#
+# Usage:
+#   ./scripts/ci-eval.sh                    # local: uses ollama://llama3.2
+#   ./scripts/ci-eval.sh --ci               # CI mode: uses anthropic://claude-haiku-4-5-20251001
+#   ./scripts/ci-eval.sh --model <url>      # explicit model
+#   ./scripts/ci-eval.sh --update-baseline  # capture current results as new baseline
+```
+
+Implementation:
+
+1. Parse args:
+   - `--ci`: sets MODEL to "anthropic://claude-haiku-4-5-20251001" (cheapest, good enough
+     for regression detection), sets CONCURRENCY=3
+   - `--model <url>`: override model
+   - `--update-baseline`: run benchmarks and save results as the new baseline
+   - Default (no flags): MODEL="ollama://llama3.2", CONCURRENCY=1
+
+2. Check prerequisites:
+   - If model starts with "ollama://": verify `curl -s localhost:11434/api/tags` succeeds,
+     else print "ollama not running" and exit 1
+   - If model starts with "anthropic://": verify ANTHROPIC_API_KEY is set
+   - If model starts with "openai://": verify OPENAI_API_KEY is set
+
+3. Run the eval:
+   ```bash
+   node --import tsx src/cli/index.ts eval tasks/benchmark/ \
+     --model "$MODEL" \
+     --concurrency "$CONCURRENCY" \
+     --no-judge \
+     2>&1 | tee "$LOGFILE"
+   ```
+   (--no-judge in CI to save tokens and avoid needing a vision model)
+
+4. Capture exit code. If non-zero, the eval itself had failures — report and exit 1.
+
+5. Regression check (if not --update-baseline):
+   - Baseline file: `eval-logs/baseline.json`
+   - If baseline exists: compare current pass rates against it
+   - Generate current summary via:
+     `node --import tsx -e "import {aggregateLogs} from './src/eval/report.js'; console.log(JSON.stringify(aggregateLogs('eval-logs')))"`
+   - For each task: if current pass_rate < baseline pass_rate - 0.1 (10% tolerance),
+     flag as regression
+   - If any regressions found: print them and exit 1
+   - If no regressions: print "No regressions detected" and exit 0
+
+6. If --update-baseline:
+   - Run benchmarks (step 3)
+   - Save aggregated summary to eval-logs/baseline.json
+   - Print "Baseline updated with N tasks"
+   - Exit 0
+
+Make the script executable (chmod +x).
+
+TASK B: Create `eval-logs/.gitkeep` and add to .gitignore
+
+- Create `eval-logs/.gitkeep` so the directory exists in the repo
+- Add to .gitignore (create if it doesn't exist, or append):
+  ```
+  # Eval logs (keep directory, ignore contents except baseline)
+  eval-logs/*
+  !eval-logs/.gitkeep
+  !eval-logs/baseline.json
+  ```
+  This tracks the baseline for regression detection but ignores run logs.
+
+- Also add `eval-scratch/` to .gitignore (the temp directory where generated
+  .forge.ts files are written during eval runs).
+
+TASK C: Add npm script
+
+Add to package.json scripts:
+```json
+"eval": "tsx src/cli/index.ts eval",
+"eval:ci": "./scripts/ci-eval.sh --ci",
+"eval:baseline": "./scripts/ci-eval.sh --update-baseline"
+```
+
+This lets you run:
+- `npm run eval -- tasks/benchmark/box-with-hole.yaml --model ollama://qwen3:8b`
+- `npm run eval:ci` (in GitHub Actions)
+- `npm run eval:baseline` (capture new baseline)
+
+TASK D: Create `.github/workflows/eval.yml` (~40 lines)
+
+A GitHub Actions workflow that runs on:
+- push to main (after merge)
+- manual dispatch (workflow_dispatch)
+- NOT on every PR (too expensive)
+
+```yaml
+name: Eval Benchmarks
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/eval/**'
+      - 'tasks/benchmark/**'
+      - 'src/engine/**'
+      - 'src/api/**'
+  workflow_dispatch:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: ./scripts/ci-eval.sh --ci
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-logs
+          path: eval-logs/
+          retention-days: 30
+```
+
+Run `npm run typecheck`. Commit. Push.
+```
+
+---
+
+## All Steps Complete
+
+```
+Step 1 (types + YAML) ──┐
+                         ├──▶ Step 3 (scorer) ──▶ Step 4 (runner + CLI) ──▶ Step 5 (benchmarks)
+Step 2 (model adapter) ──┘
+                                                                              │
+                         Step 6 (reports) ──▶ Step 7 (judge) ──▶ Step 8 (batch) ──▶ Step 9 (adhoc) ──▶ Step 10 (CI)
+```
+
+Steps 1-2 parallel. Everything else sequential. Each prompt is one Sonnet session.
