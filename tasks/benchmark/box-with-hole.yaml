@@ -4,6 +4,8 @@ description: |
   Build a single solid rectangular block that is 40 mm wide (X), 30 mm deep (Y), and 20 mm tall (Z).
   Add one centered through-hole: a vertical cylindrical cut with 10 mm diameter that runs completely through the 20 mm height.
   The hole axis must pass through the center of the top face and continue straight down along Z so the opening is visible on both top and bottom faces.
+reference_prompt: "A professional 3D CAD render of a solid rectangular block, 40mm x 30mm x 20mm, with a single centered 10mm diameter vertical through-hole. Simple geometric form, brushed metal texture, clean edges, studio lighting, isometric view."
+reference_images: ["tasks/benchmark/references/box-with-hole.png"]
 acceptance:
   body_count: 1
   volume_min: 18800

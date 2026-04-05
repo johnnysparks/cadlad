@@ -98,7 +98,7 @@ export async function runBatch(config: BatchConfig): Promise<BatchReport> {
     const lock = getLock(work.model);
     await acquireLock(lock);
     try {
-      const outcome = await runEval(work.task, work.model);
+      const outcome = await runEval(work.task, work.model, { judgeConfig: config.judgeConfig });
       const result: EvalResult = { ...outcome, model: `${work.model.provider}://${work.model.model}` };
       completed.push({ result, work });
       config.onResult?.(result);

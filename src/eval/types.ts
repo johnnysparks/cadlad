@@ -62,6 +62,7 @@ export interface TaskSpec {
   id: string;
   difficulty: number;
   description: string;
+  reference_prompt?: string;
   acceptance: TaskAcceptanceCriteria;
   api_surface: PrimitiveName[];
   reference_images?: string[];
@@ -187,6 +188,7 @@ export function parseTaskSpec(raw: string): TaskSpec {
     id: record.id,
     difficulty: record.difficulty,
     description: record.description,
+    reference_prompt: typeof record.reference_prompt === "string" ? record.reference_prompt : undefined,
     acceptance: record.acceptance as TaskAcceptanceCriteria,
     api_surface: record.api_surface as PrimitiveName[],
     reference_images: Array.isArray(record.reference_images) ? (record.reference_images as string[]) : undefined,
@@ -273,6 +275,9 @@ function parseYamlScalar(value: string): unknown {
       out[k.trim()] = parseYamlScalar((v ?? "").trim());
     }
     return out;
+  }
+  if ((trimmed.startsWith("\"") && trimmed.endsWith("\"")) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return trimmed.slice(1, -1);
   }
   if (trimmed === "true") return true;
   if (trimmed === "false") return false;

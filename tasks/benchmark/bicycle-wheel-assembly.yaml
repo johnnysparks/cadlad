@@ -1,0 +1,20 @@
+id: bicycle-wheel-assembly
+difficulty: 6
+description: |
+  Model a complete 700c road bicycle wheel assembly. 
+  1. **Hub**: A central cylindrical body with flanges on both sides (O.D. 45mm, width 80mm).
+  2. **Rim**: A swept or extruded ring with a V-shaped aero profile and a hooked inner channel for the tire. (Outer diameter 622mm).
+  3. **Tire**: A sweep of a semicircular profile seated inside the rim.
+  4. **Spokes & Nipples**: 32 spokes (16 per side). Model the spokes as thin cylinders running from the hub flanges to the rim. Implement a standard "3-cross" lacing pattern, meaning the spokes angle backward and forward to cross each other 3 times before reaching the rim. 
+  Use assembly() to organize the Hub, Rim, Tire, and the pattern of Spokes.
+reference_prompt: "A professional 3D CAD render of a 700c road bicycle wheel assembly including a central hub with flanges, an aero-profile V-shaped rim, a rubber tire, and 32 spokes in a 3-cross lacing pattern. Realistic materials, metallic hub and rim, matte black tire, studio lighting, detailed perspective."
+reference_images: ["tasks/benchmark/references/bicycle-wheel-assembly.png"]
+acceptance:
+  body_count_min: 35 # 1 hub + 1 rim + 1 tire + 32 spokes
+  body_count_max: 100
+  assembly: true
+  validation_errors: 0
+  has_subtraction: true
+api_surface: [assembly, circularPatternAssembly, sweep, cylinder, box, subtract, union, translate, rotate]
+max_iterations: 8
+pass_threshold: 80

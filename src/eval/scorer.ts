@@ -36,21 +36,23 @@ export function scoreEval(task: TaskSpec, bundle: EvaluationBundle, source: stri
 
 export function applyJudgeScore(base: ScoreBreakdown, judgeScore: number): ScoreBreakdown {
   const clampedJudge = clamp(judgeScore);
+  const weights = effectiveWeights(clampedJudge);
   const total = clamp(
-    base.geometry * BASE_WEIGHTS.geometry
-      + base.constraints * BASE_WEIGHTS.constraints
-      + base.api * BASE_WEIGHTS.api
-      + clampedJudge * BASE_WEIGHTS.judge,
+    base.geometry * weights.geometry
+      + base.constraints * weights.constraints
+      + base.api * weights.api
+      + clampedJudge * weights.judge,
   );
 
   return {
     ...base,
-    judge: clampedJudge,
     total,
     pass: total >= 70,
-    weights: { ...BASE_WEIGHTS },
+    judge: clampedJudge,
+    weights,
   };
 }
+
 
 function scoreGeometry(task: TaskSpec, stats: GeometryStats | undefined): number {
   const acceptance = task.acceptance;
@@ -132,7 +134,12 @@ function scoreApiSurface(task: TaskSpec, source: string): number {
 
 function effectiveWeights(judge: number): ScoreBreakdown["weights"] {
   if (judge > 0) {
-    return BASE_WEIGHTS;
+    return {
+      geometry: BASE_WEIGHTS.geometry,
+      constraints: BASE_WEIGHTS.constraints,
+      api: BASE_WEIGHTS.api,
+      judge: BASE_WEIGHTS.judge,
+    };
   }
 
   const nonJudge = BASE_WEIGHTS.geometry + BASE_WEIGHTS.constraints + BASE_WEIGHTS.api;
