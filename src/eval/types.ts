@@ -73,6 +73,7 @@ export interface EvalResult {
   score: number;
   geometry: number;
   constraints: number;
+  api: number;
   visual: number;
   feedback: string[];
 }
@@ -82,6 +83,7 @@ export interface ScoringRubric {
   weights: {
     geometry: number;
     constraints: number;
+    api: number;
     visual: number;
   };
 }
