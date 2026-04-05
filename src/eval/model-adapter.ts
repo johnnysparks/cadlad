@@ -248,7 +248,7 @@ function parseOpenAiCompatibleHttpRef(modelRef: string): ModelConfig | null {
 }
 
 function parseContextLoopRef(modelRef: string): ModelConfig | null {
-  const normalized = modelRef.trim().toLowerCase();
+  const normalized = normalizeContextLoopAlias(modelRef);
   if (normalized === "context-loop" || normalized === "current-context-loop" || normalized === "current") {
     const provider = inferContextLoopProvider();
     if (!provider) {
@@ -259,12 +259,21 @@ function parseContextLoopRef(modelRef: string): ModelConfig | null {
     return buildContextLoopConfig(provider);
   }
 
-  const scopedMatch = normalized.match(/^(openai|anthropic):\/\/(context-loop|current-context-loop|current)$/);
+  const scopedMatch = normalized.match(/^(openai|anthropic):\/\/(.+)$/);
   if (!scopedMatch) {
     return null;
   }
 
-  return buildContextLoopConfig(scopedMatch[1] as "openai" | "anthropic");
+  const [, provider, alias] = scopedMatch;
+  if (alias !== "context-loop" && alias !== "current-context-loop" && alias !== "current") {
+    return null;
+  }
+
+  return buildContextLoopConfig(provider as "openai" | "anthropic");
+}
+
+function normalizeContextLoopAlias(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s_]+/g, "-");
 }
 
 function inferContextLoopProvider(): "openai" | "anthropic" | null {
