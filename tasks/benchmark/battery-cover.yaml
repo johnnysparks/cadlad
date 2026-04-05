@@ -1,0 +1,16 @@
+id: battery-cover
+difficulty: 4
+description: |
+  Create a snap-fit battery cover as a single printable part with a 35 mm × 50 mm top plate, 1.5 mm plate thickness, and a downward perimeter lip 3 mm deep.
+  The lip should be formed as a thin frame with approximately 1 mm wall thickness by subtracting an inner rectangular void, and the frame should sit below the plate to register inside a compartment opening.
+  Add two small snap tabs on opposite short ends near the bottom of the lip and include shallow grip ridges on the top face for finger traction.
+acceptance:
+  body_count: 1
+  volume_min: 2500
+  volume_max: 5000
+  validation_errors: 0
+  has_subtraction: true
+  has_params: [width, length, thickness]
+api_surface: [box, subtract, union, translate, param]
+max_iterations: 10
+pass_threshold: 70

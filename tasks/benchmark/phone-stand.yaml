@@ -1,0 +1,15 @@
+id: phone-stand
+difficulty: 3
+description: |
+  Build a desk phone stand as one solid body with a flat base, an upright back support, and a front retaining lip.
+  Use base dimensions 80 mm (width) × 60 mm (depth) × 8 mm (thickness), a back support that rises 70 mm above the base with 5 mm thickness at the rear edge, and a front lip 12 mm tall with 5 mm thickness at the front edge.
+  The back and lip should both run across the full width, and all three features should be united into a stable stand that supports a phone leaning against the back.
+acceptance:
+  body_count: 1
+  volume_min: 51000
+  volume_max: 98000
+  validation_errors: 0
+  has_params: [base_width, base_depth, base_height, back_height, back_thickness, lip_height]
+api_surface: [box, union, translate, param]
+max_iterations: 8
+pass_threshold: 70
