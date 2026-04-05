@@ -1,0 +1,13 @@
+id: box-with-hole
+difficulty: 1
+description: |
+  A 40×30×20mm box with a 10mm diameter through-hole centered on the top face.
+acceptance:
+  body_count: 1
+  volume_min: 20000
+  volume_max: 24000
+  validation_errors: 0
+  has_subtraction: true
+api_surface: [box, cylinder, subtract, translate]
+reference_images: [box-with-hole-iso.png]
+max_iterations: 3

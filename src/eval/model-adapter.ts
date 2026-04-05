@@ -43,7 +43,7 @@ export function parseModelConfig(modelRef: string): ModelConfig {
   const match = modelRef.match(/^(ollama|openai|anthropic):\/\/(.+)$/);
   if (!match) {
     throw new Error(
-      `Invalid model reference \"${modelRef}\". Expected format: <provider>://<model>, e.g. ollama://llama3.2`,
+      `Invalid model reference "${modelRef}". Expected format: <provider>://<model>, e.g. ollama://llama3.2`,
     );
   }
 
@@ -51,7 +51,7 @@ export function parseModelConfig(modelRef: string): ModelConfig {
   const model = match[2].trim();
 
   if (!model) {
-    throw new Error(`Model reference \"${modelRef}\" is missing a model name.`);
+    throw new Error(`Model reference "${modelRef}" is missing a model name.`);
   }
 
   if (provider === "openai") {
