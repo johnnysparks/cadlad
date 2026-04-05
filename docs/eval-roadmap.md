@@ -670,8 +670,130 @@ Run `npm run typecheck`. Commit. Push.
 
 ---
 
+## Step 8: Multi-Model Batch + Parallel Runs
+
+```
+You are working on the CadLad project (code-first parametric 3D CAD in TypeScript).
+Branch: claude/agent-evaluation-loop-GXddC
+
+Pull latest from origin first.
+
+Read these files:
+- src/eval/runner.ts (runEval — the single-task single-model loop you'll wrap)
+- src/eval/types.ts (TaskSpec, EvalResult, ModelConfig)
+- src/eval/report.ts (aggregateLogs — called automatically after a batch finishes)
+- src/cli/index.ts (cmdEval — the CLI entry point you'll modify)
+
+CONTEXT: Right now `cadlad eval` runs one task with one model sequentially.
+We need it to handle:
+  cadlad eval tasks/benchmark/ --model ollama://llama3.2 --model ollama://qwen3:8b
+This runs every YAML task against every model, with smart parallelism.
+
+TASK A: Create `src/eval/batch.ts` (~120 LOC)
+
+```typescript
+interface BatchConfig {
+  tasks: TaskSpec[];
+  models: ModelConfig[];
+  judgeConfig?: ModelConfig;
+  concurrency: number;         // max parallel eval runs (default 2)
+  onResult?: (result: EvalResult) => void;  // stream results as they complete
+}
+
+interface BatchReport {
+  started_at: string;          // ISO timestamp
+  completed_at: string;
+  results: EvalResult[];       // all results, grouped by task then model
+  summary: {
+    total_runs: number;
+    total_pass: number;
+    total_fail: number;
+    total_tokens: number;
+    total_duration_ms: number;
+  };
+}
+
+async function runBatch(config: BatchConfig): Promise<BatchReport>
+```
+
+Implementation:
+
+1. Build a work queue: every (task, model) pair is one unit of work.
+   For 5 tasks x 3 models = 15 work items.
+
+2. Run work items with bounded concurrency. Use a simple semaphore pattern:
+   - Maintain a Set of running promises, capped at config.concurrency
+   - When a slot opens, start the next work item
+   - DO NOT use any external concurrency library — just Promise + async/await
+
+3. Concurrency rules (important for local models):
+   - Ollama can only run one inference at a time. If multiple models are ollama://,
+     they share a single concurrency slot.
+   - API-based models (anthropic://, openai://) can run in parallel.
+   - So the effective strategy: group by backend type, serialize within ollama,
+     parallelize across API backends.
+   - Implementation: maintain a per-backend lock. Before starting a work item,
+     acquire the lock for its backend. Ollama gets concurrency=1. API backends
+     get concurrency=config.concurrency.
+   - Backend detection: just check the URL prefix (ollama:// vs everything else).
+
+4. For each completed work item, call onResult if provided (for live CLI output).
+
+5. After all work items complete:
+   - Record completed_at
+   - Compute summary totals
+   - Return BatchReport
+
+Also export a helper for the CLI:
+
+```typescript
+function formatBatchSummaryTable(report: BatchReport): string
+```
+
+This produces the model-vs-model comparison table:
+```
+| Task              | ollama://llama3.2 | ollama://qwen3:8b | anthropic://claude-sonnet-4-6 |
+|-------------------|-------------------|-------------------|-------------------------------|
+| box-with-hole     | PASS 82 (1 iter)  | PASS 88 (1 iter)  | PASS 95 (1 iter)              |
+| parametric-bracket| FAIL 45 (3 iter)  | PASS 71 (2 iter)  | PASS 90 (1 iter)              |
+| Overall           | 40% pass          | 80% pass          | 100% pass                     |
+```
+
+TASK B: Update `src/cli/index.ts` cmdEval
+
+The --model flag should accept multiple values. Change arg parsing so that each
+`--model <url>` encountered pushes to an array. If no --model given, default to
+["ollama://llama3.2"].
+
+Add new flags:
+- `--concurrency <n>`: max parallel runs (default 2)
+- `--repeat <n>`: run each (task, model) pair N times for statistical significance
+  (default 1). When repeat > 1, the same work item is queued N times.
+
+Updated flow in cmdEval:
+1. Parse task path(s) — single YAML or directory of YAMLs
+2. Parse model list
+3. If single task + single model + repeat=1: call runEval directly (existing fast path)
+4. Otherwise: call runBatch, stream results with onResult callback that prints
+   each result as it completes:
+   ```
+   [eval] box-with-hole (ollama://llama3.2)  PASS  score=82  iterations=1  tokens=1,204  time=3.1s
+   [eval] box-with-hole (ollama://qwen3:8b)  PASS  score=88  iterations=1  tokens=1,102  time=2.8s
+   ```
+5. After batch completes: print the comparison table via formatBatchSummaryTable
+6. Auto-run aggregateLogs and print a one-liner pointing to the report:
+   ```
+   [eval] Batch complete: 10 runs, 8 pass, 2 fail. See eval-logs/reports/ for details.
+   ```
+
+Update printUsage() with the new flags.
+
+Run `npm run typecheck`. Commit. Push.
+```
+
+---
+
 ## Next Steps (not written yet)
 
-- Step 8: Multi-model batch + parallel runs
 - Step 9: Ad-hoc tasks (`cadlad eval --task "..."`)
 - Step 10: CI integration (`scripts/ci-eval.sh`)
