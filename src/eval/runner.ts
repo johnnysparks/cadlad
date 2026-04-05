@@ -37,11 +37,14 @@ export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult
   mkdirSync(logDir, { recursive: true });
 
   const sourcePath = join(scratchDir, `${runId}.forge.ts`);
-  const screenshotSourcePath = join(scratchDir, `${runId}.forge.js`);
   const logPath = join(logDir, `${timestamp}.ndjson`);
 
   let totalTokens = 0;
   const runStart = Date.now();
+  const maxIterations = Math.max(1, task.max_iterations ?? 1);
+  const passThreshold = options.passThreshold ?? 70;
+  const screenshotPaths: string[] = [];
+  const retryNotes: string[] = [];
 
   appendEvent(logPath, {
     ts: Date.now(),
@@ -51,128 +54,199 @@ export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult
     data: {
       model: options.modelRef,
       config: {
-        max_iterations: task.max_iterations ?? 1,
-        pass_threshold: options.passThreshold,
+        max_iterations: maxIterations,
+        pass_threshold: passThreshold,
       },
     },
   });
 
   const systemPrompt = buildSystemPrompt(task);
-  const userPrompt = buildUserPrompt(task);
-
-  appendEvent(logPath, {
-    ts: Date.now(),
-    run_id: runId,
-    task_id: task.id,
-    event: "plan.prompt_sent",
-    data: {
-      prompt_tokens: estimateTokens(`${systemPrompt}\n\n${userPrompt}`),
-      has_reference_images: (task.reference_images?.length ?? 0) > 0,
-    },
-  });
-
-  const generation = await generateCode(model, {
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-  });
-
-  totalTokens += generation.usage.total_tokens;
-
-  appendEvent(logPath, {
-    ts: Date.now(),
-    run_id: runId,
-    task_id: task.id,
-    event: "plan.response",
-    data: {
-      response_tokens: generation.usage.completion_tokens,
-      prompt_tokens: generation.usage.prompt_tokens,
-      total_tokens: generation.usage.total_tokens,
-    },
-  });
-
-  const source = extractTypeScriptFence(generation.text);
-  writeFileSync(sourcePath, source, "utf-8");
-  writeFileSync(screenshotSourcePath, source, "utf-8");
-
-  appendEvent(logPath, {
-    ts: Date.now(),
-    run_id: runId,
-    task_id: task.id,
-    event: "build.code_generated",
-    data: {
-      source_hash: sha256(source),
-      line_count: source.split(/\r?\n/).length,
-      iteration: 1,
-      path: sourcePath,
-    },
-  });
 
   await initManifold();
-  const modelResult = await evaluateModel(source);
+  let latestScore: EvalResult | undefined;
+  let latestEvaluation:
+    | (ReturnType<typeof evaluateModel> extends Promise<infer TResult> ? TResult : never)
+    | undefined;
+  let finalPass = false;
+  let finalReason = "max iterations reached";
+  let completedIterations = 0;
 
-  appendEvent(logPath, {
-    ts: Date.now(),
-    run_id: runId,
-    task_id: task.id,
-    event: "eval.completed",
-    data: {
-      success: modelResult.errors.length === 0,
-      errors: modelResult.errors,
-      warnings: modelResult.evaluation.summary.warningCount,
-      stats: modelResult.evaluation.stats,
-    },
-  });
+  for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+    completedIterations = iteration;
+    const userPrompt = buildIterationPrompt(task, retryNotes, iteration, maxIterations);
 
-  const screenshotPaths = await tryCaptureScreenshots(screenshotSourcePath);
-  if (screenshotPaths.length > 0) {
     appendEvent(logPath, {
       ts: Date.now(),
       run_id: runId,
       task_id: task.id,
-      event: "eval.screenshots",
+      event: "plan.prompt_sent",
       data: {
-        paths: screenshotPaths,
-        angles: ["iso", "front", "right", "top"],
+        iteration,
+        prompt_tokens: estimateTokens(`${systemPrompt}\n\n${userPrompt}`),
+        has_reference_images: (task.reference_images?.length ?? 0) > 0,
       },
     });
+
+    const generation = await generateCode(model, {
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    });
+
+    totalTokens += generation.usage.total_tokens;
+
+    appendEvent(logPath, {
+      ts: Date.now(),
+      run_id: runId,
+      task_id: task.id,
+      event: "plan.response",
+      data: {
+        iteration,
+        response_tokens: generation.usage.completion_tokens,
+        prompt_tokens: generation.usage.prompt_tokens,
+        total_tokens: generation.usage.total_tokens,
+      },
+    });
+
+    const source = extractTypeScriptFence(generation.text);
+    writeFileSync(sourcePath, source, "utf-8");
+
+    appendEvent(logPath, {
+      ts: Date.now(),
+      run_id: runId,
+      task_id: task.id,
+      event: "build.code_generated",
+      data: {
+        source_hash: sha256(source),
+        line_count: source.split(/\r?\n/).length,
+        iteration,
+        path: sourcePath,
+      },
+    });
+
+    const modelResult = await evaluateModel(source);
+    latestEvaluation = modelResult;
+
+    appendEvent(logPath, {
+      ts: Date.now(),
+      run_id: runId,
+      task_id: task.id,
+      event: "eval.completed",
+      data: {
+        iteration,
+        success: modelResult.errors.length === 0,
+        errors: modelResult.errors,
+        warnings: modelResult.evaluation.summary.warningCount,
+        stats: modelResult.evaluation.stats,
+      },
+    });
+
+    const iterationScreenshots = await tryCaptureScreenshots(sourcePath);
+    screenshotPaths.push(...iterationScreenshots);
+    if (iterationScreenshots.length > 0) {
+      appendEvent(logPath, {
+        ts: Date.now(),
+        run_id: runId,
+        task_id: task.id,
+        event: "eval.screenshots",
+        data: {
+          iteration,
+          paths: iterationScreenshots,
+          angles: ["iso", "front", "right", "top"],
+        },
+      });
+    }
+
+    const score = scoreEvaluation({
+      task,
+      bundle: modelResult.evaluation,
+      source,
+    });
+    latestScore = score;
+
+    appendEvent(logPath, {
+      ts: Date.now(),
+      run_id: runId,
+      task_id: task.id,
+      event: "score.computed",
+      data: {
+        iteration,
+        total: score.score,
+        geometry: score.geometry,
+        constraints: score.constraints,
+        visual: score.visual,
+        api: score.api,
+        feedback: score.feedback,
+      },
+    });
+
+    const pass = score.pass && score.score >= passThreshold;
+    if (pass) {
+      finalPass = true;
+      finalReason = "score meets threshold";
+      appendEvent(logPath, {
+        ts: Date.now(),
+        run_id: runId,
+        task_id: task.id,
+        event: "decide.action",
+        data: {
+          iteration,
+          action: "pass",
+          reason: finalReason,
+        },
+      });
+      break;
+    }
+
+    if (iteration < maxIterations) {
+      const feedback = composeRetryFeedback(score.feedback, modelResult.errors, passThreshold, score.score);
+      retryNotes.push(feedback);
+      finalReason = "score below threshold";
+      appendEvent(logPath, {
+        ts: Date.now(),
+        run_id: runId,
+        task_id: task.id,
+        event: "decide.action",
+        data: {
+          iteration,
+          action: "retry",
+          reason: finalReason,
+          score: score.score,
+          pass_threshold: passThreshold,
+        },
+      });
+      appendEvent(logPath, {
+        ts: Date.now(),
+        run_id: runId,
+        task_id: task.id,
+        event: "build.retry",
+        data: {
+          iteration: iteration + 1,
+          feedback_summary: feedback,
+        },
+      });
+    } else {
+      finalReason = "score below threshold";
+      appendEvent(logPath, {
+        ts: Date.now(),
+        run_id: runId,
+        task_id: task.id,
+        event: "decide.action",
+        data: {
+          iteration,
+          action: "fail",
+          reason: finalReason,
+          score: score.score,
+          pass_threshold: passThreshold,
+        },
+      });
+    }
   }
 
-  const score = scoreEvaluation({
-    task,
-    bundle: modelResult.evaluation,
-    source,
-  });
-
-  appendEvent(logPath, {
-    ts: Date.now(),
-    run_id: runId,
-    task_id: task.id,
-    event: "score.computed",
-    data: {
-      total: score.score,
-      geometry: score.geometry,
-      constraints: score.constraints,
-      visual: score.visual,
-      api: score.api,
-      feedback: score.feedback,
-    },
-  });
-
-  const passThreshold = options.passThreshold ?? 70;
-  const pass = score.pass && score.score >= passThreshold;
-
-  appendEvent(logPath, {
-    ts: Date.now(),
-    run_id: runId,
-    task_id: task.id,
-    event: "decide.action",
-    data: {
-      action: pass ? "pass" : "fail",
-      reason: pass ? "score meets threshold" : "score below threshold",
-    },
-  });
+  if (!latestScore || !latestEvaluation) {
+    throw new Error("Eval run did not produce a score.");
+  }
 
   appendEvent(logPath, {
     ts: Date.now(),
@@ -180,11 +254,11 @@ export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult
     task_id: task.id,
     event: "run.completed",
     data: {
-      final_score: score.score,
-      iterations: 1,
+      final_score: latestScore.score,
+      iterations: completedIterations,
       total_tokens: totalTokens,
       duration_ms: Date.now() - runStart,
-      pass,
+      pass: finalPass,
     },
   });
 
@@ -195,13 +269,13 @@ export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult
     event: "run.summary",
     data: {
       model: options.modelRef,
-      pass,
-      score: score.score,
-      iterations: 1,
+      pass: finalPass,
+      score: latestScore.score,
+      iterations: completedIterations,
       total_tokens: totalTokens,
       total_duration_ms: Date.now() - runStart,
-      eval_bundle: modelResult.evaluation,
-      failure_reason: pass ? undefined : score.feedback[0] ?? "Score below threshold",
+      eval_bundle: latestEvaluation.evaluation,
+      failure_reason: finalPass ? undefined : latestScore.feedback[0] ?? finalReason,
     },
   };
 
@@ -210,12 +284,44 @@ export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult
   return {
     runId,
     task,
-    pass,
-    score,
+    pass: finalPass,
+    score: latestScore,
     sourcePath,
     logPath,
     screenshotPaths,
   };
+}
+
+function buildIterationPrompt(task: TaskSpec, retryNotes: string[], iteration: number, maxIterations: number): string {
+  const basePrompt = buildUserPrompt(task);
+  if (retryNotes.length === 0) {
+    return basePrompt;
+  }
+
+  return [
+    basePrompt,
+    "",
+    `RETRY CONTEXT: attempt ${iteration} of ${maxIterations}.`,
+    "Address the issues from previous attempts:",
+    ...retryNotes.map((note, index) => `- Attempt ${index + 1}: ${note}`),
+    "",
+    "Return a complete replacement .forge.ts implementation, not a diff.",
+  ].join("\n");
+}
+
+function composeRetryFeedback(
+  scoreFeedback: string[],
+  runtimeErrors: string[],
+  passThreshold: number,
+  score: number,
+): string {
+  const reasons = [
+    `score ${score.toFixed(2)} below pass threshold ${passThreshold}`,
+    ...runtimeErrors.map((error) => `runtime: ${error}`),
+    ...scoreFeedback,
+  ].slice(0, 6);
+
+  return reasons.join("; ");
 }
 
 function loadTaskSpec(taskPath: string): TaskSpec {
