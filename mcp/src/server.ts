@@ -1284,16 +1284,8 @@ interface GeometrySummary {
 }
 
 interface OverviewInput {
-  stats: RunResultEnvelope["runResult"] extends infer R
-    ? R extends { stats?: infer S }
-      ? S
-      : never
-    : never;
-  evaluation: RunResultEnvelope["runResult"] extends infer R
-    ? R extends { evaluation?: infer E }
-      ? E
-      : never
-    : never;
+  stats: NonNullable<RunResultEnvelope["runResult"]>["stats"] | undefined;
+  evaluation: NonNullable<RunResultEnvelope["runResult"]>["evaluation"] | undefined;
   actionableErrors: string[];
   warnings: string[];
 }
