@@ -13,12 +13,12 @@ Reproduce the bug visually first. Check both studio and gallery — they share r
 ## Where rendering lives
 
 ```
-src/rendering/
+packages/rendering/
   scene-builder.ts    # THE shared rendering module. Lighting, grid, body→mesh,
                       # edge strokes, auto-color, Z-up→Y-up transform.
                       # buildBodyGroup(), createLighting(), createGrid()
 
-src/studio/
+apps/studio-web/
   viewport.ts         # Studio 3D viewport — OrbitControls, camera, resize
   main.ts             # Studio boot — wires editor + viewport + params
 

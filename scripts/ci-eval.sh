@@ -16,7 +16,7 @@ export PATH="$REPO_ROOT/node_modules/.bin:$PATH"
 
 LOGFILE="/tmp/cadlad-ci-eval-$$.log"
 LOCKFILE="/tmp/cadlad-ci-eval.lock"
-BASELINE_FILE="eval-logs/baseline.json"
+BASELINE_FILE="infra/eval/eval-logs/baseline.json"
 MODEL="ollama://llama3.2"
 CONCURRENCY=1
 UPDATE_BASELINE=0
@@ -90,8 +90,8 @@ if [ "$EVAL_EXIT" -ne 0 ]; then
   exit 1
 fi
 
-mkdir -p eval-logs
-CURRENT_SUMMARY=$(node --import tsx -e "import {aggregateLogs} from './packages/eval/report.js'; console.log(JSON.stringify(aggregateLogs('eval-logs')))")
+mkdir -p infra/eval/eval-logs
+CURRENT_SUMMARY=$(node --import tsx -e "import {aggregateLogs} from './packages/eval/report.js'; console.log(JSON.stringify(aggregateLogs('infra/eval/eval-logs')))")
 
 if [ "$UPDATE_BASELINE" -eq 1 ]; then
   printf '%s\n' "$CURRENT_SUMMARY" > "$BASELINE_FILE"

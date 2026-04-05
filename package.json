@@ -38,11 +38,6 @@
     "geometry"
   ],
   "license": "MIT",
-  "dependencies": {
-    "@three-ts/orbit-controls": "^1.4.7",
-    "manifold-3d": "^3.0.0",
-    "three": "^0.170.0"
-  },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "@types/node": "^25.5.0",
@@ -51,6 +46,7 @@
     "monaco-editor": "^0.52.0",
     "playwright-core": "^1.59.1",
     "sharp": "^0.34.5",
+    "three": "^0.183.2",
     "tsx": "^4.20.6",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.0.0",

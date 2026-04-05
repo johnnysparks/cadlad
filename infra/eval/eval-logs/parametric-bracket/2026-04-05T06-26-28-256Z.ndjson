@@ -1,0 +1,6 @@
+{"ts":1775370388256,"run_id":"f714503d-3fed-4168-9151-fcf7d2f3bce5","task_id":"parametric-bracket","event":"run.started","data":{"model":"gpt-4o-mini"}}
+{"ts":1775370392354,"run_id":"f714503d-3fed-4168-9151-fcf7d2f3bce5","task_id":"parametric-bracket","event":"build.code_generated","data":{"iteration":1,"chars":881,"tokens":832}}
+{"ts":1775370392357,"run_id":"f714503d-3fed-4168-9151-fcf7d2f3bce5","task_id":"parametric-bracket","event":"eval.completed","data":{"iteration":1,"success":true,"error_count":0,"warning_count":0}}
+{"ts":1775370395080,"run_id":"f714503d-3fed-4168-9151-fcf7d2f3bce5","task_id":"parametric-bracket","event":"score.computed","data":{"iteration":1,"total":79.04761904761907,"pass":true,"geometry":60,"constraints":100,"api":85.71428571428571,"judge":0,"weights":{"geometry":0.44444444444444453,"constraints":0.33333333333333337,"api":0.22222222222222227,"judge":0}}}
+{"ts":1775370395080,"run_id":"f714503d-3fed-4168-9151-fcf7d2f3bce5","task_id":"parametric-bracket","event":"decide.action","data":{"iteration":1,"action":"pass"}}
+{"ts":1775370395081,"run_id":"f714503d-3fed-4168-9151-fcf7d2f3bce5","task_id":"parametric-bracket","event":"run.completed","data":{"pass":true,"iterations":1,"total_tokens":832,"duration_ms":6825,"score":79.04761904761907}}

@@ -32,6 +32,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: eval-logs
-          path: eval-logs/
+          name: infra/eval/eval-logs
+          path: infra/eval/eval-logs/
           retention-days: 30
