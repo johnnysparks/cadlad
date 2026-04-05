@@ -5,7 +5,7 @@ description: |
   The lip should be formed as a thin frame with approximately 1 mm wall thickness by subtracting an inner rectangular void, and the frame should sit below the plate to register inside a compartment opening.
   Add two small snap tabs on opposite short ends near the bottom of the lip and include shallow grip ridges on the top face for finger traction.
 reference_prompt: "A professional 3D CAD render of a snap-fit battery cover, 35mm x 50mm, with a perimeter lip, two snap tabs on the short ends, and shallow grip ridges on the top surface for finger traction. High-quality plastic material, clean engineering studio lighting, isometric view."
-reference_images: ["tasks/benchmark/references/battery-cover.png"]
+reference_images: ["content/benchmarks/references/battery-cover.png"]
 acceptance:
   body_count: 1
   volume_min: 2500

@@ -8,7 +8,7 @@ description: |
   4. **Spokes & Nipples**: 32 spokes (16 per side). Model the spokes as thin cylinders running from the hub flanges to the rim. Implement a standard "3-cross" lacing pattern, meaning the spokes angle backward and forward to cross each other 3 times before reaching the rim. 
   Use assembly() to organize the Hub, Rim, Tire, and the pattern of Spokes.
 reference_prompt: "A professional 3D CAD render of a 700c road bicycle wheel assembly including a central hub with flanges, an aero-profile V-shaped rim, a rubber tire, and 32 spokes in a 3-cross lacing pattern. Realistic materials, metallic hub and rim, matte black tire, studio lighting, detailed perspective."
-reference_images: ["tasks/benchmark/references/bicycle-wheel-assembly.png"]
+reference_images: ["content/benchmarks/references/bicycle-wheel-assembly.png"]
 acceptance:
   body_count_min: 35 # 1 hub + 1 rim + 1 tire + 32 spokes
   body_count_max: 100

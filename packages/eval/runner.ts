@@ -37,8 +37,8 @@ export async function runEval(task: TaskSpec, config: ModelConfig, opts?: {
   const run_id = randomUUID();
   const startedAt = Date.now();
   const ts = new Date(startedAt).toISOString().replace(/[:.]/g, "-");
-  const log_path = resolve("eval-logs", task.id, `${ts}.ndjson`);
-  mkdirSync(resolve("eval-logs", task.id), { recursive: true });
+  const log_path = resolve("infra/eval/eval-logs", task.id, `${ts}.ndjson`);
+  mkdirSync(resolve("infra/eval/eval-logs", task.id), { recursive: true });
 
   let iteration = 0;
   let totalTokens = 0;
@@ -74,8 +74,8 @@ export async function runEval(task: TaskSpec, config: ModelConfig, opts?: {
       data: { iteration, chars: code.length, tokens: response.usage.total_tokens },
     });
 
-    const source_path = resolve("eval-scratch", task.id, `${run_id}.forge.ts`);
-    mkdirSync(resolve("eval-scratch", task.id), { recursive: true });
+    const source_path = resolve("infra/eval/eval-scratch", task.id, `${run_id}.forge.ts`);
+    mkdirSync(resolve("infra/eval/eval-scratch", task.id), { recursive: true });
     writeFileSync(source_path, code, "utf-8");
 
     await initManifold();
@@ -97,7 +97,7 @@ export async function runEval(task: TaskSpec, config: ModelConfig, opts?: {
     if (result.errors.length === 0 && opts?.renderSession) {
       try {
         console.log(`[eval] Rendering screenshots for iteration ${iteration}...`);
-        const snapDir = resolve("eval-scratch", task.id, run_id);
+        const snapDir = resolve("infra/eval/eval-scratch", task.id, run_id);
         const paths = await opts.renderSession.renderCode(code, snapDir, task.id, DEFAULT_VIEWS);
         console.log(`[eval] Screenshots rendered (${paths.length}).`);
         screenshotPaths = paths;

@@ -5,7 +5,7 @@ description: |
   Use base dimensions 80 mm (width) × 60 mm (depth) × 8 mm (thickness), a back support that rises 70 mm above the base with 5 mm thickness at the rear edge, and a front lip 12 mm tall with 5 mm thickness at the front edge.
   The back and lip should both run across the full width, and all three features should be united into a stable stand that supports a phone leaning against the back.
 reference_prompt: "A professional 3D CAD render of a minimalist desk phone stand, featuring a wide flat base, an angled upright back support, and a front retaining lip. Unified solid body design, sleek modern aesthetic, matte finish, studio lighting, perspective view."
-reference_images: ["tasks/benchmark/references/phone-stand.png"]
+reference_images: ["content/benchmarks/references/phone-stand.png"]
 acceptance:
   body_count: 1
   volume_min: 51000
