@@ -21,6 +21,7 @@ import { LocalHistoryStore } from "./local-history-store.js";
 import { RevisionBranchError } from "../core/revision-branch.js";
 import { loadTaskFile, runEval } from "../eval/runner.js";
 import { parseModelConfig } from "../eval/model-adapter.js";
+import { aggregateLogs, generateDeadweightReport, generateIssuesReport } from "../eval/report.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -50,6 +51,9 @@ async function main() {
       break;
     case "eval":
       await cmdEval(args);
+      break;
+    case "eval-report":
+      await cmdEvalReport(args);
       break;
     default:
       printUsage();
@@ -343,6 +347,50 @@ async function cmdEval(args: string[]) {
   }
 }
 
+async function cmdEvalReport(args: string[]) {
+  const parsed = parseEvalReportArgs(args);
+  const report = aggregateLogs(parsed.logDir);
+  const filteredTasks = parsed.taskId
+    ? report.tasks.filter((task) => task.task_id === parsed.taskId)
+    : report.tasks;
+  const scopedReport = { ...report, tasks: filteredTasks };
+
+  if (parsed.deadweight) {
+    const deadweight = generateDeadweightReport(parsed.logDir, parsed.tasksDir);
+    if (parsed.json) {
+      console.log(JSON.stringify(deadweight, null, 2));
+      return;
+    }
+    printDeadweightReport(deadweight);
+    return;
+  }
+
+  if (parsed.issues) {
+    const issues = generateIssuesReport(scopedReport);
+    if (parsed.json) {
+      console.log(JSON.stringify(issues, null, 2));
+      return;
+    }
+    printIssuesReport(issues);
+    return;
+  }
+
+  if (parsed.compare) {
+    if (parsed.json) {
+      console.log(JSON.stringify(scopedReport, null, 2));
+      return;
+    }
+    printModelComparison(scopedReport);
+    return;
+  }
+
+  if (parsed.json) {
+    console.log(JSON.stringify(scopedReport, null, 2));
+    return;
+  }
+  printSummary(scopedReport);
+}
+
 function collectTaskFiles(taskPath: string): string[] {
   const absolute = resolve(taskPath);
   const stat = statSync(absolute);
@@ -421,6 +469,8 @@ Usage:
   cadlad export <file> -o output.stl    Export model to STL
   cadlad eval <task.yaml|dir> [--model <provider://model|http://host/model>]
                                        Run one or many eval tasks
+  cadlad eval-report [--task <task-id>] [--compare] [--issues] [--deadweight] [--json]
+                                       Aggregate eval logs into summary/comparison/issue reports
   cadlad studio                         Launch browser studio
 `);
 }
@@ -595,6 +645,116 @@ function parseEvalArgs(args: string[]): { taskPath?: string; modelRef: string } 
   }
 
   return parsed;
+}
+
+function parseEvalReportArgs(args: string[]): {
+  taskId?: string;
+  compare: boolean;
+  issues: boolean;
+  deadweight: boolean;
+  json: boolean;
+  logDir: string;
+  tasksDir: string;
+} {
+  const parsed = {
+    taskId: undefined as string | undefined,
+    compare: false,
+    issues: false,
+    deadweight: false,
+    json: false,
+    logDir: resolve("eval-logs"),
+    tasksDir: resolve("tasks/benchmark"),
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--task") {
+      parsed.taskId = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === "--compare") {
+      parsed.compare = true;
+      continue;
+    }
+    if (arg === "--issues") {
+      parsed.issues = true;
+      continue;
+    }
+    if (arg === "--deadweight") {
+      parsed.deadweight = true;
+      continue;
+    }
+    if (arg === "--json") {
+      parsed.json = true;
+    }
+  }
+
+  return parsed;
+}
+
+function printSummary(report: { generated_at: string; total_runs: number; tasks: Array<{ task_id: string; runs: number; pass_rate: number; avg_score: number; avg_iterations: number; avg_tokens: number; }> }): void {
+  const date = report.generated_at.slice(0, 10);
+  console.log(`## Eval Summary (${report.total_runs} runs, ${date})\n`);
+  console.log("| Task | Runs | Pass Rate | Avg Score | Avg Iters | Avg Tokens |");
+  console.log("|-------------------|------|-----------|-----------|-----------|------------|");
+  for (const task of report.tasks) {
+    console.log(
+      `| ${task.task_id} | ${padLeft(task.runs.toString(), 4)} | ${padLeft(formatPercent(task.pass_rate), 8)} | ${padLeft(task.avg_score.toFixed(1), 8)} | ${padLeft(task.avg_iterations.toFixed(1), 8)} | ${padLeft(formatInt(task.avg_tokens), 10)} |`,
+    );
+  }
+}
+
+function printModelComparison(report: { tasks: Array<{ task_id: string; by_model: Record<string, { pass_rate: number; avg_iterations: number }> }>; models: string[] }): void {
+  console.log("## Model Comparison\n");
+  const header = ["Task", ...report.models];
+  console.log(`| ${header.join(" | ")} |`);
+  console.log(`|${header.map(() => "---").join("|")}|`);
+  for (const task of report.tasks) {
+    const columns = report.models.map((model) => {
+      const modelData = task.by_model[model];
+      if (!modelData) return "—";
+      return `${formatPercent(modelData.pass_rate)} (${modelData.avg_iterations.toFixed(1)} iter)`;
+    });
+    console.log(`| ${task.task_id} | ${columns.join(" | ")} |`);
+  }
+}
+
+function printIssuesReport(report: { issues: Array<{ task_id: string; severity: "critical" | "warning"; issue: string; detail: string }> }): void {
+  if (report.issues.length === 0) {
+    console.log("No issues detected.");
+    return;
+  }
+
+  for (const issue of report.issues) {
+    const emoji = issue.severity === "critical" ? "X" : "!";
+    console.log(`- ${emoji} [${issue.severity}] ${issue.task_id}: ${issue.issue} — ${issue.detail}`);
+  }
+}
+
+function printDeadweightReport(report: { entries: Array<{ api_method: string; referenced_in_tasks: string[]; success_rate: number; issue: string }> }): void {
+  if (report.entries.length === 0) {
+    console.log("No deadweight API methods detected.");
+    return;
+  }
+
+  console.log("| Method | Tasks | Success Rate | Issue |");
+  console.log("|---|---|---|---|");
+  for (const entry of report.entries) {
+    console.log(`| ${entry.api_method} | ${entry.referenced_in_tasks.join(", ")} | ${formatPercent(entry.success_rate)} | ${entry.issue} |`);
+  }
+}
+
+function formatPercent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function formatInt(value: number): string {
+  return Math.round(value).toLocaleString("en-US");
+}
+
+function padLeft(value: string, width: number): string {
+  return value.length >= width ? value : `${" ".repeat(width - value.length)}${value}`;
 }
 
 function handleRevisionBranchError(error: unknown): never {
