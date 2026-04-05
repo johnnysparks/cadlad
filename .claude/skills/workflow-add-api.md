@@ -14,13 +14,13 @@ npm run test       # green baseline (requires vitest installed locally)
 ## Where things live
 
 ```
-src/engine/
+packages/cad-kernel/
   solid.ts         # Solid class — all instance methods (.translate, .subtract, .smooth, etc.)
   primitives.ts    # Primitive factory functions (box, cylinder, sphere, etc.)
   manifold.ts      # Low-level Manifold WASM wrapper
   types.ts         # Body, Mesh, param types
 
-src/api/
+packages/cad-api/
   runtime.ts       # evaluateModel() — executes .forge.ts code, injects API into scope
   sketch.ts        # Sketch class (2D profiles → extrude/revolve)
   assembly.ts      # Assembly class (multi-part models)
@@ -30,22 +30,22 @@ src/api/
 
 ## Adding a method to Solid
 
-1. **Add the method in `src/engine/solid.ts`**.
+1. **Add the method in `packages/cad-kernel/solid.ts`**.
    - Use `_derive()` to return a new Solid that preserves `_color` and `_name`.
    - All methods are immutable — return a new Solid, never mutate `this`.
 
 2. **No explicit export needed** — Solid instances are already in scope in .forge.ts via the primitives.
 
-3. **If it's a new standalone function** (not a Solid method), add it to `src/engine/primitives.ts` and expose it in `src/api/runtime.ts` in the `sandbox` object passed to `evaluateModel`.
+3. **If it's a new standalone function** (not a Solid method), add it to `packages/cad-kernel/primitives.ts` and expose it in `packages/cad-api/runtime.ts` in the `sandbox` object passed to `evaluateModel`.
 
 ## Adding a Sketch method
 
-1. Add the method in `src/api/sketch.ts`.
+1. Add the method in `packages/cad-api/sketch.ts`.
 2. It's already available — Sketch is exposed in the runtime sandbox.
 
 ## Exposing to .forge.ts runtime
 
-Check `src/api/runtime.ts` — the `sandbox` object defines everything available in model code:
+Check `packages/cad-api/runtime.ts` — the `sandbox` object defines everything available in model code:
 
 ```js
 const sandbox = {

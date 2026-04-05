@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CadLad — Code-First Parametric CAD</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="toolbar">
+      <h1>CadLad</h1>
+      <div id="toolbar-actions">
+        <button id="btn-run" title="Run model (Ctrl+Enter)">▶ Run</button>
+        <button id="btn-toggle-params" title="Toggle parameters" aria-controls="param-panel" aria-expanded="false">Params</button>
+        <div id="toolbar-menu">
+          <button id="btn-menu" title="More actions" aria-label="More actions" aria-haspopup="true" aria-expanded="false">⋯</button>
+          <div id="toolbar-menu-dropdown" role="menu">
+            <button id="btn-live-session" role="menuitem" title="Create live assistant session">🤖☁️ Live session</button>
+            <button id="btn-export-stl" role="menuitem" title="Export STL">↓ Export STL</button>
+            <button id="btn-toggle-tool-bodies" role="menuitem" title="Toggle construction geometry wireframe">◌ Tool bodies</button>
+            <a href="./gallery/" id="btn-gallery" role="menuitem" title="Example Gallery">◈ Gallery</a>
+          </div>
+        </div>
+      </div>
+    </header>
+    <div id="live-session-strip" aria-live="polite">
+      <span id="live-session-status" data-state="idle">Live: off</span>
+      <span id="live-session-feedback"></span>
+      <button id="btn-copy-claude-prompt" title="Copy Claude Desktop / Claude Code session prompt" aria-label="Copy Claude prompt">🤖 Claude</button>
+      <button id="btn-connect-chatgpt" title="Generate link code for ChatGPT / OpenAI MCP" aria-label="Connect ChatGPT" style="display:none">⬡ ChatGPT</button>
+      <button id="btn-copy-live-error" title="Copy error to clipboard" aria-label="Copy error">📋</button>
+    </div>
+    <main id="workspace">
+      <div id="editor-pane"></div>
+      <div id="param-panel"></div>
+      <button
+        id="mobile-splitter"
+        type="button"
+        aria-label="Resize viewer and editor"
+        title="Drag to resize viewer and editor"
+      ></button>
+      <div id="viewport"></div>
+    </main>
+  </div>
+  <script type="module" src="./studio-main.ts"></script>
+</body>
+</html>

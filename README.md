@@ -101,7 +101,7 @@ return asm.toSolid();
 
 ## Examples
 
-The `projects/` directory contains ready-to-run models:
+The `content/projects/` directory contains ready-to-run models:
 
 | File | Description |
 |---|---|
@@ -116,30 +116,26 @@ Paste any example into the studio editor or run via CLI.
 
 ```bash
 # Validate a model (.forge.ts)
-cadlad run projects/box-with-hole.forge.ts
+cadlad run content/projects/box-with-hole/box-with-hole.forge.ts
 
 # Local-only validation loop (reruns on save)
-cadlad validate projects/box-with-hole.forge.ts --watch
-
-# Validate and emit machine-readable stats JSON (good for automation/agents)
-cadlad run projects/box-with-hole.forge.ts --json
-
-# Export to STL
-cadlad export projects/box-with-hole.forge.ts -o output.stl
-
-# List configured providers and discover available models in this environment
-cadlad models
+cadlad validate content/projects/box-with-hole/box-with-hole.forge.ts --watch
 ```
 
 ## Architecture
 
 ```
-src/
-  engine/          Manifold WASM backend, Solid class, primitives
-  api/             Public modeling API (param, sketch, assembly, runtime)
-  studio/          Browser IDE (Monaco + Three.js + param panel)
-  cli/             Node.js CLI tool
-projects/          Example .forge.ts models
+/apps
+  /studio-web      Browser IDE (Monaco + Three.js)
+  /cli             Node.js CLI tool
+  /worker          Live-session backend (Cloudflare)
+/packages
+  /cad-kernel      Geometry engine (Manifold WASM)
+  /cad-api         Public modeling API
+  /rendering       Shared Three.js scene builder
+/content
+  /projects        Example .forge.ts models
+  /snapshots       Visual baseline snapshots
 ```
 
 ### Design Principles

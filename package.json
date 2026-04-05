@@ -1,17 +1,20 @@
 {
   "name": "cadlad",
   "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "description": "Code-first parametric CAD for TypeScript — browser & CLI",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "bin": {
     "cadlad": "./dist/cli/index.js"
   },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "build:cli": "tsc -p tsconfig.cli.json",
+    "build:cli": "tsc -p apps/cli/tsconfig.json",
     "preview": "vite preview",
     "snap": "node scripts/render-node.mjs",
     "headless:doctor": "node scripts/headless-doctor.mjs",
@@ -19,10 +22,11 @@
     "test:watch": "vitest",
     "lint": "node scripts/lint.mjs",
     "typecheck": "node scripts/typecheck.mjs",
-    "worker:dev": "npm --prefix worker run dev",
-    "worker:deploy": "npm --prefix worker run deploy",
-    "worker:deploy:dry": "npm --prefix worker run deploy:dry",
-    "eval": "tsx src/cli/index.ts eval",
+    "typecheck:full": "npm run typecheck && npm --prefix apps/worker run typecheck && npm --prefix apps/mcp-gateway run typecheck",
+    "worker:dev": "npm --prefix apps/worker run dev",
+    "worker:deploy": "npm --prefix apps/worker run deploy",
+    "worker:deploy:dry": "npm --prefix apps/worker run deploy:dry",
+    "eval": "tsx apps/cli/index.ts eval",
     "eval:ci": "./scripts/ci-eval.sh --ci",
     "eval:baseline": "./scripts/ci-eval.sh --update-baseline"
   },
@@ -35,11 +39,6 @@
     "geometry"
   ],
   "license": "MIT",
-  "dependencies": {
-    "@three-ts/orbit-controls": "^1.4.7",
-    "manifold-3d": "^3.0.0",
-    "three": "^0.170.0"
-  },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "@types/node": "^25.5.0",
@@ -48,10 +47,12 @@
     "monaco-editor": "^0.52.0",
     "playwright-core": "^1.59.1",
     "sharp": "^0.34.5",
+    "three": "^0.183.2",
     "tsx": "^4.20.6",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.0.0",
     "vite": "^6.0.0",
+    "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^3.0.0"
   }
 }

@@ -13,7 +13,7 @@ npm run dev  # localhost:5173 (studio) and localhost:5173/gallery/ (gallery)
 ```
 index.html              # Studio HTML shell (editor pane, viewport, param panel, buttons)
 
-src/studio/
+apps/studio-web/
   main.ts               # Boot sequence: creates editor, viewport, param panel
                         # Handles ?code= URL param (base64-encoded model from gallery links)
                         # Exposes window.__cadlad for automation
@@ -37,7 +37,7 @@ gallery/
 
 ## Shared rendering
 
-Both studio and gallery use `src/rendering/scene-builder.ts` for:
+Both studio and gallery use `packages/rendering/scene-builder.ts` for:
 - `buildBodyGroup()` — mesh construction, edge strokes, auto-color
 - `createLighting()` — 3-point lighting setup
 - `createGrid()` — ground grid
@@ -52,7 +52,7 @@ Studio reads: `URLSearchParams.get("code")` → `atob` → `editor.setValue()`
 After loading, URL is cleaned via `history.replaceState`.
 
 ### Model evaluation
-Both use `evaluateModel(code, paramValues?)` from `src/api/runtime.ts`.
+Both use `evaluateModel(code, paramValues?)` from `packages/cad-api/runtime.ts`.
 Returns: `{ bodies, params, errors, hints, camera }`.
 
 ### Automation API (`window.__cadlad`)

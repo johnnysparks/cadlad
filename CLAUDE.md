@@ -7,32 +7,39 @@ Code-first parametric 3D CAD in TypeScript. Browser studio (Monaco + Three.js) a
 ## Commands
 
 ```bash
-npm run dev          # Vite dev server at localhost:5173
+npm run dev          # Vite dev server (studio-web)
 npm run build        # Production build
-npm run typecheck    # tsc --noEmit  ← ALWAYS reliable, use this
-npm run test         # vitest run    ← exits 0 if vitest not installed (silent no-op)
-npm run lint         # eslint src/   ← exits 0 if eslint not installed (silent no-op)
+npm run typecheck    # Global tsc --noEmit
+npm run test         # Global vitest run
+npm run lint         # Global eslint
+npm run eval         # CLI eval tool
 ```
 
-**Important:** `npm run test` and `npm run lint` exit 0 without running if their tools aren't installed locally. `npm run typecheck` is the one reliable check — always run it after changes. If you need real test execution, install vitest first (`npm install -D vitest`).
+**Important:** `npm run typecheck` is the most reliable check. Run it after any major change.
 
 ## Architecture
 
 ```
-src/
-  engine/    Manifold WASM backend, Solid class, primitives, types
-  api/       Public modeling API: runtime, params, sketch, assembly, hints, constraints, reference geometry
-  studio/    Browser IDE: Monaco editor, Three.js viewport, param panel
-  cli/       Node CLI: run, export, studio launcher
-  validation/ Layered validation pipeline (5 stages + constraint enforcement)
-  rendering/ Shared Three.js scene builder
-worker/      Cloudflare Durable Objects backend: live sessions, event store, agent telemetry
-mcp/         MCP server: evaluation, stats, validation, domain analysis, branch/revision tools
-projects/    Folder-per-project: projects/{name}/{name}.forge.ts + README.md + reference/
-gallery/     Gallery page (auto-reads from projects/*/*.forge.ts via import.meta.glob)
-scripts/     CI checks, snapshot tests, hook installer
-snapshots/   Visual regression test references
-docs/        Roadmap (split by phase), north star vision, architecture docs
+/apps
+  /studio-web       Browser IDE (Monaco + Three.js) and gallery
+  /cli              Node CLI (run, eval, export)
+  /worker           Cloudflare Worker (live sessions, event store)
+  /mcp-gateway      MCP server (bridge for assistants)
+/packages
+  /cad-kernel       Geometry engine (Manifold WASM), Solid, types
+  /cad-api          Public modeling API (.forge.ts surface)
+  /rendering        Shared Three.js scene builder
+  /validation       Layered validation pipeline
+  /session-core     Event/revision store abstractions
+  /eval             Model evaluation pipeline
+  /prompts          Prompt assets for eval/agents
+/content
+  /projects         User model corpus (.forge.ts)
+  /benchmarks       Evaluation tasks/benchmarks
+  /snapshots        Visual baseline snapshots
+/infra              Cloudflare configuration, health functions
+/docs               Roadmap and architecture docs
+/scripts            Maintenance and CI helper scripts
 ```
 
 ## Roadmap

@@ -1,0 +1,11 @@
+{
+  "name": "@cadlad/kernel",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "dependencies": {
+    "manifold-3d": "^3.0.0",
+    "three": "^0.170.0"
+  }
+}

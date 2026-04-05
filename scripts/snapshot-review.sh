@@ -16,10 +16,9 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
-REPORT="$REPO_ROOT/snapshots/report.json"
-REF_DIR="$REPO_ROOT/snapshots/reference"
-CUR_DIR="$REPO_ROOT/snapshots/current"
-EXAMPLES_DIR="$REPO_ROOT/projects"
+REPORT="/tmp/cadlad-snapshots/report.json"
+SNAPSHOTS_DIR="$REPO_ROOT/content/snapshots"
+EXAMPLES_DIR="$REPO_ROOT/content/projects"
 
 if [ ! -f "$REPORT" ]; then
   echo "No snapshot report found at $REPORT"
@@ -43,8 +42,8 @@ ACCEPTED=""
 REJECTED=""
 
 for NAME in $DIFFS; do
-  REF_IMG="$REF_DIR/${NAME}.png"
-  CUR_IMG="$CUR_DIR/${NAME}.png"
+  REF_IMG="$SNAPSHOTS_DIR/${NAME}/reference.png"
+  CUR_IMG="/tmp/cadlad-snapshots/${NAME}.png"
   EXAMPLE_FILE="$EXAMPLES_DIR/${NAME}/${NAME}.forge.js"
 
   if [ ! -f "$REF_IMG" ] || [ ! -f "$CUR_IMG" ]; then
@@ -111,7 +110,7 @@ fi
 
 # If we accepted changes, commit the updated references
 if [ -n "$ACCEPTED" ] && [ -z "$REJECTED" ]; then
-  git add snapshots/reference/
+  git add content/snapshots/
   git commit -m "$(cat <<EOF
 chore: update snapshot references (auto-reviewed)
 

@@ -4,10 +4,10 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/eval/**'
-      - 'tasks/benchmark/**'
-      - 'src/engine/**'
-      - 'src/api/**'
+      - 'packages/eval/**'
+      - 'content/benchmarks/**'
+      - 'packages/cad-kernel/**'
+      - 'packages/cad-api/**'
   workflow_dispatch:
 
 jobs:
@@ -16,11 +16,11 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - run: npm ci
@@ -32,6 +32,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: eval-logs
-          path: eval-logs/
+          name: infra/eval/eval-logs
+          path: infra/eval/eval-logs/
           retention-days: 30

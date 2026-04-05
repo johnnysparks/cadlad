@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../dist/packages/session-core",
+    "rootDir": "."
+  },
+  "include": ["**/*"],
+  "exclude": ["node_modules", "dist"]
+}

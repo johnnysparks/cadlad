@@ -74,8 +74,13 @@ const outputArg = args.find(
     a !== argVal("--angle") &&
     a !== argVal("--url"),
 );
-const outputDir = outputArg ? resolve(outputArg) : join(projectDir, "snapshots");
+
 const modelName = basename(forgePath).replace(/\.forge\.(ts|js)$/, "");
+const defaultOutputDir = forgePath.includes("content/projects")
+  ? join(ROOT, "content/snapshots", modelName)
+  : join(projectDir, "snapshots");
+
+const outputDir = outputArg ? resolve(outputArg) : defaultOutputDir;
 const baseUrl = argVal("--url") ?? "http://localhost:5173";
 
 if (!existsSync(forgePath)) {
@@ -94,7 +99,7 @@ if (!existsSync(tsRunner)) {
 // Inline TS script — uses RenderSession for fast, event-driven capture
 const runScript = `
 import { readFileSync } from "node:fs";
-import { RenderSession } from "${pathToFileURL(join(ROOT, "src/eval/renderer.ts")).href}";
+import { RenderSession } from "${pathToFileURL(join(ROOT, "packages/eval/renderer.ts")).href}";
 
 const code = readFileSync(${JSON.stringify(forgePath)}, "utf-8");
 

@@ -8,13 +8,13 @@ if (!taskFile) {
   process.exit(1);
 }
 
-const SCRATCH_DIR = resolve("eval-scratch");
+const SCRATCH_DIR = resolve("infra/eval/eval-scratch");
 if (!existsSync(SCRATCH_DIR)) {
   mkdirSync(SCRATCH_DIR);
 }
 
-const PROMPT_FILE = resolve("eval-scratch/agent_prompt.txt");
-const CODE_FILE = resolve("eval-scratch/agent_code.txt");
+const PROMPT_FILE = resolve("infra/eval/eval-scratch/agent_prompt.txt");
+const CODE_FILE = resolve("infra/eval/eval-scratch/agent_code.txt");
 
 // Reset files
 writeFileSync(PROMPT_FILE, "");
@@ -24,7 +24,7 @@ console.log(`[agent-loop] Starting eval for ${taskFile}`);
 console.log(`[agent-loop] I will write prompts to ${PROMPT_FILE}`);
 console.log(`[agent-loop] I will wait for code in ${CODE_FILE}`);
 
-const evalProcess = spawn("npx", ["tsx", "src/cli/index.ts", "eval", taskFile], {
+const evalProcess = spawn("npx", ["tsx", "apps/cli/index.ts", "eval", taskFile], {
   stdio: ["pipe", "pipe", "inherit"],
 });
 

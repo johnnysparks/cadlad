@@ -26,7 +26,7 @@ if (hasLocal) {
   console.log('[lint] No local node_modules/eslint — falling back to global eslint in PATH');
 
   // In bare-minimum fallback (no typescript-eslint), only JS files can be parsed.
-  // If src/ has none (pure TypeScript project), skip linting and exit 0.
+  // If apps/ packages/ infra/ has none (pure TypeScript project), skip linting and exit 0.
   function hasJsFiles(dir) {
     try {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -37,17 +37,17 @@ if (hasLocal) {
     return false;
   }
 
-  if (!hasJsFiles('src')) {
+  if (!hasJsFiles('apps')) {
     console.log(
-      '[lint] Bare-minimum mode: src/ has no plain JS files (TypeScript requires typescript-eslint). Exit 0.',
+      '[lint] Bare-minimum mode: apps/ packages/ infra/ has no plain JS files (TypeScript requires typescript-eslint). Exit 0.',
     );
     process.exit(0);
   }
 }
 
 const [cmd, args] = hasLocal
-  ? ['node', [localBin, 'src/']]
-  : ['eslint', ['src/']];
+  ? ['node', [localBin, 'apps/', 'packages/', 'infra/']]
+  : ['eslint', ['apps/', 'packages/', 'infra/']];
 
 const result = spawnSync(cmd, args, { stdio: 'inherit' });
 process.exit(result.status ?? 1);

@@ -6,7 +6,7 @@ You're making sure tests pass, types are clean, lint is happy, and snapshots are
 
 ```bash
 npm run typecheck    # tsc --noEmit  ← ALWAYS reliable, use this first
-npm run lint         # eslint src/   ← exits 0 if eslint not installed (silent no-op)
+npm run lint         # eslint packages/   ← exits 0 if eslint not installed (silent no-op)
 npm run test         # vitest run    ← exits 0 if vitest not installed (silent no-op)
 npm run build        # production build (catches import/bundling issues)
 ```
@@ -55,14 +55,14 @@ Local `core.hooksPath` is set to `.git/hooks` (overrides global hooks).
 
 ### Type errors
 - New Solid methods need `_derive()` for color/name preservation — check return types
-- Runtime sandbox in `src/api/runtime.ts` must match what .forge.ts code expects
+- Runtime sandbox in `packages/cad-api/runtime.ts` must match what .forge.ts code expects
 
 ### Lint errors
-- Auto-fix: `npx eslint src/ --fix`
+- Auto-fix: `npx eslint packages/ --fix`
 - Common: unused imports, missing semicolons, prefer-const
 
 ### Test failures
-- Tests are in `src/__tests__/` or co-located
+- Tests are in `packages/__tests__/` or co-located
 - Vitest config in `vite.config.ts`
 - If a test fails on geometry, check that Manifold WASM initializes properly in the test environment
 
