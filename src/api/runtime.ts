@@ -23,6 +23,7 @@ import { assembly } from "./assembly.js";
 import { plane, axis, datum } from "./reference.js";
 import { isToolBody, toolBody } from "./toolbody.js";
 import { withLayeredValidation } from "../validation/layered-validation.js";
+import { computeModelStats } from "../studio/model-stats.js";
 
 /**
  * Evaluate a model script string and return the result.
@@ -207,9 +208,13 @@ export async function evaluateModel(
     runtimeErrors.push(msg);
   }
 
-  // Warn about real geometry problems (not style opinions)
+  // Warn about runtime geometry issues and design-intent opportunities.
+  const stats = computeModelStats(bodies);
   hints = collectHints({
     emptyBodies: bodies.filter((b) => b.mesh.positions.length === 0).length,
+    source: code,
+    stats,
+    params: collectedParams,
   });
 
   return withLayeredValidation({
