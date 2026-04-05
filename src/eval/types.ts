@@ -199,8 +199,9 @@ function parseSimpleYaml(input: string): Record<string, unknown> {
   const root: Record<string, unknown> = {};
   let currentSection: string | undefined;
   let currentIndent = 0;
-
-  for (const rawLine of input.split(/\r?\n/)) {
+  const lines = input.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const rawLine = lines[index];
     const commentTrimmed = rawLine.replace(/\s+#.*$/, "");
     if (!commentTrimmed.trim()) continue;
 
@@ -217,7 +218,32 @@ function parseSimpleYaml(input: string): Record<string, unknown> {
 
     const entryMatch = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
     if (!entryMatch) throw new Error(`Unsupported YAML line: ${rawLine}`);
-    const [, key, rawValue] = entryMatch;
+    const [, key, rawValueRaw] = entryMatch;
+    let rawValue = rawValueRaw;
+
+    if (rawValue === "|" || rawValue === ">") {
+      const blockLines: string[] = [];
+      const blockIndent = indent;
+      const foldNewlines = rawValue === ">";
+      while (index + 1 < lines.length) {
+        const nextRawLine = lines[index + 1];
+        const nextCommentTrimmed = nextRawLine.replace(/\s+#.*$/, "");
+        const nextIndent = nextRawLine.length - nextRawLine.trimStart().length;
+        if (nextCommentTrimmed.trim() && nextIndent <= blockIndent) {
+          break;
+        }
+        index += 1;
+        if (!nextCommentTrimmed.trim()) {
+          blockLines.push("");
+          continue;
+        }
+        blockLines.push(nextRawLine.slice(Math.min(nextIndent, blockIndent + 2)).trimEnd());
+      }
+      rawValue = foldNewlines
+        ? blockLines.join(" ").replace(/\s+/g, " ").trim()
+        : blockLines.join("\n").trim();
+    }
+
     const value = parseYamlScalar(rawValue);
 
     if (currentSection && indent > currentIndent) {

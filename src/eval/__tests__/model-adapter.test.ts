@@ -5,11 +5,19 @@ import type { ModelConfig } from "../types.js";
 const originalFetch = globalThis.fetch;
 const originalOpenAiKey = process.env.OPENAI_API_KEY;
 const originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
+const originalOpenAiModel = process.env.OPENAI_MODEL;
+const originalOpenAiBaseUrl = process.env.OPENAI_BASE_URL;
+const originalAnthropicModel = process.env.ANTHROPIC_MODEL;
+const originalAnthropicBaseUrl = process.env.ANTHROPIC_BASE_URL;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
   process.env.OPENAI_API_KEY = originalOpenAiKey;
   process.env.ANTHROPIC_API_KEY = originalAnthropicKey;
+  process.env.OPENAI_MODEL = originalOpenAiModel;
+  process.env.OPENAI_BASE_URL = originalOpenAiBaseUrl;
+  process.env.ANTHROPIC_MODEL = originalAnthropicModel;
+  process.env.ANTHROPIC_BASE_URL = originalAnthropicBaseUrl;
   vi.restoreAllMocks();
 });
 
@@ -59,6 +67,32 @@ describe("parseModelConfig", () => {
 
   it("rejects malformed references", () => {
     expect(() => parseModelConfig("llama3.2")).toThrow("Invalid model reference");
+  });
+
+  it("parses context-loop aliases for codex/cloud style environments", () => {
+    process.env.OPENAI_MODEL = "gpt-5";
+    process.env.OPENAI_BASE_URL = "https://gateway.example.com";
+    const config = parseModelConfig("context-loop");
+    expect(config).toEqual({
+      provider: "openai",
+      model: "gpt-5",
+      endpoint: "https://gateway.example.com",
+      requiresApiKey: false,
+      apiKeyEnvVar: "OPENAI_API_KEY",
+    });
+  });
+
+  it("parses provider-scoped context-loop aliases for claude code style environments", () => {
+    process.env.ANTHROPIC_MODEL = "claude-sonnet-4-6";
+    process.env.ANTHROPIC_BASE_URL = "https://claude-gateway.example.com";
+    const config = parseModelConfig("anthropic://current-context-loop");
+    expect(config).toEqual({
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      endpoint: "https://claude-gateway.example.com",
+      requiresApiKey: false,
+      apiKeyEnvVar: "ANTHROPIC_API_KEY",
+    });
   });
 });
 

@@ -376,6 +376,9 @@ interface ModelAdapter {
 // ollama://model-name     → localhost:11434
 // openai://model-name     → api.openai.com (needs OPENAI_API_KEY)
 // anthropic://model-name  → api.anthropic.com (needs ANTHROPIC_API_KEY)
+// context-loop            → infer active OpenAI/Anthropic "current model" from env (Codex/Claude CLI-friendly)
+// openai://context-loop   → force OpenAI context loop resolution from env
+// anthropic://context-loop → force Anthropic context loop resolution from env
 // http://host:port/model  → custom OpenAI-compatible endpoint
 // lmstudio://model-name   → localhost:1234 (OpenAI-compatible, no API key)
 ```
