@@ -9,7 +9,7 @@ description: |
   5. Add a 10mm diameter circular hole at the center of each rounded end.
   6. Apply a 2mm fillet to all top edges.
 reference_prompt: "A professional 3D CAD render of a flat mechanical link with rounded ends, 100mm long. Features a central longitudinal slot and circular holes at each end. Polished steel finish, subtle edge fillets, technical engineering part, studio lighting, top-down perspective."
-reference_images: ["tasks/benchmark/references/slotted-link.png"]
+reference_images: ["content/benchmarks/references/slotted-link.png"]
 acceptance:
   body_count: 1
   volume_min: 10000

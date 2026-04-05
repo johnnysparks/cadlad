@@ -13,7 +13,7 @@ description: |
   
   All subsystems must be grouped into their own distinct assemblies (`assembly("FrontWheel")`, `assembly("Drivetrain")`, etc.), and combined into one final master `assembly("RoadBike")`. Assign logical distinct colors to different materials (e.g., dark gray/carbon for the frame, silver for metal parts, black for rubber tires).
 reference_prompt: "A professional 3D CAD render of a high-end road racing bicycle master assembly. Includes a tapered diamond frame, bladed forks, drop handlebars, 700c aero wheels, a full 2x11 drivetrain with chain and derailleurs, and a racing saddle. Carbon fiber and metallic textures, complex engineering assembly, studio lighting, full side view."
-reference_images: ["tasks/benchmark/references/road-racing-bicycle.png"]
+reference_images: ["content/benchmarks/references/road-racing-bicycle.png"]
 acceptance:
   body_count_min: 500 # Wheels + Drivetrain + Frame + Brakes
   body_count_max: 3000

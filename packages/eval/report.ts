@@ -64,7 +64,7 @@ interface CompletedRun {
   run_id: string;
 }
 
-export function aggregateLogs(logDir = resolve("eval-logs")): AggregatedReport {
+export function aggregateLogs(logDir = resolve("infra/eval/eval-logs")): AggregatedReport {
   const logFiles = findFilesRecursive(resolve(logDir), ".ndjson");
   const runs = logFiles.map(parseRunFromLog).filter((run): run is CompletedRun => run !== null);
 
