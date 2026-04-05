@@ -20,6 +20,7 @@ import { formatValidationDiagnostic } from "../validation/layered-validation.js"
 import { LocalHistoryStore } from "./local-history-store.js";
 import { RevisionBranchError } from "../core/revision-branch.js";
 import { loadTaskFile, runEval } from "../eval/runner.js";
+import { buildAdhocTask } from "../eval/adhoc.js";
 import { parseModelConfig } from "../eval/model-adapter.js";
 import { aggregateLogs, generateDeadweightReport, generateIssuesReport } from "../eval/report.js";
 
@@ -306,24 +307,31 @@ async function cmdExport(args: string[]) {
 
 async function cmdEval(args: string[]) {
   const parsed = parseEvalArgs(args);
-  if (!parsed.taskPath) {
-    console.error("Usage: cadlad eval <task.yaml|task-dir> [--model <provider://model|http://host/model>] [--judge <provider://model|http://host/model>] [--no-judge]");
+  if (!parsed.taskPath && !parsed.taskDescription) {
+    console.error("Usage: cadlad eval <task.yaml|task-dir> [--task \"<description>\"] [--model <provider://model|http://host/model>] [--judge <provider://model|http://host/model>] [--no-judge]");
     process.exit(1);
   }
 
   const modelConfig = parseModelConfig(parsed.modelRef);
-  const taskFiles = collectTaskFiles(parsed.taskPath);
-  if (taskFiles.length === 0) {
-    console.error(`[cadlad eval] No task files found at ${parsed.taskPath}`);
-    process.exit(1);
-  }
-
+  const judgeConfig = parsed.noJudge || !parsed.judgeModelRef ? undefined : parseModelConfig(parsed.judgeModelRef);
   let allPass = true;
 
-  for (const taskFile of taskFiles) {
+  if (parsed.taskDescription) {
+    const task = buildAdhocTask(parsed.taskDescription, {
+      difficulty: parsed.taskDifficulty,
+      max_iterations: parsed.taskMaxIter,
+    });
+    const acceptanceSummary = task.acceptance.body_count_min !== undefined
+      ? `body_count_min=${task.acceptance.body_count_min}`
+      : `body_count=${task.acceptance.body_count}`;
+    console.log(`[eval] Ad-hoc task: ${task.id}`);
+    console.log(`[eval] Inferred API surface: ${task.api_surface.join(", ")}`);
+    console.log(`[eval] Acceptance: ${acceptanceSummary}, validation_errors=0, volume_min=100`);
+    console.log(
+      `[eval] Running with ${modelConfig.provider}://${modelConfig.model} (max ${task.max_iterations ?? 5} iterations, pass threshold ${task.pass_threshold ?? 60})...`,
+    );
+
     try {
-      const task = loadTaskFile(taskFile);
-      const judgeConfig = parsed.noJudge || !parsed.judgeModelRef ? undefined : parseModelConfig(parsed.judgeModelRef);
       const result = await runEval(task, modelConfig, { judgeConfig });
       if (!result.pass) {
         allPass = false;
@@ -340,7 +348,36 @@ async function cmdEval(args: string[]) {
     } catch (error) {
       allPass = false;
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`[eval] ${taskFile} FAIL  reason: ${message}`);
+      console.error(`[eval] ${task.id} FAIL  reason: ${message}`);
+    }
+  } else {
+    const taskFiles = collectTaskFiles(parsed.taskPath!);
+    if (taskFiles.length === 0) {
+      console.error(`[cadlad eval] No task files found at ${parsed.taskPath}`);
+      process.exit(1);
+    }
+
+    for (const taskFile of taskFiles) {
+      try {
+        const task = loadTaskFile(taskFile);
+        const result = await runEval(task, modelConfig, { judgeConfig });
+        if (!result.pass) {
+          allPass = false;
+        }
+
+        const status = result.pass ? "PASS" : "FAIL";
+        const seconds = (result.duration_ms / 1000).toFixed(1);
+        const tokens = result.total_tokens.toLocaleString("en-US");
+        const judgeSuffix = result.judge !== undefined ? ` (judge:${Math.round(result.judge)})` : "";
+        const reasonSuffix = result.pass ? "" : `  reason: ${result.reason ?? "score below threshold"}`;
+        console.log(
+          `[eval] ${task.id.padEnd(14)} ${status.padEnd(4)}  score=${Math.round(result.score)}${judgeSuffix}  iterations=${result.iterations}  tokens=${tokens}  time=${seconds}s${reasonSuffix}`,
+        );
+      } catch (error) {
+        allPass = false;
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[eval] ${taskFile} FAIL  reason: ${message}`);
+      }
     }
   }
 
@@ -471,6 +508,8 @@ Usage:
   cadlad export <file> -o output.stl    Export model to STL
   cadlad eval <task.yaml|dir> [--model <provider://model|http://host/model>] [--judge <provider://model|http://host/model>] [--no-judge]
                                        Run one or many eval tasks
+  cadlad eval --task "A dice with rounded edges" --model ollama://qwen3:8b
+  cadlad eval --task "Phone stand with cable slot" --judge anthropic://claude-sonnet-4-6
   cadlad eval-report [--task <task-id>] [--compare] [--issues] [--deadweight] [--json]
                                        Aggregate eval logs into summary/comparison/issue reports
   cadlad studio                         Launch browser studio
@@ -625,9 +664,20 @@ function parseHistoryArgs(args: string[]): { file?: string; limit: number; offse
   return parsed;
 }
 
-function parseEvalArgs(args: string[]): { taskPath?: string; modelRef: string; judgeModelRef?: string; noJudge: boolean } {
+function parseEvalArgs(args: string[]): {
+  taskPath?: string;
+  taskDescription?: string;
+  taskDifficulty?: number;
+  taskMaxIter?: number;
+  modelRef: string;
+  judgeModelRef?: string;
+  noJudge: boolean;
+} {
   const parsed = {
     taskPath: undefined as string | undefined,
+    taskDescription: undefined as string | undefined,
+    taskDifficulty: undefined as number | undefined,
+    taskMaxIter: undefined as number | undefined,
     modelRef: "ollama://llama3.2",
     judgeModelRef: undefined as string | undefined,
     noJudge: false,
@@ -642,6 +692,23 @@ function parseEvalArgs(args: string[]): { taskPath?: string; modelRef: string; j
     }
     if (arg === "--judge") {
       parsed.judgeModelRef = args[index + 1] ?? parsed.judgeModelRef;
+      index += 1;
+      continue;
+    }
+    if (arg === "--task") {
+      parsed.taskDescription = args[index + 1] ?? parsed.taskDescription;
+      index += 1;
+      continue;
+    }
+    if (arg === "--task-difficulty") {
+      const value = Number(args[index + 1]);
+      parsed.taskDifficulty = Number.isFinite(value) ? value : parsed.taskDifficulty;
+      index += 1;
+      continue;
+    }
+    if (arg === "--task-max-iter") {
+      const value = Number(args[index + 1]);
+      parsed.taskMaxIter = Number.isFinite(value) ? value : parsed.taskMaxIter;
       index += 1;
       continue;
     }
