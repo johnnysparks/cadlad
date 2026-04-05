@@ -38,6 +38,22 @@ jobs:
             install_scope: false
             command: npm run test
 
+          - scope: cli
+            check: lint
+            install_root: true
+            install_scope: false
+            command: node ./node_modules/eslint/bin/eslint.js src/cli
+          - scope: cli
+            check: typecheck
+            install_root: true
+            install_scope: false
+            command: ./node_modules/.bin/tsc -p tsconfig.cli.json --noEmit
+          - scope: cli
+            check: test
+            install_root: true
+            install_scope: false
+            command: ./node_modules/.bin/vitest run src/cli
+
           - scope: worker
             check: lint
             install_root: true
