@@ -32,7 +32,6 @@ export async function scoreImageSimilarity(
   referencePaths: string[],
   candidatePaths: string[],
 ): Promise<ImageSimilarityResult> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sharpMod = await import("sharp") as any;
   const sharp = sharpMod.default ?? sharpMod;
 

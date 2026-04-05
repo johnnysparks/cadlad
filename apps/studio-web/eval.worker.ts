@@ -70,7 +70,6 @@ self.onmessage = async (e: MessageEvent) => {
     const bodies = serializeBodies(result.bodies);
     const toolBodies = serializeBodies(result.toolBodies ?? []);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (self as any).postMessage(
       {
         id,

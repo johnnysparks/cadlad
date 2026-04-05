@@ -24,9 +24,7 @@ export const DEFAULT_VIEWS: ViewAngle[] = ["iso", "front", "right", "top"];
  * Create once per eval run, share across iterations.
  */
 export class RenderSession {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private browser: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private page: any;
   readonly baseUrl: string;
 
