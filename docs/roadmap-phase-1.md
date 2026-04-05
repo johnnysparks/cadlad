@@ -176,30 +176,10 @@ Four read-only MCP tools for agents to query model state:
 
 ## 1.2 Feature-level MCP tools
 
-**Status: PARTIAL — `list_features` done, edit tools not implemented**
+**Status: REMOVED**
 
-### Done
-
-- [x] `list_features()` — parses `defineScene()` features from source, returns `{ revision, count, features: [{ id, kind, label, refs }] }`
-  - `mcp/src/server.ts:728-754`
-  - `mcp/src/scene-features.ts` — feature extraction from source
-
-### Not done
-
-- [ ] `add_feature(kind, params)` — add a hole, fillet, chamfer, shell by semantic kind
-- [ ] `modify_feature(id, params)` — change a feature's parameters by ID
-- [ ] `remove_feature(id)` — remove a feature
-
-**Why these matter for agents:** Raw code generation works but is fragile. `add_feature("through_hole", { diameter: 6, position: [5, 0, 6] })` expresses intent. The system handles oversize-cutter rules, coordinate transforms, and validation. The agent doesn't need to know the API quirks.
-
-**Implementation considerations:**
-- Requires stable feature IDs in `defineScene()` — which exist
-- Requires source-level code generation or AST patching — this is the hard part
-- Start with `add_feature` for the 5 most common operations: through_hole, pocket, fillet, chamfer, shell
-- `modify_feature` and `remove_feature` can follow once feature identity in source is reliable
-- Each operation should: generate valid `.forge.ts` code, re-evaluate, return the new EvaluationBundle
-
-**Scope:** Medium-large. The feature extraction (`scene-features.ts`) provides the read side. The write side needs a code generation layer that doesn't exist yet.
+Feature metadata in `defineScene()` and the corresponding MCP listing tool were removed as premature abstractions.
+Agents should work directly with source code via `replace_source` + `evaluate`.
 
 ---
 
@@ -237,9 +217,6 @@ For each domain tool, the upgrade path is:
 | Item | Status | Effort | Priority |
 |---|---|---|---|
 | CLI `--json` output (0.1.1) | not started | S (~50 LOC) | **high** — unblocks CLI-based agents |
-| `add_feature` MCP tool (1.2) | not started | L (code gen layer) | **high** — biggest agent UX improvement |
-| `modify_feature` MCP tool (1.2) | not started | L (depends on add_feature) | medium |
-| `remove_feature` MCP tool (1.2) | not started | M (AST deletion) | medium |
 | Structural wall thickness (1.3.1) | not started | M (ray casting) | low |
 | Structural overhang analysis (1.3.1) | not started | S (reuse constraint code) | low |
 | Structural draft/undercut (1.3.1) | not started | M | low |
@@ -261,6 +238,5 @@ For each domain tool, the upgrade path is:
 | `src/studio/model-stats.ts` | Stat computation (volume, area, bbox, pairwise) |
 | `src/api/scene-contract.ts` | `defineScene()` envelope + validators + tests |
 | `mcp/src/server.ts` | All MCP tool implementations |
-| `mcp/src/scene-features.ts` | Feature extraction for `list_features` |
 | `src/cli/index.ts` | CLI commands (where `--json` goes) |
 | `src/cli/run-output.ts` | Output formatting (where JSON formatter goes) |

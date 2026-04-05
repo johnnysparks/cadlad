@@ -14,23 +14,19 @@ function makeBody(name?: string, indices: number[] = [0, 1, 2]): Body {
 }
 
 describe("scene contract validation", () => {
-  it("detects invalid feature references during normalization", () => {
+  it("normalizes a valid scene envelope", () => {
     const scene = defineScene({
       model: "placeholder",
-      features: [
-        { id: "base", kind: "primitive.box" },
-        { id: "cut", kind: "boolean.subtract", refs: ["base", "missing"] },
-      ],
     });
 
     const normalized = normalizeScene("return scene", scene);
-    expect(normalized.diagnostics.some((diag) => diag.code === "scene.feature-ref.invalid")).toBe(true);
+    expect(normalized.scene).toBeDefined();
+    expect(normalized.diagnostics).toHaveLength(0);
   });
 
   it("runs geometry validators and tests with structured results", () => {
     const scene = defineScene({
       model: "placeholder",
-      features: [{ id: "base", kind: "primitive.box" }],
       validators: [
         {
           id: "body-count.one",
@@ -71,7 +67,6 @@ describe("scene contract validation", () => {
   it("reports disconnected multi-body output", () => {
     const scene = defineScene({
       model: "placeholder",
-      features: [{ id: "base", kind: "primitive.box" }],
     });
     const normalized = normalizeScene("return scene", scene);
 

@@ -64,7 +64,6 @@ These reduce boilerplate for the most common 2D-to-3D profiles.
 | `datum.point(point, name?)` | line 127 | Named reference point |
 | `axis.X()`, `axis.Y()`, `axis.Z()` | lines 114-123 | World axes through origin |
 | `Solid.translateTo(plane, offsets?)` | `solid.ts` | Position relative to reference plane |
-| `referenceFeature.plane/axis/datum(id)` | lines 139-149 | Feature declarations for `defineScene()` |
 
 Replaces fragile hard-coded `translate(30, 0, 50)` calls with self-updating references.
 

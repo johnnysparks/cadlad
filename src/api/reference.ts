@@ -1,6 +1,5 @@
 import type { Vec3 } from "../engine/types.js";
 import { Solid } from "../engine/solid.js";
-import type { SceneFeatureDeclaration } from "./scene-contract.js";
 
 export type Plane = {
   origin: Vec3;
@@ -133,17 +132,5 @@ export const datum = {
       point: bboxAnchorPoint(solid, anchor),
       name,
     };
-  },
-};
-
-export const referenceFeature = {
-  plane(id: string, label?: string, refs?: readonly string[]): SceneFeatureDeclaration {
-    return { id, kind: "reference.plane", label, refs };
-  },
-  axis(id: string, label?: string, refs?: readonly string[]): SceneFeatureDeclaration {
-    return { id, kind: "reference.axis", label, refs };
-  },
-  datum(id: string, label?: string, refs?: readonly string[]): SceneFeatureDeclaration {
-    return { id, kind: "reference.datum", label, refs };
   },
 };

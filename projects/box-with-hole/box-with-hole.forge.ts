@@ -12,11 +12,6 @@ return defineScene({
     height: { value: mm(20), min: 5, max: 100, unit: "mm", label: "Height" },
     holeRadius: { value: mm(8), min: 2, max: 30, unit: "mm", label: "Hole Radius" },
   },
-  features: [
-    { id: "base.box", kind: "primitive.box", label: "Main body" },
-    { id: "hole.cylinder", kind: "primitive.cylinder", label: "Through hole cutter" },
-    { id: "base.with-hole", kind: "boolean.subtract", refs: ["base.box", "hole.cylinder"], label: "Final body" },
-  ],
   validators: [
     {
       id: "hole.fits-width",

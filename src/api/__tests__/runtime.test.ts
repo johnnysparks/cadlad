@@ -142,7 +142,6 @@ describe("evaluateModel", () => {
     const code = `
       return defineScene({
         model: box(10, 10, 10),
-        features: [{ id: "base", kind: "primitive", label: "Base box" }],
       });
     `;
     const result = await evaluateModel(code);
@@ -150,51 +149,8 @@ describe("evaluateModel", () => {
     expect(result.bodies).toHaveLength(1);
   });
 
-  it("reports missing scene feature ids before geometry build", async () => {
-    const code = `
-      return defineScene({
-        model: box(10, 10, 10),
-        features: [{ kind: "primitive", label: "Base box" }],
-      });
-    `;
-    const result = await evaluateModel(code);
-    expect(result.bodies).toHaveLength(0);
-    expect(result.errors).toContain(
-      '[scene.feature-id.missing] Feature kind "primitive" is missing a stable string id.',
-    );
-  });
 
-  it("reports duplicate scene feature ids with source range", async () => {
-    const code = `
-      return defineScene({
-        model: box(10, 10, 10),
-        features: [
-          { id: "base", kind: "primitive", label: "Base box A" },
-          { id: "base", kind: "primitive", label: "Base box B" },
-        ],
-      });
-    `;
-    const result = await evaluateModel(code);
-    expect(result.bodies).toHaveLength(0);
-    expect(result.errors[0]).toContain("[scene.feature-id.duplicate]");
-    expect(result.errors[0]).toContain("[feature:base]");
-    expect(result.errors[0]).toContain("[L");
-  });
 
-  it("reports invalid scene feature references", async () => {
-    const code = `
-      return defineScene({
-        model: box(10, 10, 10),
-        features: [
-          { id: "base", kind: "primitive", label: "Base box" },
-          { id: "hole", kind: "cut", refs: ["missing.feature"] },
-        ],
-      });
-    `;
-    const result = await evaluateModel(code);
-    expect(result.bodies).toHaveLength(0);
-    expect(result.errors[0]).toContain("[scene.feature-ref.invalid]");
-  });
 
   it("evaluates defineScene model factories with typed params", async () => {
     const code = `
@@ -204,7 +160,6 @@ describe("evaluateModel", () => {
           width: { value: 12, unit: "mm" },
           depth: { value: 8, unit: "mm" },
         },
-        features: [{ id: "base", kind: "primitive", label: "Base box" }],
         model: ({ params }) => box(params.width, params.depth, 5),
       });
     `;
@@ -222,7 +177,6 @@ describe("evaluateModel", () => {
         params: {
           wall: { value: 1, unit: "mm" },
         },
-        features: [{ id: "wall", kind: "primitive", label: "Wall" }],
         validators: [
           {
             id: "wall.min-thickness",
@@ -259,7 +213,6 @@ describe("evaluateModel", () => {
           expectedVolume: { max: 500 },
           expectedBoundingBox: { min: { x: 0 } },
         },
-        features: [{ id: "base", kind: "primitive.box" }],
         model: box(10, 10, 10),
       });
     `;
@@ -273,7 +226,6 @@ describe("evaluateModel", () => {
     const code = `
       return defineScene({
         meta: { name: "geometry-validator-model-context" },
-        features: [{ id: "base", kind: "primitive.box" }],
         validators: [
           {
             id: "solid-context",
@@ -296,7 +248,6 @@ describe("evaluateModel", () => {
     const code = `
       return defineScene({
         meta: { name: "constraint-wall-thickness" },
-        features: [{ id: "thin-wall", kind: "primitive.box" }],
         constraints: [
           constraint("wall_thickness", { min: mm(2) }),
         ],
@@ -313,10 +264,6 @@ describe("evaluateModel", () => {
     const code = `
       return defineScene({
         meta: { name: "constraint-clearance-symmetry" },
-        features: [
-          { id: "base", kind: "primitive.box" },
-          { id: "lid", kind: "primitive.box", refs: ["base"] },
-        ],
         constraints: [
           constraint("clearance", { between: ["base", "lid"], min: mm(5) }),
           constraint("symmetry", { axis: "X", tolerance: mm(0.1) }),

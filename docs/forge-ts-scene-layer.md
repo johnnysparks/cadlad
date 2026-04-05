@@ -10,12 +10,6 @@ The `defineScene(...)` envelope makes `.forge.ts` models machine-operable while 
 return defineScene({
   meta: { id: "bracket", intent: "Parametric mounting bracket" },
   params: { /* typed defaults and machine-readable ranges */ },
-  features: [
-    { id: "base", kind: "primitive.box" },
-    { id: "mid-plane", kind: "reference.plane", refs: ["base"] },
-    { id: "holes", kind: "primitive.cylinder", refs: ["base"] },
-    { id: "result", kind: "boolean.subtract", refs: ["base", "holes"] },
-  ],
   constraints: [
     constraint("wall_thickness", { min: mm(2) }),
     constraint("symmetry", { axis: "X" }),
@@ -44,7 +38,6 @@ return defineScene({
 |---|---|---|
 | `meta` | Identity + intent for tracking | no |
 | `params` | Typed defaults with min/max/unit/step | no (falls back to `param()` calls) |
-| `features` | Stable IDs + semantic kinds + `refs` for dependency tracking | no |
 | `constraints` | Declarative design rules checked after geometry build | no |
 | `validators` | Author assertions at semantic or geometry stages | no |
 | `tests` | Lightweight in-source checks run after model exists | no |
@@ -61,16 +54,13 @@ return defineScene({
 
 - Malformed scene envelope structure
 - Params missing `{ value: ... }` structure
-- Missing or empty feature IDs
-- Duplicate feature IDs
-- Feature `refs` targeting unknown feature IDs
 
 ### Stage 2: Semantic checks (pre-build)
 
 `src/api/scene-contract.ts:273-314`
 
 - Scene semantic validators (`validators` with `stage: "semantic"`)
-- Passed params + features (no geometry yet)
+- Passed params (no geometry yet)
 
 ### Stage 3: Geometry checks (post-build)
 
@@ -107,18 +97,7 @@ All checks are deterministic, avoid fuzzy heuristics, and are intentionally chea
 
 ## Reference geometry integration
 
-Features can declare reference geometry types:
-
-```ts
-features: [
-  { id: "base", kind: "primitive.box" },
-  { id: "mid-plane", kind: "reference.plane", label: "Midplane", refs: ["base"] },
-  { id: "mount-datum", kind: "reference.datum", refs: ["base"] },
-  { id: "center-axis", kind: "reference.axis" },
-]
-```
-
-Reference feature declarations (`src/api/reference.ts:139-149`) register as features in the scene for dependency tracking. The actual reference objects (`plane.XY()`, `datum.fromBBox()`, `axis.Z()`) are used in modeling code.
+Reference objects (`plane.XY()`, `datum.fromBBox()`, `axis.Z()`) are used directly in modeling code.
 
 ## Declarative constraints
 
@@ -172,6 +151,6 @@ Render is optional and late. Agents get full structured feedback without renderi
 | `src/api/scene-contract.ts` | `defineScene()` normalization + validation (stages 1-3, 5) |
 | `src/validation/layered-validation.ts` | Stats/relations + constraint enforcement (stage 4) |
 | `src/api/constraints.ts` | Constraint types + `constraint()` factory |
-| `src/api/reference.ts` | Reference geometry types + `referenceFeature` declarations |
+| `src/api/reference.ts` | Reference geometry types + factories |
 | `src/engine/types.ts` | `EvaluationBundle`, `GeometryStats`, `Hint` types |
 | `src/api/runtime.ts` | `evaluateModel()` orchestration |

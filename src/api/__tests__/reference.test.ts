@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { initManifold } from "../../engine/manifold-backend.js";
 import { box } from "../../engine/primitives.js";
-import { axis, datum, plane, referenceFeature } from "../reference.js";
+import { axis, datum, plane } from "../reference.js";
 
 beforeAll(async () => {
   await initManifold();
@@ -32,15 +32,6 @@ describe("reference geometry factories", () => {
     expect(datum.fromBBox(solid, "bottom-front-left", "corner")).toEqual({
       point: [-1, -16, -7],
       name: "corner",
-    });
-  });
-
-  it("builds scene feature declarations for references", () => {
-    expect(referenceFeature.plane("mid", "Midplane")).toEqual({
-      id: "mid",
-      kind: "reference.plane",
-      label: "Midplane",
-      refs: undefined,
     });
   });
 });
