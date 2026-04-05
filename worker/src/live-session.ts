@@ -26,6 +26,14 @@ import type { EventActor, EventEnvelope, EventType } from './event-store.js';
 import { SqliteEventStore, createDurableObjectSqliteRunner } from './event-store.js';
 import { recordCapabilityGapEvent } from './capability-gap-reducer.js';
 import { buildApiImprovementReport } from './agent-learning.js';
+import {
+  checkpointRevision as checkpointRevisionSnapshot,
+  compareBranchHeads,
+  createBranch,
+  checkoutBranch,
+  updateBranchHead,
+  RevisionBranchError,
+} from '../../src/core/revision-branch.js';
 
 const MAX_PATCHES = 100;
 const HEARTBEAT_INTERVAL_MS = 25_000; // keep SSE connections alive
@@ -315,52 +323,51 @@ export class LiveSession implements DurableObject {
     if (authErr) return authErr;
 
     const body = await request.json() as { name?: string; fromRevision?: number };
-    const name = body.name?.trim();
-    if (!name) return err('name is required', 'INVALID_REQUEST', 400);
-    if (this.branches.some((branch) => branch.name === name)) {
-      return err('Branch name already exists', 'BRANCH_NAME_CONFLICT', 409);
-    }
-
     const fromRevision = typeof body.fromRevision === 'number' ? body.fromRevision : this.revision;
-    const snapshot = this.revisions.find((entry) => entry.revision === fromRevision);
-    if (!snapshot) return err('fromRevision not found', 'REVISION_NOT_FOUND', 404);
-
     const actor = this.resolveActor(request);
-    const now = Date.now();
-    const branch: Branch = {
-      id: crypto.randomUUID(),
-      name,
-      headRevision: fromRevision,
-      baseRevision: fromRevision,
-      createdAt: now,
-      updatedAt: now,
-      actor,
-    };
-    this.branches.push(branch);
-    await this.persist();
-    return ok({ branch }, 201);
+
+    try {
+      const result = createBranch({
+        branches: this.branches,
+        revisions: this.revisions,
+        name: body.name ?? '',
+        fromRevision,
+        actor,
+      });
+      this.branches = result.branches as Branch[];
+      await this.persist();
+      return ok({ branch: result.branch }, 201);
+    } catch (error) {
+      if (error instanceof RevisionBranchError) {
+        return err(error.message, error.code, error.status);
+      }
+      throw error;
+    }
   }
 
   private async handleCheckoutBranch(request: Request, branchId: string): Promise<Response> {
     const authErr = this.checkAuth(request);
     if (authErr) return authErr;
 
-    const branch = this.branches.find((entry) => entry.id === branchId);
-    if (!branch) return err('Branch not found', 'BRANCH_NOT_FOUND', 404);
-    const head = this.revisions.find((entry) => entry.revision === branch.headRevision);
-    if (!head) return err('Branch head revision not found', 'REVISION_NOT_FOUND', 404);
-
-    this.activeBranchId = branch.id;
-    this.source = head.source;
-    this.params = { ...head.params };
-    this.revision = head.revision;
-    this.updatedAt = Date.now();
-    await this.persist();
-    return ok({
-      branch,
-      session: this.fullState(),
-      message: `Checked out branch "${branch.name}" at revision ${branch.headRevision}.`,
-    });
+    try {
+      const { branch, revision } = checkoutBranch(this.branches, this.revisions, branchId);
+      this.activeBranchId = branch.id;
+      this.source = revision.source;
+      this.params = { ...revision.params };
+      this.revision = revision.revision;
+      this.updatedAt = Date.now();
+      await this.persist();
+      return ok({
+        branch,
+        session: this.fullState(),
+        message: `Checked out branch "${branch.name}" at revision ${branch.headRevision}.`,
+      });
+    } catch (error) {
+      if (error instanceof RevisionBranchError) {
+        return err(error.message, error.code, error.status);
+      }
+      throw error;
+    }
   }
 
   private handleCompareBranches(url: URL): Response {
@@ -369,45 +376,28 @@ export class LiveSession implements DurableObject {
     if (!branchAId || !branchBId) {
       return err('Query params "a" and "b" are required', 'INVALID_REQUEST', 400);
     }
-    const branchA = this.branches.find((entry) => entry.id === branchAId);
-    const branchB = this.branches.find((entry) => entry.id === branchBId);
-    if (!branchA || !branchB) return err('One or both branches not found', 'BRANCH_NOT_FOUND', 404);
-    const revisionA = this.revisions.find((entry) => entry.revision === branchA.headRevision);
-    const revisionB = this.revisions.find((entry) => entry.revision === branchB.headRevision);
-    if (!revisionA || !revisionB) return err('One or both branch heads are missing revisions', 'REVISION_NOT_FOUND', 404);
-    const patchA = this.patches.find((entry) => entry.revision === branchA.headRevision);
-    const patchB = this.patches.find((entry) => entry.revision === branchB.headRevision);
-    return ok({
-      branches: {
-        a: { id: branchA.id, name: branchA.name, headRevision: branchA.headRevision },
-        b: { id: branchB.id, name: branchB.name, headRevision: branchB.headRevision },
-      },
-      revisions: {
-        a: {
-          revision: revisionA.revision,
-          sourceHash: revisionA.sourceHash,
-          params: revisionA.params,
-          evaluation: revisionA.evaluation ?? null,
-        },
-        b: {
-          revision: revisionB.revision,
-          sourceHash: revisionB.sourceHash,
-          params: revisionB.params,
-          evaluation: revisionB.evaluation ?? null,
-        },
-      },
-      diff: {
-        stats: compareStats(patchA?.runResult?.stats, patchB?.runResult?.stats),
-        validation: {
-          errorCountDelta:
-            (patchB?.runResult?.evaluation?.summary.errorCount ?? 0)
-            - (patchA?.runResult?.evaluation?.summary.errorCount ?? 0),
-          warningCountDelta:
-            (patchB?.runResult?.evaluation?.summary.warningCount ?? 0)
-            - (patchA?.runResult?.evaluation?.summary.warningCount ?? 0),
-        },
-      },
-    });
+    const statsByRevision: Record<number, { triangles: number; bodies: number; volume?: number; surfaceArea?: number; componentCount?: number } | undefined> = {};
+    const validationByRevision: Record<number, { errorCount?: number; warningCount?: number } | undefined> = {};
+    for (const patch of this.patches) {
+      statsByRevision[patch.revision] = patch.runResult?.stats;
+      validationByRevision[patch.revision] = patch.runResult?.evaluation?.summary;
+    }
+    try {
+      const result = compareBranchHeads({
+        branches: this.branches,
+        revisions: this.revisions,
+        branchAId,
+        branchBId,
+        statsByRevision,
+        validationByRevision,
+      });
+      return ok(result);
+    } catch (error) {
+      if (error instanceof RevisionBranchError) {
+        return err(error.message, error.code, error.status);
+      }
+      throw error;
+    }
   }
 
   private handleSSE(request: Request): Response {
@@ -900,29 +890,17 @@ export class LiveSession implements DurableObject {
     eventIds: string[];
     actor: EventActor;
   }): Promise<void> {
-    const previous = this.revisions[this.revisions.length - 1];
-    const sourceHash = await hashText(this.source);
-    const snapshot: RevisionSnapshot = {
-      id: crypto.randomUUID(),
+    const result = await checkpointRevisionSnapshot({
+      revisions: this.revisions,
       revision: input.revision,
       branchId: this.branch.id,
-      parentRevision: previous?.revision ?? null,
-      sourceHash,
       source: this.source,
-      params: { ...this.params },
+      params: this.params,
       eventIds: input.eventIds,
-      createdAt: Date.now(),
       actor: input.actor,
-    };
-    const existingIdx = this.revisions.findIndex((entry) => entry.revision === input.revision);
-    if (existingIdx >= 0) {
-      this.revisions[existingIdx] = {
-        ...snapshot,
-        evaluation: this.revisions[existingIdx].evaluation,
-      };
-      return;
-    }
-    this.revisions.push(snapshot);
+      hashSource: hashText,
+    });
+    this.revisions = result.revisions as RevisionSnapshot[];
     this.cursor.checkpointRevision = input.revision;
   }
 
@@ -933,14 +911,7 @@ export class LiveSession implements DurableObject {
   }
 
   private updateActiveBranchHead(revision: number): void {
-    if (!this.activeBranchId) return;
-    const idx = this.branches.findIndex((branch) => branch.id === this.activeBranchId);
-    if (idx < 0) return;
-    this.branches[idx] = {
-      ...this.branches[idx],
-      headRevision: revision,
-      updatedAt: Date.now(),
-    };
+    this.branches = updateBranchHead(this.branches, this.activeBranchId, revision) as Branch[];
   }
 }
 
@@ -976,36 +947,6 @@ async function hashText(input: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
   const bytes = new Uint8Array(digest);
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-type ComparableStats = {
-  triangles: number;
-  bodies: number;
-  volume?: number;
-  surfaceArea?: number;
-  componentCount?: number;
-};
-
-function compareStats(
-  a: ComparableStats | undefined,
-  b: ComparableStats | undefined,
-): Record<string, number | null> {
-  if (!a || !b) {
-    return {
-      triangles: null,
-      bodies: null,
-      volume: null,
-      surfaceArea: null,
-      componentCount: null,
-    };
-  }
-  return {
-    triangles: b.triangles - a.triangles,
-    bodies: b.bodies - a.bodies,
-    volume: (b.volume ?? 0) - (a.volume ?? 0),
-    surfaceArea: (b.surfaceArea ?? 0) - (a.surfaceArea ?? 0),
-    componentCount: (b.componentCount ?? 0) - (a.componentCount ?? 0),
-  };
 }
 
 function isNonEmptyString(value: unknown): value is string {

@@ -252,7 +252,7 @@ This means local agents start cold every time. The MCP server (`mcp/src/server.t
 
 - [ ] **Local EventStore backend** — SQLite file in the project directory (e.g., `.cadlad/events.db`). The `SqliteEventStore` class already exists but is coupled to Durable Object SQL storage. Extract it to work with any SQLite driver (better-sqlite3, sql.js).
 
-- [ ] **Local revision/branch management** — The revision and branch logic in `live-session.ts` is tightly coupled to the Durable Object lifecycle. Extract the core logic (checkpointing, branch CRUD, comparison) into a shared module that both the worker and a local CLI backend can use.
+- [x] **Local revision/branch management** — Core revision/branch logic (checkpointing, branch CRUD, comparison) now lives in `src/core/revision-branch.ts` and is consumed by `worker/src/live-session.ts`, so the worker and local backends can share one implementation.
 
 - [ ] **CLI integration** — `cadlad run` should optionally write events to the local store. `cadlad branch`, `cadlad compare`, `cadlad history` commands for local branch/revision management.
 
