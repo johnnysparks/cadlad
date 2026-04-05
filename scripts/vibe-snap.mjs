@@ -3,12 +3,12 @@
  * vibe-snap.mjs — One-command screenshot capture for vibe-modeling sessions.
  *
  * Usage:
- *   node scripts/vibe-snap.mjs projects/foo/foo.forge.js           # 4 angles → projects/foo/snapshots/
+ *   node scripts/vibe-snap.mjs projects/foo/foo.forge.ts           # 4 angles → projects/foo/snapshots/
  *   node scripts/vibe-snap.mjs projects/foo/foo.forge.js /tmp/out  # custom output dir
- *   node scripts/vibe-snap.mjs projects/foo/foo.forge.js --angles 1   # just iso
- *   node scripts/vibe-snap.mjs projects/foo/foo.forge.js --angles 7   # all 7 angles
- *   node scripts/vibe-snap.mjs projects/foo/foo.forge.js --angle front # specific angle
- *   node scripts/vibe-snap.mjs projects/foo/foo.forge.js --quiet      # suppress info logs
+ *   node scripts/vibe-snap.mjs projects/foo/foo.forge.ts --angles 1   # just iso
+ *   node scripts/vibe-snap.mjs projects/foo/foo.forge.ts --angles 7   # all 7 angles
+ *   node scripts/vibe-snap.mjs projects/foo/foo.forge.ts --angle front # specific angle
+ *   node scripts/vibe-snap.mjs projects/foo/foo.forge.ts --quiet      # suppress info logs
  *
  * Requires: dev server running at localhost:5173 (npm run dev)
  */
@@ -72,10 +72,11 @@ function findChromeBinary() {
 
 const args = process.argv.slice(2);
 const QUIET = args.includes("--quiet");
-const forgeFile = args.find(a => a.endsWith(".forge.js"));
+const isForgeSource = (value) => value.endsWith(".forge.ts") || value.endsWith(".forge.js");
+const forgeFile = args.find((a) => isForgeSource(a));
 
 if (!forgeFile) {
-  console.error("Usage: node scripts/vibe-snap.mjs <path-to.forge.js> [output-dir] [--angles 1|4|7] [--angle <view>] [--quiet]");
+  console.error("Usage: node scripts/vibe-snap.mjs <path-to.forge.ts|.forge.js> [output-dir] [--angles 1|4|7] [--angle <view>] [--quiet]");
   process.exit(1);
 }
 
@@ -108,7 +109,7 @@ if (specificAngle) {
 // Output directory: explicit arg, or project's snapshots/ folder
 const forgePath = resolve(forgeFile);
 const projectDir = dirname(forgePath);
-const outputArg = args.find(a => !a.startsWith("--") && !a.endsWith(".forge.js") && a !== argVal("--angles") && a !== argVal("--angle"));
+const outputArg = args.find((a) => !a.startsWith("--") && !isForgeSource(a) && a !== argVal("--angles") && a !== argVal("--angle"));
 const outputDir = outputArg ? resolve(outputArg) : join(projectDir, "snapshots");
 
 const BASE_URL = argVal("--url") || "http://localhost:5173";
