@@ -601,6 +601,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!data.runResult) {
           return errorContent("No run result yet. Open CadLad Studio and run the model first.");
         }
+        const actionableErrors = collectActionableDiagnostics(data.runResult, "error");
+        const warnings = collectActionableDiagnostics(data.runResult, "warning");
+        const geometrySummary = buildGeometrySummary(data.runResult.stats);
+        const overview = buildEvaluationOverview({
+          stats: data.runResult.stats,
+          evaluation: data.runResult.evaluation,
+          actionableErrors: actionableErrors,
+          warnings,
+        });
         const { code, paramOverrides } = args as { code?: string; paramOverrides?: Record<string, number> };
         const notes: string[] = [];
         if (code !== undefined) notes.push("code argument received; evaluating arbitrary code is not yet supported in remote sessions.");
@@ -612,6 +621,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify({
                 revision: data.revision,
                 success: data.runResult.success,
+                overview,
+                actionable_errors: actionableErrors,
+                warnings,
+                geometry_summary: geometrySummary,
                 evaluation: data.runResult.evaluation ?? null,
                 diagnostics: data.runResult.diagnostics ?? [],
                 stats: data.runResult.stats ?? null,
@@ -1255,6 +1268,147 @@ function slugify(input: string): string {
 
 function asNumber(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+interface GeometrySummary {
+  bodies: number;
+  triangles: number;
+  volume_mm3: number | null;
+  surface_area_mm2: number | null;
+  bounding_box: {
+    size: [number, number, number];
+    center: [number, number, number];
+  };
+  intersecting_pairs: Array<[string, string]>;
+  disconnected: boolean;
+}
+
+interface OverviewInput {
+  stats: RunResultEnvelope["runResult"] extends infer R
+    ? R extends { stats?: infer S }
+      ? S
+      : never
+    : never;
+  evaluation: RunResultEnvelope["runResult"] extends infer R
+    ? R extends { evaluation?: infer E }
+      ? E
+      : never
+    : never;
+  actionableErrors: string[];
+  warnings: string[];
+}
+
+function collectActionableDiagnostics(
+  runResult: NonNullable<RunResultEnvelope["runResult"]>,
+  severity: "error" | "warning",
+): string[] {
+  const staged: Array<{ stage: string; message: string }> = [];
+  const pushDiagnostics = (
+    diagnostics: Array<{ severity?: string; message?: string; stage?: string }> | undefined,
+    fallbackStage: string,
+  ) => {
+    if (!diagnostics) return;
+    for (const diagnostic of diagnostics) {
+      if (diagnostic?.severity !== severity || !diagnostic.message) continue;
+      staged.push({ stage: diagnostic.stage ?? fallbackStage, message: diagnostic.message });
+    }
+  };
+
+  pushDiagnostics(runResult.evaluation?.typecheck?.diagnostics, "types/schema");
+  pushDiagnostics(runResult.evaluation?.semanticValidation?.diagnostics, "semantic");
+  pushDiagnostics(runResult.evaluation?.geometryValidation?.diagnostics, "geometry");
+  pushDiagnostics(runResult.evaluation?.relationValidation?.diagnostics, "stats/relations");
+  pushDiagnostics(runResult.diagnostics, "validation");
+
+  for (const message of severity === "error" ? runResult.errors ?? [] : runResult.warnings ?? []) {
+    if (!message) continue;
+    staged.push({ stage: "runtime", message });
+  }
+
+  const deduped = new Set<string>();
+  const out: string[] = [];
+  for (const item of staged) {
+    const text = `[${item.stage}] ${item.message}`;
+    if (deduped.has(text)) continue;
+    deduped.add(text);
+    out.push(text);
+  }
+  return out;
+}
+
+function buildGeometrySummary(
+  stats: NonNullable<NonNullable<RunResultEnvelope["runResult"]>["stats"]> | undefined,
+): GeometrySummary | null {
+  if (!stats) return null;
+
+  const min = stats.boundingBox.min;
+  const max = stats.boundingBox.max;
+  const size: [number, number, number] = [
+    roundTo3(max[0] - min[0]),
+    roundTo3(max[1] - min[1]),
+    roundTo3(max[2] - min[2]),
+  ];
+  const center: [number, number, number] = [
+    roundTo3((min[0] + max[0]) / 2),
+    roundTo3((min[1] + max[1]) / 2),
+    roundTo3((min[2] + max[2]) / 2),
+  ];
+
+  return {
+    bodies: stats.bodies,
+    triangles: stats.triangles,
+    volume_mm3: stats.volume !== undefined ? Math.round(stats.volume) : null,
+    surface_area_mm2: stats.surfaceArea !== undefined ? Math.round(stats.surfaceArea) : null,
+    bounding_box: { size, center },
+    intersecting_pairs: (stats.pairwise ?? [])
+      .filter((pair) => pair.intersects)
+      .map((pair) => [pair.partA, pair.partB] as [string, string]),
+    disconnected: typeof stats.componentCount === "number" ? stats.componentCount > stats.bodies : false,
+  };
+}
+
+function buildEvaluationOverview(input: OverviewInput): string {
+  const lines: string[] = [];
+  const { stats, evaluation, actionableErrors, warnings } = input;
+
+  if (!stats) {
+    lines.push("Geometry stats unavailable (evaluation likely halted before geometry stage).");
+  } else {
+    const bodyLabel = stats.bodies === 1 ? "1 body" : `${stats.bodies}-part assembly`;
+    const volume = stats.volume !== undefined ? `, ${Math.round(stats.volume).toLocaleString()}mm³ volume` : "";
+    lines.push(`${bodyLabel}, ${stats.triangles.toLocaleString()} tris${volume}.`);
+  }
+
+  if (actionableErrors.length === 0 && warnings.length === 0) {
+    lines.push("No errors or warnings.");
+  } else {
+    const issueSummaryParts: string[] = [];
+    if (actionableErrors.length > 0) {
+      issueSummaryParts.push(`${actionableErrors.length} error${actionableErrors.length === 1 ? "" : "s"}`);
+    }
+    if (warnings.length > 0) {
+      issueSummaryParts.push(`${warnings.length} warning${warnings.length === 1 ? "" : "s"}`);
+    }
+    lines.push(`${issueSummaryParts.join(", ")}.`);
+  }
+
+  if (evaluation?.haltedAt) {
+    lines.push(`Halted at ${evaluation.haltedAt} stage.`);
+  } else if (stats?.pairwise?.some((pair) => pair.intersects)) {
+    const pairs = stats.pairwise
+      ?.filter((pair) => pair.intersects)
+      .map((pair) => `'${pair.partA}' and '${pair.partB}'`)
+      .join(", ");
+    if (pairs) {
+      lines.push(`Intersecting parts detected: ${pairs}.`);
+    }
+  }
+
+  return lines.slice(0, 3).join("\n");
+}
+
+function roundTo3(value: number): number {
+  return Math.round(value * 1_000) / 1_000;
 }
 
 function errorContent(message: string) {
