@@ -9,9 +9,9 @@
  *   cadlad studio                          — launch browser studio (dev server)
  */
 
-import { watch } from "node:fs";
+import { readdirSync, statSync, watch } from "node:fs";
 import { writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { initManifold } from "../engine/manifold-backend.js";
 import { evaluateModel } from "../api/runtime.js";
 import { loadModelSource } from "./source-loader.js";
@@ -19,7 +19,8 @@ import { buildRunJsonOutput, buildRunReport, formatRunReportText } from "./run-o
 import { formatValidationDiagnostic } from "../validation/layered-validation.js";
 import { LocalHistoryStore } from "./local-history-store.js";
 import { RevisionBranchError } from "../core/revision-branch.js";
-import { runEval } from "../eval/runner.js";
+import { loadTaskFile, runEval } from "../eval/runner.js";
+import { parseModelConfig } from "../eval/model-adapter.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -302,29 +303,61 @@ async function cmdExport(args: string[]) {
 async function cmdEval(args: string[]) {
   const parsed = parseEvalArgs(args);
   if (!parsed.taskPath) {
-    console.error("Usage: cadlad eval <task.yaml> [--model <provider://model|http://host/model>] [--pass-threshold <number>]");
+    console.error("Usage: cadlad eval <task.yaml|task-dir> [--model <provider://model|http://host/model>]");
     process.exit(1);
   }
 
-  try {
-    const result = await runEval({
-      taskPath: parsed.taskPath,
-      modelRef: parsed.modelRef,
-      passThreshold: parsed.passThreshold,
-    });
+  const modelConfig = parseModelConfig(parsed.modelRef);
+  const taskFiles = collectTaskFiles(parsed.taskPath);
+  if (taskFiles.length === 0) {
+    console.error(`[cadlad eval] No task files found at ${parsed.taskPath}`);
+    process.exit(1);
+  }
 
-    const icon = result.pass ? "PASS" : "FAIL";
-    console.log(`[cadlad eval] ${icon} task=${result.task.id} score=${result.score.score.toFixed(2)} run=${result.runId}`);
-    console.log(`[cadlad eval] source=${result.sourcePath}`);
-    console.log(`[cadlad eval] log=${result.logPath}`);
-    if (result.screenshotPaths.length > 0) {
-      console.log(`[cadlad eval] screenshots=${result.screenshotPaths.length}`);
+  let allPass = true;
+
+  for (const taskFile of taskFiles) {
+    try {
+      const task = loadTaskFile(taskFile);
+      const result = await runEval(task, modelConfig);
+      if (!result.pass) {
+        allPass = false;
+      }
+
+      const status = result.pass ? "PASS" : "FAIL";
+      const seconds = (result.duration_ms / 1000).toFixed(1);
+      const tokens = result.total_tokens.toLocaleString("en-US");
+      const reasonSuffix = result.pass ? "" : `  reason: ${result.reason ?? "score below threshold"}`;
+      console.log(
+        `[eval] ${task.id.padEnd(14)} ${status.padEnd(4)}  score=${Math.round(result.score)}  iterations=${result.iterations}  tokens=${tokens}  time=${seconds}s${reasonSuffix}`,
+      );
+    } catch (error) {
+      allPass = false;
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[eval] ${taskFile} FAIL  reason: ${message}`);
     }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[cadlad eval] ${message}`);
+  }
+
+  if (!allPass) {
     process.exit(1);
   }
+}
+
+function collectTaskFiles(taskPath: string): string[] {
+  const absolute = resolve(taskPath);
+  const stat = statSync(absolute);
+  if (stat.isFile()) {
+    return [absolute];
+  }
+
+  if (!stat.isDirectory()) {
+    return [];
+  }
+
+  return readdirSync(absolute)
+    .filter((name) => name.endsWith(".yaml"))
+    .map((name) => join(absolute, name))
+    .sort();
 }
 
 function meshToSTLBuffer(mesh: { positions: Float32Array; indices: Uint32Array }): ArrayBuffer {
@@ -386,8 +419,8 @@ Usage:
   cadlad history --file <file.forge.ts> [--limit N] [--offset N] [--json]
                                        Show local revision history
   cadlad export <file> -o output.stl    Export model to STL
-  cadlad eval <task.yaml> [--model <provider://model|http://host/model>] [--pass-threshold <number>]
-                                       Run one eval task end-to-end
+  cadlad eval <task.yaml|dir> [--model <provider://model|http://host/model>]
+                                       Run one or many eval tasks
   cadlad studio                         Launch browser studio
 `);
 }
@@ -540,22 +573,16 @@ function parseHistoryArgs(args: string[]): { file?: string; limit: number; offse
   return parsed;
 }
 
-function parseEvalArgs(args: string[]): { taskPath?: string; modelRef: string; passThreshold?: number } {
+function parseEvalArgs(args: string[]): { taskPath?: string; modelRef: string } {
   const parsed = {
     taskPath: undefined as string | undefined,
     modelRef: "ollama://llama3.2",
-    passThreshold: undefined as number | undefined,
   };
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--model") {
       parsed.modelRef = args[index + 1] ?? parsed.modelRef;
-      index += 1;
-      continue;
-    }
-    if (arg === "--pass-threshold") {
-      parsed.passThreshold = Number(args[index + 1]);
       index += 1;
       continue;
     }

@@ -1,8 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { createHash, randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
-import { initManifold } from "../engine/manifold-backend.js";
+import { execSync } from "node:child_process";
+import { resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import { evaluateModel } from "../api/runtime.js";
 import { scoreEval } from "./scorer.js";
 import { buildSystemPrompt, buildUserPrompt } from "./prompts.js";
@@ -14,34 +13,88 @@ export interface EvalRunnerOptions {
   modelRef: string;
   passThreshold?: number;
 }
+import { initManifold } from "../engine/manifold-backend.js";
+import { createModelAdapter, extractCode } from "./model-adapter.js";
+import { buildRetryPrompt, buildSystemPrompt, buildUserPrompt } from "./prompts.js";
+import { scoreEval } from "./scorer.js";
+import { parseTaskSpec, type EvalEvent, type ModelConfig, type TaskSpec } from "./types.js";
 
 export interface EvalRunResult {
-  runId: string;
-  task: TaskSpec;
   pass: boolean;
   score: ScoreBreakdown;
   sourcePath: string;
   logPath: string;
   screenshotPaths: string[];
+  score: number;
+  iterations: number;
+  total_tokens: number;
+  duration_ms: number;
+  reason?: string;
+  task: TaskSpec;
+  run_id: string;
+  log_path: string;
+  source_path: string;
 }
 
-export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult> {
-  const task = loadTaskSpec(options.taskPath);
-  const model = parseModelConfig(options.modelRef);
-  const runId = randomUUID();
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+export function loadTaskFile(path: string): TaskSpec {
+  const raw = readFileSync(resolve(path), "utf-8");
+  return parseTaskSpec(raw);
+}
 
-  const scratchDir = resolve("eval-scratch", task.id);
-  const logDir = resolve("eval-logs", task.id);
-  mkdirSync(scratchDir, { recursive: true });
-  mkdirSync(logDir, { recursive: true });
-
+export async function runEval(task: TaskSpec, config: ModelConfig): Promise<EvalRunResult> {
+  const run_id = randomUUID();
+  const startedAt = Date.now();
+  const ts = new Date(startedAt).toISOString().replace(/[:.]/g, "-");
+  const log_path = resolve("eval-logs", task.id, `${ts}.ndjson`);
+  mkdirSync(resolve("eval-logs", task.id), { recursive: true });
   const sourcePath = join(scratchDir, `${runId}.forge.ts`);
-  const screenshotSourcePath = join(scratchDir, `${runId}.forge.js`);
   const logPath = join(logDir, `${timestamp}.ndjson`);
 
+  let iteration = 0;
   let totalTokens = 0;
+  let prompt = `${buildSystemPrompt(task)}\n\n${buildUserPrompt(task)}`;
+  let code = "";
+  let finalScore = 0;
+  let finalReason: string | undefined;
+
+  logEvent(log_path, { ts: Date.now(), run_id, task_id: task.id, event: "run.started", data: { model: config.model } });
+
+  const adapter = createModelAdapter(config);
+
+  while (true) {
+    iteration += 1;
+    const images = task.reference_images && task.reference_images.length > 0 && adapter.supportsVision
+      ? task.reference_images.map((path) => readFileSync(resolve(path)))
+      : undefined;
+
+    const response = await adapter.generate({
+      messages: [{ role: "system", content: prompt }],
+      images,
+    });
+    totalTokens += response.usage.total_tokens;
+
+    code = extractCode(response.text);
+    logEvent(log_path, {
+      ts: Date.now(),
+      run_id,
+      task_id: task.id,
+      event: "build.code_generated",
+      data: { iteration, chars: code.length, tokens: response.usage.total_tokens },
+    });
+
+    const source_path = resolve("eval-scratch", task.id, `${run_id}.forge.ts`);
+    mkdirSync(resolve("eval-scratch", task.id), { recursive: true });
+    writeFileSync(source_path, code, "utf-8");
+
+    await initManifold();
+    const result = await evaluateModel(code);
+
+    logEvent(log_path, {
   const runStart = Date.now();
+  const maxIterations = Math.max(1, task.max_iterations ?? 1);
+  const passThreshold = options.passThreshold ?? 70;
+  const screenshotPaths: string[] = [];
+  const retryNotes: string[] = [];
 
   appendEvent(logPath, {
     ts: Date.now(),
@@ -51,93 +104,98 @@ export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult
     data: {
       model: options.modelRef,
       config: {
-        max_iterations: task.max_iterations ?? 1,
-        pass_threshold: options.passThreshold,
+        max_iterations: maxIterations,
+        pass_threshold: passThreshold,
       },
     },
   });
 
   const systemPrompt = buildSystemPrompt(task);
-  const userPrompt = buildUserPrompt(task);
-
-  appendEvent(logPath, {
-    ts: Date.now(),
-    run_id: runId,
-    task_id: task.id,
-    event: "plan.prompt_sent",
-    data: {
-      prompt_tokens: estimateTokens(`${systemPrompt}\n\n${userPrompt}`),
-      has_reference_images: (task.reference_images?.length ?? 0) > 0,
-    },
-  });
-
-  const generation = await generateCode(model, {
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-  });
-
-  totalTokens += generation.usage.total_tokens;
-
-  appendEvent(logPath, {
-    ts: Date.now(),
-    run_id: runId,
-    task_id: task.id,
-    event: "plan.response",
-    data: {
-      response_tokens: generation.usage.completion_tokens,
-      prompt_tokens: generation.usage.prompt_tokens,
-      total_tokens: generation.usage.total_tokens,
-    },
-  });
-
-  const source = extractTypeScriptFence(generation.text);
-  writeFileSync(sourcePath, source, "utf-8");
-  writeFileSync(screenshotSourcePath, source, "utf-8");
-
-  appendEvent(logPath, {
-    ts: Date.now(),
-    run_id: runId,
-    task_id: task.id,
-    event: "build.code_generated",
-    data: {
-      source_hash: sha256(source),
-      line_count: source.split(/\r?\n/).length,
-      iteration: 1,
-      path: sourcePath,
-    },
-  });
 
   await initManifold();
-  const modelResult = await evaluateModel(source);
+  let latestScore: EvalResult | undefined;
+  let latestEvaluation:
+    | (ReturnType<typeof evaluateModel> extends Promise<infer TResult> ? TResult : never)
+    | undefined;
+  let finalPass = false;
+  let finalReason = "max iterations reached";
+  let completedIterations = 0;
 
-  appendEvent(logPath, {
-    ts: Date.now(),
-    run_id: runId,
-    task_id: task.id,
-    event: "eval.completed",
-    data: {
-      success: modelResult.errors.length === 0,
-      errors: modelResult.errors,
-      warnings: modelResult.evaluation.summary.warningCount,
-      stats: modelResult.evaluation.stats,
-    },
-  });
+  for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+    completedIterations = iteration;
+    const userPrompt = buildIterationPrompt(task, retryNotes, iteration, maxIterations);
 
-  const screenshotPaths = await tryCaptureScreenshots(screenshotSourcePath);
-  if (screenshotPaths.length > 0) {
     appendEvent(logPath, {
       ts: Date.now(),
       run_id: runId,
       task_id: task.id,
-      event: "eval.screenshots",
+      event: "plan.prompt_sent",
       data: {
-        paths: screenshotPaths,
-        angles: ["iso", "front", "right", "top"],
+        iteration,
+        prompt_tokens: estimateTokens(`${systemPrompt}\n\n${userPrompt}`),
+        has_reference_images: (task.reference_images?.length ?? 0) > 0,
       },
     });
-  }
+
+    const generation = await generateCode(model, {
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    });
+
+    totalTokens += generation.usage.total_tokens;
+
+    appendEvent(logPath, {
+      ts: Date.now(),
+      run_id: runId,
+      task_id: task.id,
+      event: "plan.response",
+      data: {
+        iteration,
+        response_tokens: generation.usage.completion_tokens,
+        prompt_tokens: generation.usage.prompt_tokens,
+        total_tokens: generation.usage.total_tokens,
+      },
+    });
+
+    const source = extractTypeScriptFence(generation.text);
+    writeFileSync(sourcePath, source, "utf-8");
+
+    appendEvent(logPath, {
+      ts: Date.now(),
+      run_id: runId,
+      task_id: task.id,
+      event: "build.code_generated",
+      data: {
+        source_hash: sha256(source),
+        line_count: source.split(/\r?\n/).length,
+        iteration,
+        path: sourcePath,
+      },
+    });
+
+    const modelResult = await evaluateModel(source);
+    latestEvaluation = modelResult;
+
+    appendEvent(logPath, {
+      ts: Date.now(),
+      run_id,
+      task_id: task.id,
+      event: "eval.completed",
+      data: {
+        iteration,
+        success: result.errors.length === 0,
+        error_count: result.errors.length,
+        warning_count: result.evaluation.summary.warningCount,
+      },
+    });
+        success: modelResult.errors.length === 0,
+        errors: modelResult.errors,
+        warnings: modelResult.evaluation.summary.warningCount,
+        stats: modelResult.evaluation.stats,
+      },
+    });
 
   const score = scoreEval(task, modelResult.evaluation, source);
 
@@ -158,17 +216,111 @@ export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult
 
   const passThreshold = options.passThreshold ?? 70;
   const pass = score.pass && score.total >= passThreshold;
+    const iterationScreenshots = await tryCaptureScreenshots(sourcePath);
+    screenshotPaths.push(...iterationScreenshots);
+    if (iterationScreenshots.length > 0) {
+      appendEvent(logPath, {
+        ts: Date.now(),
+        run_id: runId,
+        task_id: task.id,
+        event: "eval.screenshots",
+        data: {
+          iteration,
+          paths: iterationScreenshots,
+          angles: ["iso", "front", "right", "top"],
+        },
+      });
+    }
 
-  appendEvent(logPath, {
-    ts: Date.now(),
-    run_id: runId,
-    task_id: task.id,
-    event: "decide.action",
-    data: {
-      action: pass ? "pass" : "fail",
-      reason: pass ? "score meets threshold" : "score below threshold",
-    },
-  });
+    const score = scoreEvaluation({
+      task,
+      bundle: modelResult.evaluation,
+      source,
+    });
+    latestScore = score;
+
+    appendEvent(logPath, {
+      ts: Date.now(),
+      run_id: runId,
+      task_id: task.id,
+      event: "score.computed",
+      data: {
+        iteration,
+        total: score.score,
+        geometry: score.geometry,
+        constraints: score.constraints,
+        visual: score.visual,
+        api: score.api,
+        feedback: score.feedback,
+      },
+    });
+
+    const pass = score.pass && score.score >= passThreshold;
+    if (pass) {
+      finalPass = true;
+      finalReason = "score meets threshold";
+      appendEvent(logPath, {
+        ts: Date.now(),
+        run_id: runId,
+        task_id: task.id,
+        event: "decide.action",
+        data: {
+          iteration,
+          action: "pass",
+          reason: finalReason,
+        },
+      });
+      break;
+    }
+
+    if (iteration < maxIterations) {
+      const feedback = composeRetryFeedback(score.feedback, modelResult.errors, passThreshold, score.score);
+      retryNotes.push(feedback);
+      finalReason = "score below threshold";
+      appendEvent(logPath, {
+        ts: Date.now(),
+        run_id: runId,
+        task_id: task.id,
+        event: "decide.action",
+        data: {
+          iteration,
+          action: "retry",
+          reason: finalReason,
+          score: score.score,
+          pass_threshold: passThreshold,
+        },
+      });
+      appendEvent(logPath, {
+        ts: Date.now(),
+        run_id: runId,
+        task_id: task.id,
+        event: "build.retry",
+        data: {
+          iteration: iteration + 1,
+          feedback_summary: feedback,
+        },
+      });
+    } else {
+      finalReason = "score below threshold";
+      appendEvent(logPath, {
+        ts: Date.now(),
+        run_id: runId,
+        task_id: task.id,
+        event: "decide.action",
+        data: {
+          iteration,
+          action: "fail",
+          reason: finalReason,
+          score: score.score,
+          pass_threshold: passThreshold,
+        },
+      });
+    }
+  }
+
+  if (!latestScore || !latestEvaluation) {
+    throw new Error("Eval run did not produce a score.");
+  }
 
   appendEvent(logPath, {
     ts: Date.now(),
@@ -178,9 +330,11 @@ export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult
     data: {
       final_score: score.total,
       iterations: 1,
+      final_score: latestScore.score,
+      iterations: completedIterations,
       total_tokens: totalTokens,
       duration_ms: Date.now() - runStart,
-      pass,
+      pass: finalPass,
     },
   });
 
@@ -198,6 +352,13 @@ export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult
       total_duration_ms: Date.now() - runStart,
       eval_bundle: modelResult.evaluation,
       failure_reason: pass ? undefined : "Score below threshold",
+      pass: finalPass,
+      score: latestScore.score,
+      iterations: completedIterations,
+      total_tokens: totalTokens,
+      total_duration_ms: Date.now() - runStart,
+      eval_bundle: latestEvaluation.evaluation,
+      failure_reason: finalPass ? undefined : latestScore.feedback[0] ?? finalReason,
     },
   };
 
@@ -206,12 +367,44 @@ export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult
   return {
     runId,
     task,
-    pass,
-    score,
+    pass: finalPass,
+    score: latestScore,
     sourcePath,
     logPath,
     screenshotPaths,
   };
+}
+
+function buildIterationPrompt(task: TaskSpec, retryNotes: string[], iteration: number, maxIterations: number): string {
+  const basePrompt = buildUserPrompt(task);
+  if (retryNotes.length === 0) {
+    return basePrompt;
+  }
+
+  return [
+    basePrompt,
+    "",
+    `RETRY CONTEXT: attempt ${iteration} of ${maxIterations}.`,
+    "Address the issues from previous attempts:",
+    ...retryNotes.map((note, index) => `- Attempt ${index + 1}: ${note}`),
+    "",
+    "Return a complete replacement .forge.ts implementation, not a diff.",
+  ].join("\n");
+}
+
+function composeRetryFeedback(
+  scoreFeedback: string[],
+  runtimeErrors: string[],
+  passThreshold: number,
+  score: number,
+): string {
+  const reasons = [
+    `score ${score.toFixed(2)} below pass threshold ${passThreshold}`,
+    ...runtimeErrors.map((error) => `runtime: ${error}`),
+    ...scoreFeedback,
+  ].slice(0, 6);
+
+  return reasons.join("; ");
 }
 
 function loadTaskSpec(taskPath: string): TaskSpec {
@@ -355,105 +548,113 @@ function parseSimpleYaml(input: string): Record<string, unknown> {
   let multilineIndent = 0;
   const multilineLines: string[] = [];
 
-  const flushMultiline = () => {
-    if (multilineKey) {
-      root[multilineKey] = multilineLines.join("\n").trimEnd();
-      multilineKey = undefined;
-      multilineLines.length = 0;
-    }
-  };
-
-  for (const rawLine of input.split(/\r?\n/)) {
-    const commentTrimmed = rawLine.replace(/\s+#.*$/, "");
-    if (!commentTrimmed.trim()) {
-      if (multilineKey) {
-        multilineLines.push("");
+    if (result.errors.length === 0) {
+      try {
+        const snapOut = execSync(`node scripts/vibe-snap.mjs ${JSON.stringify(source_path)} --angles 4 --quiet`, {
+          encoding: "utf-8",
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        const paths = snapOut.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.endsWith(".png"));
+        if (paths.length > 0) {
+          logEvent(log_path, {
+            ts: Date.now(),
+            run_id,
+            task_id: task.id,
+            event: "eval.screenshots",
+            data: { iteration, paths },
+          });
+        }
+      } catch {
+        // Optional screenshots.
       }
+    }
+
+    const score = scoreEval(task, result.evaluation, code);
+    finalScore = score.total;
+
+    logEvent(log_path, {
+      ts: Date.now(),
+      run_id,
+      task_id: task.id,
+      event: "score.computed",
+      data: { iteration, ...score },
+    });
+
+    const threshold = task.pass_threshold ?? 70;
+    const maxIterations = task.max_iterations ?? 1;
+
+    if (score.total >= threshold && result.errors.length === 0) {
+      logEvent(log_path, { ts: Date.now(), run_id, task_id: task.id, event: "decide.action", data: { iteration, action: "pass" } });
+      logEvent(log_path, {
+        ts: Date.now(),
+        run_id,
+        task_id: task.id,
+        event: "run.completed",
+        data: { pass: true, iterations: iteration, total_tokens: totalTokens, duration_ms: Date.now() - startedAt, score: score.total },
+      });
+      return {
+        pass: true,
+        score: score.total,
+        iterations: iteration,
+        total_tokens: totalTokens,
+        duration_ms: Date.now() - startedAt,
+        task,
+        run_id,
+        log_path,
+        source_path,
+      };
+    }
+
+    if (score.total < threshold && iteration < maxIterations) {
+      prompt = buildRetryPrompt({
+        task,
+        previousCode: code,
+        errors: result.errors,
+        score,
+        iteration: iteration + 1,
+      });
+      logEvent(log_path, {
+        ts: Date.now(),
+        run_id,
+        task_id: task.id,
+        event: "build.retry",
+        data: { iteration, next_iteration: iteration + 1, error_count: result.errors.length, score: score.total },
+      });
       continue;
     }
 
-    const indent = rawLine.length - rawLine.trimStart().length;
-    const line = commentTrimmed.trim();
+    finalReason = score.feedback[0] ?? result.errors[0] ?? "max iterations reached";
+    logEvent(log_path, { ts: Date.now(), run_id, task_id: task.id, event: "decide.action", data: { iteration, action: "fail", reason: finalReason } });
+    logEvent(log_path, {
+      ts: Date.now(),
+      run_id,
+      task_id: task.id,
+      event: "run.completed",
+      data: {
+        pass: false,
+        iterations: iteration,
+        total_tokens: totalTokens,
+        duration_ms: Date.now() - startedAt,
+        score: finalScore,
+        reason: finalReason,
+      },
+    });
 
-    if (multilineKey) {
-      if (indent > multilineIndent) {
-        multilineLines.push(rawLine.slice(multilineIndent + 2));
-        continue;
-      }
-      flushMultiline();
-    }
-
-    const sectionMatch = line.match(/^([A-Za-z0-9_]+):\s*$/);
-    if (sectionMatch) {
-      currentSection = sectionMatch[1];
-      currentIndent = indent;
-      root[currentSection] = {};
-      continue;
-    }
-
-    const entryMatch = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
-    if (!entryMatch) {
-      throw new Error(`Unsupported YAML line: ${rawLine}`);
-    }
-
-    const [, key, rawValue] = entryMatch;
-
-    if (rawValue === "|") {
-      multilineKey = key;
-      multilineIndent = indent;
-      continue;
-    }
-
-    const value = parseYamlScalar(rawValue);
-
-    if (currentSection && indent > currentIndent) {
-      const section = root[currentSection] as Record<string, unknown>;
-      section[key] = value;
-      continue;
-    }
-
-    currentSection = undefined;
-    root[key] = value;
+    return {
+      pass: false,
+      score: finalScore,
+      iterations: iteration,
+      total_tokens: totalTokens,
+      duration_ms: Date.now() - startedAt,
+      reason: finalReason,
+      task,
+      run_id,
+      log_path,
+      source_path,
+    };
   }
-
-  flushMultiline();
-
-  return root;
 }
 
-function parseYamlScalar(value: string): unknown {
-  const trimmed = value.trim();
-
-  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-    const inside = trimmed.slice(1, -1).trim();
-    if (!inside) {
-      return [];
-    }
-    return inside.split(",").map((item) => parseYamlScalar(item.trim()));
-  }
-
-  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-    const inside = trimmed.slice(1, -1).trim();
-    const object: Record<string, unknown> = {};
-    if (!inside) {
-      return object;
-    }
-    for (const pair of inside.split(",")) {
-      const [rawKey, rawVal] = pair.split(":");
-      object[rawKey.trim()] = parseYamlScalar((rawVal ?? "").trim());
-    }
-    return object;
-  }
-
-  if (trimmed === "true") {
-    return true;
-  }
-  if (trimmed === "false") {
-    return false;
-  }
-  if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) {
-    return Number(trimmed);
-  }
-
-  return trimmed;
+function logEvent(logPath: string, event: EvalEvent): void {
+  appendFileSync(logPath, `${JSON.stringify(event)}\n`, "utf-8");
 }
