@@ -128,26 +128,3 @@ function effectiveWeights(judge: number): ScoreBreakdown["weights"] {
 function clamp(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-export function scoreEval(task: TaskSpec, bundle: EvaluationBundle, source: string): {
-  total: number;
-  geometry: number;
-  constraints: number;
-  api: number;
-  visual: number;
-  feedback: string[];
-} {
-  const scored = scoreEvaluation({ task, bundle, source });
-  return {
-    total: scored.score,
-    geometry: scored.geometry,
-    constraints: scored.constraints,
-    api: scored.api,
-    visual: scored.visual,
-    feedback: scored.feedback,
-  };
-}
