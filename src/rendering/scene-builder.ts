@@ -117,6 +117,7 @@ export function buildBodyGroup(
 
   for (let i = 0; i < bodies.length; i++) {
     const body = bodies[i];
+    const isToolBody = body.kind === "tool-body";
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(body.mesh.positions, 3));
     geometry.setAttribute("normal", new THREE.BufferAttribute(body.mesh.normals, 3));
@@ -134,14 +135,21 @@ export function buildBodyGroup(
     }
 
     // Surface material
-    const material = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(r, g, b),
-      metalness: hiContrast ? 0.0 : 0.1,
-      roughness: hiContrast ? 0.9 : 0.6,
-      side: THREE.DoubleSide,
-      transparent: !hiContrast && (body.color?.[3] ?? 1) < 1,
-      opacity: hiContrast ? 1 : (body.color?.[3] ?? 1),
-    });
+    const material = isToolBody
+      ? new THREE.MeshBasicMaterial({
+          color: new THREE.Color(0.95, 0.45, 0.2),
+          wireframe: true,
+          transparent: true,
+          opacity: 0.85,
+        })
+      : new THREE.MeshStandardMaterial({
+          color: new THREE.Color(r, g, b),
+          metalness: hiContrast ? 0.0 : 0.1,
+          roughness: hiContrast ? 0.9 : 0.6,
+          side: THREE.DoubleSide,
+          transparent: !hiContrast && (body.color?.[3] ?? 1) < 1,
+          opacity: hiContrast ? 1 : (body.color?.[3] ?? 1),
+        });
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.castShadow = true;
@@ -149,14 +157,16 @@ export function buildBodyGroup(
     group.add(mesh);
 
     // Edge strokes
-    const edges = new THREE.EdgesGeometry(geometry, EDGE_ANGLE_THRESHOLD);
-    let edgeColor: THREE.Color;
-    if (hiContrast) {
-      edgeColor = new THREE.Color(bodies.length > 1 ? 0x222222 : 0x555555);
-    } else {
-      edgeColor = adaptiveEdgeColor(r, g, b);
+    if (!isToolBody) {
+      const edges = new THREE.EdgesGeometry(geometry, EDGE_ANGLE_THRESHOLD);
+      let edgeColor: THREE.Color;
+      if (hiContrast) {
+        edgeColor = new THREE.Color(bodies.length > 1 ? 0x222222 : 0x555555);
+      } else {
+        edgeColor = adaptiveEdgeColor(r, g, b);
+      }
+      group.add(new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: edgeColor })));
     }
-    group.add(new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: edgeColor })));
   }
 
   return group;

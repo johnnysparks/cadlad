@@ -61,6 +61,16 @@ describe("evaluateModel", () => {
     const result = await evaluateModel(code);
     expect(result.errors).toHaveLength(0);
     expect(result.bodies).toHaveLength(1);
+    expect(result.toolBodies).toHaveLength(1);
+    expect(result.toolBodies?.[0].kind).toBe("tool-body");
+    expect(result.toolBodies?.[0].name).toBe("center-cut");
+  });
+
+  it("accepts top-level toolBody return as construction-only geometry", async () => {
+    const result = await evaluateModel("return toolBody('debug', box(5,5,5))");
+    expect(result.errors).toHaveLength(0);
+    expect(result.bodies).toHaveLength(0);
+    expect(result.toolBodies).toHaveLength(1);
   });
 
   it("handles metadata object with camera", async () => {
@@ -75,15 +85,15 @@ describe("evaluateModel", () => {
     const result = await evaluateModel("const x = 1 + 1;");
     expect(result.bodies).toHaveLength(0);
     expect(result.errors).toContain(
-      "Model script must return geometry: Solid, Assembly, array of Solid/Assembly, or { model, camera }.",
+      "Model script must return geometry: Solid, ToolBody, Assembly, array of those, or { model, camera }.",
     );
   });
 
   it("errors on invalid array entry types with index diagnostics", async () => {
     const result = await evaluateModel("return [box(10,10,10), 42, 'bad']");
     expect(result.bodies).toHaveLength(1);
-    expect(result.errors).toContain("Model[1] must be a Solid or Assembly, got number.");
-    expect(result.errors).toContain("Model[2] must be a Solid or Assembly, got string.");
+    expect(result.errors).toContain("Model[1] must be a Solid, ToolBody, or Assembly, got number.");
+    expect(result.errors).toContain("Model[2] must be a Solid, ToolBody, or Assembly, got string.");
     expect(result.diagnostics?.[0]).toMatchObject({
       stage: "semantic",
       severity: "error",

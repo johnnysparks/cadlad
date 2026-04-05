@@ -127,20 +127,19 @@ Violations appear as diagnostics in `EvaluationBundle` with `featureId` like `co
 
 ### 4.1 Tool bodies
 
-**Status: NOT IMPLEMENTED**
+**Status: DONE**
 
 Tool bodies are construction-only solids (not rendered in final output) used for organizing boolean cuts. Pro CAD pattern: collect all cutters as tool bodies, subtract in one batch.
 
-- [ ] `toolBody(name, solid)` — marks a solid as construction-only geometry
-- [ ] Tool bodies register as `kind: "tool-body"` features in `defineScene()`
-- [ ] `subtractAll()` / `intersectAll()` accept `ToolBody` directly
-- [ ] Studio viewport can optionally show tool bodies as wireframe for debugging
+- [x] `toolBody(name, solid)` — marks a solid as construction-only geometry
+- [x] Tool bodies register as `kind: "tool-body"` bodies in evaluation output (`result.toolBodies`)
+- [x] `subtractAll()` / `intersectAll()` accept `ToolBody` directly
+- [x] Studio viewport can optionally show tool bodies as wireframe for debugging
 
-**Implementation plan:**
-- New file: `src/api/toolbody.ts`
-- `ToolBody` wrapper class around `Solid` with `_isToolBody = true` flag
-- `evaluateModel()` strips tool bodies from final output bodies
-- Studio viewport reads the flag and renders as wireframe when toggled
+**Implemented:**
+- `src/api/toolbody.ts` now provides a `ToolBody` wrapper class with `_isToolBody = true`
+- `evaluateModel()` now strips tool bodies from final output bodies and exposes them via `result.toolBodies`
+- Studio viewport renders tool bodies as wireframe when `Tool bodies` toggle is enabled
 
 **Scope:** Small-medium. The concept is simple; the work is plumbing it through evaluation and rendering.
 
