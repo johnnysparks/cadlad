@@ -25,7 +25,7 @@ import { SessionClient, clientFromUrl, ApiError, type RunResultEnvelope, type Re
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
 const sessionUrl =
-  process.argv.find((a) => a.startsWith("--session="))?.slice("--session=".length) ??
+  process.argv.find((a: string) => a.startsWith("--session="))?.slice("--session=".length) ??
   process.env.CADLAD_SESSION_URL;
 
 if (!sessionUrl) {

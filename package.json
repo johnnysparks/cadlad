@@ -22,6 +22,7 @@
     "test:watch": "vitest",
     "lint": "node scripts/lint.mjs",
     "typecheck": "node scripts/typecheck.mjs",
+    "typecheck:full": "npm run typecheck && npm --prefix apps/worker run typecheck && npm --prefix apps/mcp-gateway run typecheck",
     "worker:dev": "npm --prefix apps/worker run dev",
     "worker:deploy": "npm --prefix apps/worker run deploy",
     "worker:deploy:dry": "npm --prefix apps/worker run deploy:dry",
