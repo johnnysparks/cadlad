@@ -793,7 +793,105 @@ Run `npm run typecheck`. Commit. Push.
 
 ---
 
+## Step 9: Ad-Hoc Tasks (`cadlad eval --task "..."`)
+
+```
+You are working on the CadLad project (code-first parametric 3D CAD in TypeScript).
+Branch: claude/agent-evaluation-loop-GXddC
+
+Pull latest from origin first.
+
+Read these files:
+- src/eval/types.ts (TaskSpec, AcceptanceCriteria)
+- src/eval/runner.ts (runEval, loadTaskFile)
+- src/eval/prompts.ts (buildSystemPrompt — see what the prompt expects from a TaskSpec)
+- src/cli/index.ts (cmdEval — the arg parsing you'll extend)
+
+CONTEXT: Currently `cadlad eval` requires a YAML file. For quick experiments you
+want to just type a description and go:
+  cadlad eval --task "A coffee mug with handle" --model ollama://qwen3:8b
+This synthesizes a TaskSpec on the fly with sensible defaults.
+
+TASK A: Create `src/eval/adhoc.ts` (~70 LOC)
+
+Export:
+```typescript
+function buildAdhocTask(description: string, opts?: {
+  difficulty?: number;
+  max_iterations?: number;
+  pass_threshold?: number;
+}): TaskSpec
+```
+
+Implementation:
+
+1. Generate an id from the description: lowercase, replace non-alphanumeric with
+   hyphens, truncate to 40 chars, strip trailing hyphens.
+   e.g. "A Coffee Mug with Handle" → "a-coffee-mug-with-handle"
+
+2. Infer api_surface from the description using simple keyword matching.
+   Scan the description (case-insensitive) for these patterns:
+   - "hole" | "cut" | "through" → ["subtract", "cylinder"]
+   - "round" | "fillet" | "smooth" → ["fillet"]
+   - "hollow" | "shell" | "thin wall" → ["shell"]
+   - "handle" | "arm" | "bracket" → ["sketch", "extrude"]
+   - "taper" | "draft" → ["draft"]
+   - "assem" | "parts" | "multi" → ["assembly"]
+   - "slot" | "channel" | "groove" → ["sketch", "subtract"]
+   - "param" | "adjustable" | "variable" → ["param"]
+   Always include: ["box", "cylinder", "translate"] as baseline.
+   Deduplicate the final list.
+
+3. Build AcceptanceCriteria with loose defaults:
+   - body_count: 1 (unless assembly keywords detected → body_count_min: 2)
+   - validation_errors: 0
+   - volume_min: 100 (basically "not empty")
+   - No volume_max, no bbox constraints (we can't guess dimensions from free text)
+
+4. Return a TaskSpec with:
+   - id from step 1
+   - difficulty: opts?.difficulty ?? 2
+   - description: the raw input string
+   - acceptance from step 3
+   - api_surface from step 2
+   - max_iterations: opts?.max_iterations ?? 5
+   - pass_threshold: opts?.pass_threshold ?? 60 (lower than benchmarks — ad-hoc is exploratory)
+
+TASK B: Update `src/cli/index.ts` cmdEval
+
+Modify arg parsing to detect `--task <description>`. The description is the next
+argument (a quoted string). When --task is used, no positional file/dir argument
+is needed.
+
+Updated flow:
+1. If `--task` flag present: call buildAdhocTask(description) → get TaskSpec, run it
+2. If positional arg is a .yaml file: existing path (loadTaskFile)
+3. If positional arg is a directory: existing path (glob YAMLs, batch)
+4. If neither: print usage and exit
+
+The --task flag works with all other flags (--model, --judge, --concurrency, etc).
+
+When --task is used, print the synthesized task info before running:
+```
+[eval] Ad-hoc task: a-coffee-mug-with-handle
+[eval] Inferred API surface: box, cylinder, translate, sketch, extrude
+[eval] Acceptance: body_count=1, validation_errors=0, volume_min=100
+[eval] Running with ollama://qwen3:8b (max 5 iterations, pass threshold 60)...
+```
+
+Also support `--task-difficulty <n>` and `--task-max-iter <n>` to override adhoc defaults.
+
+Update printUsage() with examples:
+```
+  cadlad eval --task "A dice with rounded edges" --model ollama://qwen3:8b
+  cadlad eval --task "Phone stand with cable slot" --judge anthropic://claude-sonnet-4-6
+```
+
+Run `npm run typecheck`. Commit. Push.
+```
+
+---
+
 ## Next Steps (not written yet)
 
-- Step 9: Ad-hoc tasks (`cadlad eval --task "..."`)
 - Step 10: CI integration (`scripts/ci-eval.sh`)
