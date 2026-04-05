@@ -385,6 +385,7 @@ export function withLayeredValidation(
 
   return {
     bodies: result.bodies,
+    toolBodies: result.toolBodies,
     params: result.params,
     hints: result.hints,
     camera: result.camera,

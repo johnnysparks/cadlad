@@ -16,7 +16,7 @@ export type PlaneLike = {
   normal: Vec3;
 };
 
-type BooleanOperand = Solid | { solid: Solid };
+type BooleanOperand = Solid | { solid: Solid; _isToolBody?: true };
 
 export class Solid {
   /** @internal raw Manifold handle */
@@ -91,7 +91,13 @@ export class Solid {
 
   private _asSolid(operand: BooleanOperand): Solid {
     if (operand instanceof Solid) return operand;
-    if (operand && typeof operand === "object" && "solid" in operand && operand.solid instanceof Solid) {
+    if (
+      operand &&
+      typeof operand === "object" &&
+      "solid" in operand &&
+      operand.solid instanceof Solid &&
+      (!("_isToolBody" in operand) || operand._isToolBody === true)
+    ) {
       return operand.solid;
     }
     throw new Error("Boolean operands must be Solid or ToolBody");

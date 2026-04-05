@@ -177,6 +177,7 @@ type Body = { mesh: { positions: Float32Array; indices: Uint32Array } };
 type BooleanOperand = Solid | ToolBody;
 
 declare type ToolBody = {
+  _isToolBody: true;
   name: string;
   solid: Solid;
 };

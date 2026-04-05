@@ -51,4 +51,4 @@ export type { Plane, Axis, Datum, MidplaneAxis, BBoxAnchor } from "./reference.j
 
 // Tool bodies (construction geometry)
 export { toolBody } from "./toolbody.js";
-export type { ToolBody } from "./toolbody.js";
+export { ToolBody } from "./toolbody.js";

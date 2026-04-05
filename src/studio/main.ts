@@ -77,6 +77,7 @@ async function boot() {
   const paramEl = document.getElementById("param-panel")!;
   const runBtn = document.getElementById("btn-run")!;
   const exportBtn = document.getElementById("btn-export-stl")!;
+  const toggleToolBodiesBtn = document.getElementById("btn-toggle-tool-bodies") as HTMLButtonElement;
   const toggleParamsBtn = document.getElementById("btn-toggle-params") as HTMLButtonElement;
   const toolbarActions = document.getElementById("toolbar-actions")!;
   const liveBtn = document.getElementById("btn-live-session") as HTMLButtonElement;
@@ -237,6 +238,15 @@ async function boot() {
 
   const viewport = new Viewport(viewportEl);
   let lastResult: Awaited<ReturnType<typeof evaluateModel>> | null = null;
+  let showToolBodies = false;
+  const renderResult = (result: Awaited<ReturnType<typeof evaluateModel>>) => {
+    const visibleBodies = showToolBodies
+      ? [...result.bodies, ...(result.toolBodies ?? [])]
+      : result.bodies;
+    if (visibleBodies.length > 0) {
+      viewport.setBodies(visibleBodies);
+    }
+  };
   const editorDecorations = new EditorDecorations(editor);
   let patchHistory: PatchEvent[] = [];
   let selectedPatchId: string | undefined;
@@ -348,9 +358,7 @@ async function boot() {
         errorBar.classList.add("visible");
       }
 
-      if (result.bodies.length > 0) {
-        viewport.setBodies(result.bodies);
-      }
+      renderResult(result);
 
       // Show hints in console (non-intrusive)
       if (result.hints && result.hints.length > 0) {
@@ -414,6 +422,15 @@ async function boot() {
       }
     }
   }
+
+  toggleToolBodiesBtn?.addEventListener("click", () => {
+    showToolBodies = !showToolBodies;
+    toggleToolBodiesBtn.textContent = showToolBodies ? "◉ Tool bodies" : "◌ Tool bodies";
+    toggleToolBodiesBtn.setAttribute("aria-pressed", String(showToolBodies));
+    if (lastResult) {
+      renderResult(lastResult);
+    }
+  });
 
   function applyPatchHistory(nextPatches: PatchEvent[]): void {
     patchHistory = nextPatches;

@@ -28,6 +28,7 @@ export interface TriMesh {
 
 /** A solid body with optional color and name */
 export interface Body {
+  kind?: "solid" | "tool-body";
   name?: string;
   color?: Color;
   mesh: TriMesh;
@@ -182,6 +183,7 @@ export interface EvaluationBundle {
 /** Result of evaluating a model script */
 export interface ModelResult {
   bodies: Body[];
+  toolBodies?: Body[];
   params: ParamDef[];
   errors: string[];
   geometryStats?: GeometryStats;

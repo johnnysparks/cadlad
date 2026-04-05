@@ -43,6 +43,7 @@ export async function evaluateModel(
   const runtimeErrors: string[] = [];
   const errors: string[] = [];
   const bodies: Body[] = [];
+  const toolBodies: Body[] = [];
   const collectedParams: ParamDef[] = [];
   let hints: Hint[] = [];
   let camera: [number, number, number] | undefined;
@@ -60,6 +61,13 @@ export async function evaluateModel(
       );
     }
     bodies.push(solid.toBody());
+  };
+
+  const collectToolBody = (tool: ReturnType<typeof toolBody>): void => {
+    const body = tool.solid.toBody();
+    body.kind = "tool-body";
+    body.name = tool.name;
+    toolBodies.push(body);
   };
 
   try {
@@ -120,6 +128,7 @@ export async function evaluateModel(
       }));
       return withLayeredValidation({
         bodies,
+        toolBodies,
         params: collectedParams,
         runtimeErrors: errors,
         hints,
@@ -139,6 +148,8 @@ export async function evaluateModel(
 
     if (model instanceof Solid) {
       collectSolid(model, "Model");
+    } else if (isToolBody(model)) {
+      collectToolBody(model);
     } else if (model instanceof Assembly) {
       bodies.push(...model.toBodies());
     } else if (Array.isArray(model)) {
@@ -149,12 +160,13 @@ export async function evaluateModel(
         } else if (item instanceof Assembly) {
           bodies.push(...item.toBodies());
         } else if (isToolBody(item)) {
-          // Construction geometry: intentionally omitted from final render output.
+          // Construction geometry: excluded from final output, retained for debug rendering.
+          collectToolBody(item);
           continue;
         } else {
           const valueType = item === null ? "null" : typeof item;
           runtimeErrors.push(
-            `Model[${i}] must be a Solid or Assembly, got ${valueType}.`,
+            `Model[${i}] must be a Solid, ToolBody, or Assembly, got ${valueType}.`,
           );
         }
       }
@@ -162,12 +174,12 @@ export async function evaluateModel(
       const valueType = model === null ? "null" : typeof model;
       if (valueType === "undefined") {
         runtimeErrors.push(
-          "Model script must return geometry: Solid, Assembly, array of Solid/Assembly, or { model, camera }.",
+          "Model script must return geometry: Solid, ToolBody, Assembly, array of those, or { model, camera }.",
         );
       } else {
         runtimeErrors.push(
           `Model script returned unsupported type: ${valueType}. ` +
-          "Expected Solid, Assembly, array of Solid/Assembly, or { model, camera }.",
+          "Expected Solid, ToolBody, Assembly, array of those, or { model, camera }.",
         );
       }
     }
@@ -202,6 +214,7 @@ export async function evaluateModel(
 
   return withLayeredValidation({
     bodies,
+    toolBodies,
     params: collectedParams,
     runtimeErrors: [...errors, ...runtimeErrors],
     hints,
