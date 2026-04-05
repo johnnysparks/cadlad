@@ -37,6 +37,26 @@ describe("parseModelConfig", () => {
     });
   });
 
+  it("parses lmstudio model references without requiring an API key", () => {
+    const config = parseModelConfig("lmstudio://google/gemma-4-26b-a4b");
+    expect(config).toEqual({
+      provider: "openai",
+      model: "google/gemma-4-26b-a4b",
+      endpoint: "http://localhost:1234",
+      requiresApiKey: false,
+    });
+  });
+
+  it("parses openai-compatible http model references", () => {
+    const config = parseModelConfig("http://localhost:1234/google%2Fgemma-4-26b-a4b");
+    expect(config).toEqual({
+      provider: "openai",
+      model: "google/gemma-4-26b-a4b",
+      endpoint: "http://localhost:1234",
+      requiresApiKey: false,
+    });
+  });
+
   it("rejects malformed references", () => {
     expect(() => parseModelConfig("llama3.2")).toThrow("Invalid model reference");
   });
@@ -139,5 +159,38 @@ describe("generateCode", () => {
         { messages: [{ role: "user", content: "hello" }] },
       ),
     ).rejects.toThrow("Missing API key environment variable");
+  });
+
+  it("calls openai-compatible endpoint without API key when disabled", async () => {
+    delete process.env.OPENAI_API_KEY;
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({
+        choices: [{ message: { content: "return roundedBox(20, 20, 20, 2);" } }],
+        usage: { prompt_tokens: 7, completion_tokens: 8, total_tokens: 15 },
+      }),
+    });
+
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await generateCode(
+      {
+        provider: "openai",
+        model: "google/gemma-4-26b-a4b",
+        endpoint: "http://localhost:1234",
+        requiresApiKey: false,
+      },
+      { messages: [{ role: "user", content: "Make a rounded box" }] },
+    );
+
+    expect(result.text).toContain("roundedBox");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:1234/v1/chat/completions",
+      expect.not.objectContaining({
+        headers: expect.objectContaining({ authorization: expect.any(String) }),
+      }),
+    );
   });
 });

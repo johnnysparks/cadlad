@@ -445,4 +445,5 @@ interface ModelAdapter {
 // openai://model-name     → api.openai.com (needs OPENAI_API_KEY)
 // anthropic://model-name  → api.anthropic.com (needs ANTHROPIC_API_KEY)
 // http://host:port/model  → custom OpenAI-compatible endpoint
+// lmstudio://model-name   → localhost:1234 (OpenAI-compatible, no API key)
 ```
