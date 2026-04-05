@@ -46,7 +46,7 @@ CadLad is a working code-first parametric 3D CAD system. The core loop — write
 - Render is optional — agents get full structured feedback without pixels
 
 **MCP tools** (`mcp/src/server.ts`, `worker/src/mcp-handler.ts`):
-- Read tools: `evaluate`, `get_stats`, `get_validation`, `compare`, `list_features`
+- Read tools: `evaluate`, `get_stats`, `get_validation`, `compare`
 - Domain analysis: `check_printability`, `check_moldability`, `suggest_improvements` (heuristic, not structural)
 - Agent telemetry: `submit_capability_gap`, `record_workaround`, `get_api_improvements`
 - Session management: `create_branch`, `checkout_branch`, `compare_branches`, revision history
@@ -73,7 +73,6 @@ CadLad is a working code-first parametric 3D CAD system. The core loop — write
 
 **Phase 1 gaps:**
 - `cadlad run --json` — CLI agents get no structured output
-- `add_feature` / `modify_feature` / `remove_feature` MCP tools — the code generation layer doesn't exist
 - Domain analysis is heuristic-only (bbox proxies), not structural (ray-cast, per-face)
 
 **Phase 2 gaps:**
@@ -116,7 +115,7 @@ Today an agent modeling in CadLad hits these walls, in order of pain:
 
 1. **No structured CLI output.** The MCP tools return structured data, but `cadlad run` returns human-readable text. CLI-based agents must parse prose or use the MCP server.
 
-2. **No semantic write operations.** Agents can read model state through MCP tools but must write raw `.forge.ts` code. There's no `add_feature("through_hole", ...)` that generates correct code. This is the biggest remaining gap.
+2. **No semantic write operations.** Agents must write raw `.forge.ts` code; higher-level intent transforms are not available yet.
 
 3. **Design intent is advisory, not enforced.** The constraint system checks `wall_thickness` and `symmetry` post-hoc, but nothing in the system *teaches* agents to model well (use datums, mirror for symmetry, batch booleans with tool bodies). The hints system is a stub.
 

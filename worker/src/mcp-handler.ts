@@ -9,14 +9,13 @@
  *
  * Tools: evaluate · get_stats · get_validation · compare · compare_branches · get_session_state ·
  *        list_patch_history · replace_source · apply_patch · update_params ·
- *        revert_patch · get_latest_screenshot · get_model_stats · list_features ·
+ *        revert_patch · get_latest_screenshot · get_model_stats ·
  *        check_printability · check_moldability · suggest_improvements ·
  *        report_capability_gap · record_workaround · suggest_api_improvements
  */
 
 import type { Env, SessionState, Patch, RunResult, ModelStats, RenderStatus } from './types.js';
 import { resolveAccessToken, loadScreenshot } from './oauth-store.js';
-import { extractSceneFeatures } from './scene-features.js';
 import { getCapabilityGapSummary } from './capability-gap-reducer.js';
 
 // ── Tool definitions (no session/token in schemas) ────────────────────────────
@@ -105,13 +104,6 @@ const TOOLS = [
       },
       required: ['branchA', 'branchB'],
     },
-  },
-
-  {
-    name: 'list_features',
-    description: 'List defineScene() features with stable ids, kinds, labels, and refs for feature-level agent workflows.',
-    annotations: { readOnlyHint: true, openWorldHint: false },
-    inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {
     name: 'check_printability',
@@ -424,25 +416,6 @@ async function callTool(
   const base = `http://do/api/live/session/${sessionId}`;
 
   switch (name) {
-
-    case 'list_features': {
-      const sessionResp = await stub.fetch(new Request(base));
-      if (!sessionResp.ok) throw new Error(`Session read failed: ${sessionResp.status}`);
-      const session = await sessionResp.json() as SessionState;
-      const parsed = extractSceneFeatures(session.source);
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify({
-            revision: session.revision,
-            count: parsed.features.length,
-            features: parsed.features,
-            warnings: parsed.warnings,
-          }, null, 2),
-        }],
-      };
-    }
-
     case 'check_printability': {
       const resp = await stub.fetch(new Request(`${base}/run-result`));
       if (resp.status === 404 || !resp.ok) {

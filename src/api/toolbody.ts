@@ -1,4 +1,3 @@
-import type { SceneFeatureDeclaration } from "./scene-contract.js";
 import { Solid } from "../engine/solid.js";
 
 export type ToolBody = {
@@ -23,14 +22,3 @@ export function isToolBody(value: unknown): value is ToolBody {
     (value as { solid: unknown }).solid instanceof Solid,
   );
 }
-
-export const toolBodyFeature = {
-  create(id: string, label?: string, refs?: readonly string[]): SceneFeatureDeclaration {
-    return {
-      id,
-      kind: "tool-body",
-      label,
-      refs,
-    };
-  },
-};

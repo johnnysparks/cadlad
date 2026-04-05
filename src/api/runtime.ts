@@ -20,8 +20,8 @@ import { param } from "./params.js";
 import { Sketch, rect, circle } from "./sketch.js";
 import { box, cylinder, sphere, roundedRect, roundedBox, taperedBox, sweep, loft } from "../engine/primitives.js";
 import { assembly } from "./assembly.js";
-import { plane, axis, datum, referenceFeature } from "./reference.js";
-import { isToolBody, toolBody, toolBodyFeature } from "./toolbody.js";
+import { plane, axis, datum } from "./reference.js";
+import { isToolBody, toolBody } from "./toolbody.js";
 import { withLayeredValidation } from "../validation/layered-validation.js";
 
 /**
@@ -70,8 +70,8 @@ export async function evaluateModel(
       "sweep", "loft",
       "assembly", "Solid", "Assembly",
       "defineScene", "mm", "constraint",
-      "plane", "axis", "datum", "referenceFeature",
-      "toolBody", "toolBodyFeature",
+      "plane", "axis", "datum",
+      "toolBody",
     ];
     const apiValues = [
       param, Sketch, rect, circle,
@@ -79,8 +79,8 @@ export async function evaluateModel(
       sweep, loft,
       assembly, Solid, Assembly,
       defineScene, mm, constraint,
-      plane, axis, datum, referenceFeature,
-      toolBody, toolBodyFeature,
+      plane, axis, datum,
+      toolBody,
     ];
 
     // Wrap user code so it can use top-level return
@@ -108,9 +108,7 @@ export async function evaluateModel(
         });
       }
     }
-    const blockingSceneDiagnostics = normalized.diagnostics.filter((diag) =>
-      diag.stage === "type-level" || diag.code === "scene.feature-ref.invalid"
-    );
+    const blockingSceneDiagnostics = normalized.diagnostics.filter((diag) => diag.stage === "type-level");
     if (blockingSceneDiagnostics.length > 0) {
       sceneValidation = normalized.scene?.validation;
       errors.push(...blockingSceneDiagnostics.map((diag) => {

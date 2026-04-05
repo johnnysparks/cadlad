@@ -15,9 +15,6 @@ export type SceneValidationSeverity = "error" | "warning";
 export type SceneDiagnostic = {
   code:
     | "scene.invalid-envelope"
-    | "scene.feature-id.missing"
-    | "scene.feature-id.duplicate"
-    | "scene.feature-ref.invalid"
     | "scene.geometry.empty"
     | "scene.geometry.disconnected-parts"
     | "scene.validator.failed"
@@ -29,13 +26,6 @@ export type SceneDiagnostic = {
   validatorId?: string;
   testId?: string;
   range?: SceneSourceRange;
-};
-
-export type SceneFeatureDeclaration = {
-  id?: string;
-  kind: string;
-  label?: string;
-  refs?: readonly string[];
 };
 
 export type UnitBrand<TUnit extends string> = number & { readonly __unit: TUnit };
@@ -72,7 +62,6 @@ export type SceneMeta = {
 
 export type SceneValidatorContext<TParams extends SceneParamsShape | undefined = SceneParamsShape | undefined> = {
   params: InferSceneParams<TParams>;
-  features: readonly NormalizedSceneFeature[];
   bodies: readonly Body[];
   model?: unknown;
 };
@@ -101,19 +90,10 @@ export type SceneEnvelope<TModel = unknown, TParams extends SceneParamsShape | u
   meta?: SceneMeta;
   model: TModel | ((context: Pick<SceneValidatorContext<TParams>, "params">) => TModel);
   params?: TParams;
-  features: readonly SceneFeatureDeclaration[];
   validators?: readonly SceneValidator<TParams>[];
   tests?: readonly SceneTest<TParams>[];
   geometry?: GeometryValidationConfig;
   constraints?: readonly SceneConstraint[];
-};
-
-export type NormalizedSceneFeature = {
-  id: string;
-  kind: string;
-  label?: string;
-  refs?: readonly string[];
-  range?: SceneSourceRange;
 };
 
 export type SceneRuleResult = {
@@ -139,7 +119,6 @@ export type NormalizedScene<TModel = unknown> = {
   meta?: SceneMeta;
   model: TModel;
   params: Record<string, number | string | boolean>;
-  features: NormalizedSceneFeature[];
   geometryValidation?: GeometryValidationConfig;
   validation: SceneValidationReport;
 };
@@ -152,55 +131,6 @@ type SceneEnvelopeInternal<TModel = unknown> = SceneEnvelope<TModel> & {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function computeLineStarts(code: string): number[] {
-  const starts = [0];
-  for (let i = 0; i < code.length; i += 1) {
-    if (code[i] === "\n") starts.push(i + 1);
-  }
-  return starts;
-}
-
-function toLineColumn(lineStarts: number[], index: number): { line: number; column: number } {
-  let low = 0;
-  let high = lineStarts.length - 1;
-
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    if (lineStarts[mid] <= index) {
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
-  }
-
-  const lineIndex = Math.max(0, high);
-  return {
-    line: lineIndex + 1,
-    column: index - lineStarts[lineIndex] + 1,
-  };
-}
-
-function tryFindFeatureRange(code: string, featureId: string): SceneSourceRange | undefined {
-  const lineStarts = computeLineStarts(code);
-  const quotedId = `id: "${featureId}"`;
-  const singleQuotedId = `id: '${featureId}'`;
-  const idIndex = code.indexOf(quotedId) >= 0 ? code.indexOf(quotedId) : code.indexOf(singleQuotedId);
-  if (idIndex < 0) return undefined;
-
-  const objectStart = code.lastIndexOf("{", idIndex);
-  const objectEnd = code.indexOf("}", idIndex);
-  if (objectStart < 0 || objectEnd < 0 || objectEnd < objectStart) return undefined;
-
-  const start = toLineColumn(lineStarts, objectStart);
-  const end = toLineColumn(lineStarts, objectEnd + 1);
-  return {
-    startLine: start.line,
-    startColumn: start.column,
-    endLine: end.line,
-    endColumn: end.column,
-  };
 }
 
 function resolveSceneParams(
@@ -272,7 +202,6 @@ function summarizeDiagnostics(diagnostics: SceneDiagnostic[]): SceneValidationRe
 
 function runSceneSemanticValidators(
   params: Record<string, number | string | boolean>,
-  features: readonly NormalizedSceneFeature[],
   validators: readonly SceneValidator[] | undefined,
 ): { diagnostics: SceneDiagnostic[]; validatorResults: SceneRuleResult[] } {
   if (!validators || validators.length === 0) {
@@ -286,7 +215,7 @@ function runSceneSemanticValidators(
     .map(toValidatorSpec)
     .filter((validator) => validator.stage === "semantic")
     .forEach((validator) => {
-      const message = validator.run({ params, features, bodies: [] });
+      const message = validator.run({ params, bodies: [] });
       if (typeof message === "string" && message.trim().length > 0) {
         diagnostics.push({
           code: "scene.validator.failed",
@@ -362,7 +291,6 @@ export function runScenePostModelValidation(input: {
       .forEach((validator) => {
         const message = validator.run({
           params: input.scene.params,
-          features: input.scene.features,
           bodies: input.bodies,
           model: input.model,
         });
@@ -394,7 +322,6 @@ export function runScenePostModelValidation(input: {
     input.tests.forEach((test) => {
       const message = test.run({
         params: input.scene.params,
-        features: input.scene.features,
         bodies: input.bodies,
         model: input.model,
       });
@@ -441,7 +368,7 @@ export function isSceneEnvelope(value: unknown): value is SceneEnvelopeInternal 
 }
 
 export function normalizeScene(
-  code: string,
+  _code: string,
   value: unknown,
   paramOverrides?: Map<string, number>,
 ): {
@@ -460,84 +387,10 @@ export function normalizeScene(
   const diagnostics: SceneDiagnostic[] = [];
   const scene = value;
 
-  if (!Array.isArray(scene.features)) {
-    diagnostics.push({
-      code: "scene.invalid-envelope",
-      stage: "type-level",
-      severity: "error",
-      message: "defineScene() requires a features array.",
-    });
-    return { diagnostics };
-  }
-
   const { resolved: resolvedParams, diagnostics: paramDiagnostics } = resolveSceneParams(scene.params, paramOverrides);
   diagnostics.push(...paramDiagnostics);
 
-  const features: NormalizedSceneFeature[] = [];
-  const seenIds = new Set<string>();
-  for (const feature of scene.features) {
-    if (!isRecord(feature) || typeof feature.kind !== "string") {
-      diagnostics.push({
-        code: "scene.invalid-envelope",
-        stage: "type-level",
-        severity: "error",
-        message: "Scene features must be objects with a string kind.",
-      });
-      continue;
-    }
-
-    if (typeof feature.id !== "string" || feature.id.trim().length === 0) {
-      diagnostics.push({
-        code: "scene.feature-id.missing",
-        stage: "type-level",
-        severity: "error",
-        message: `Feature kind "${feature.kind}" is missing a stable string id.`,
-      });
-      continue;
-    }
-
-    const featureId = feature.id.trim();
-    if (seenIds.has(featureId)) {
-      diagnostics.push({
-        code: "scene.feature-id.duplicate",
-        stage: "type-level",
-        severity: "error",
-        featureId,
-        message: `Feature id "${featureId}" must be unique.`,
-        range: tryFindFeatureRange(code, featureId),
-      });
-      continue;
-    }
-
-    seenIds.add(featureId);
-    features.push({
-      id: featureId,
-      kind: feature.kind,
-      label: typeof feature.label === "string" ? feature.label : undefined,
-      refs: Array.isArray(feature.refs)
-        ? feature.refs.filter((ref): ref is string => typeof ref === "string" && ref.trim().length > 0)
-        : undefined,
-      range: tryFindFeatureRange(code, featureId),
-    });
-  }
-
-  for (const feature of features) {
-    if (!feature.refs) continue;
-    for (const ref of feature.refs) {
-      if (!seenIds.has(ref)) {
-        diagnostics.push({
-          code: "scene.feature-ref.invalid",
-          stage: "semantic",
-          severity: "error",
-          featureId: feature.id,
-          message: `Feature "${feature.id}" references unknown feature id "${ref}".`,
-          range: feature.range,
-        });
-      }
-    }
-  }
-
-  const semanticHooks = runSceneSemanticValidators(resolvedParams, features, scene.validators);
+  const semanticHooks = runSceneSemanticValidators(resolvedParams, scene.validators);
   diagnostics.push(...semanticHooks.diagnostics);
 
   const sceneModel = typeof scene.model === "function"
@@ -556,7 +409,6 @@ export function normalizeScene(
       meta: scene.meta,
       model: sceneModel,
       params: resolvedParams,
-      features,
       geometryValidation: scene.geometry,
       validation,
     },
