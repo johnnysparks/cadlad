@@ -24,6 +24,7 @@ export { Assembly, assembly } from "./assembly.js";
 // Typed scene contract
 export { defineScene } from "./scene-contract.js";
 export { mm } from "./scene-contract.js";
+export { paramSweepTest } from "./scene-contract.js";
 export { constraint } from "./constraints.js";
 export type {
   SceneEnvelope,

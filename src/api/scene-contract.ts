@@ -1,6 +1,10 @@
-import type { Body } from "../engine/types.js";
+import { Assembly } from "./assembly.js";
+import type { Body, ValidationDiagnostic } from "../engine/types.js";
 import type { GeometryValidationConfig } from "../engine/types.js";
+import { Solid } from "../engine/solid.js";
+import { isToolBody } from "./toolbody.js";
 import type { SceneConstraint } from "./constraints.js";
+import { runLayeredValidation } from "../validation/layered-validation.js";
 
 export type SceneSourceRange = {
   startLine: number;
@@ -64,6 +68,14 @@ export type SceneValidatorContext<TParams extends SceneParamsShape | undefined =
   params: InferSceneParams<TParams>;
   bodies: readonly Body[];
   model?: unknown;
+  evaluateAtParams?: (
+    overrides: Partial<Record<string, number | string | boolean>>,
+  ) => {
+    params: Record<string, number | string | boolean>;
+    bodies: readonly Body[];
+    diagnostics: ValidationDiagnostic[];
+    sceneDiagnostics: SceneDiagnostic[];
+  };
 };
 
 export type SceneValidatorRun<TParams extends SceneParamsShape | undefined = SceneParamsShape | undefined> = (
@@ -95,6 +107,52 @@ export type SceneEnvelope<TModel = unknown, TParams extends SceneParamsShape | u
   geometry?: GeometryValidationConfig;
   constraints?: readonly SceneConstraint[];
 };
+
+export function paramSweepTest(paramName: string, values: readonly number[]): SceneTest {
+  return {
+    id: `param-sweep.${paramName}`,
+    description: `Sweep ${paramName} across ${values.length} value(s) and report fragile parameter points.`,
+    run: ({ params, evaluateAtParams }) => {
+      if (values.length === 0) {
+        return `paramSweepTest("${paramName}") requires at least one value.`;
+      }
+
+      if (!evaluateAtParams) {
+        return `paramSweepTest("${paramName}") requires defineScene({ model: ({ params }) => ... }) so alternate parameter values can be evaluated.`;
+      }
+
+      if (typeof params[paramName] !== "number") {
+        return `paramSweepTest("${paramName}") only supports numeric params.`;
+      }
+
+      const failures: string[] = [];
+
+      for (const value of values) {
+        const sweep = evaluateAtParams({ [paramName]: value });
+        const emptyGeometry = sweep.bodies.length === 0
+          || sweep.bodies.some((body) => body.mesh.positions.length === 0 || body.mesh.indices.length === 0);
+        const selfIntersection = sweep.diagnostics.some((diag) =>
+          diag.stage === "stats/relations" && diag.message.includes("intersects")
+        );
+        const validationErrors = [
+          ...sweep.diagnostics.filter((diag) => diag.severity === "error").map((diag) => diag.message),
+          ...sweep.sceneDiagnostics.filter((diag) => diag.severity === "error").map((diag) => diag.message),
+        ];
+
+        if (emptyGeometry || selfIntersection || validationErrors.length > 0) {
+          const reasons: string[] = [];
+          if (emptyGeometry) reasons.push("empty geometry");
+          if (selfIntersection) reasons.push("self-intersection");
+          if (validationErrors.length > 0) reasons.push(...validationErrors.slice(0, 2));
+          failures.push(`${paramName}=${value}: ${reasons.join("; ")}`);
+        }
+      }
+
+      if (failures.length === 0) return undefined;
+      return `paramSweepTest("${paramName}") failed at ${failures.length}/${values.length} value(s): ${failures.join(" | ")}`;
+    },
+  };
+}
 
 export type SceneRuleResult = {
   id: string;
@@ -242,10 +300,74 @@ function runSceneSemanticValidators(
   return { diagnostics, validatorResults };
 }
 
+function collectBodiesForValidation(model: unknown): { bodies: Body[]; runtimeErrors: string[] } {
+  const bodies: Body[] = [];
+  const runtimeErrors: string[] = [];
+
+  const collectSolid = (solid: Solid, context: string): void => {
+    const nComp = solid.numComponents();
+    if (nComp > 1) {
+      runtimeErrors.push(
+        `${context} has ${nComp} disconnected parts. ` +
+        `Use assembly() to group separate parts, or union overlapping solids so they connect. ` +
+        `Disconnected geometry in a single Solid is not allowed.`,
+      );
+    }
+    bodies.push(solid.toBody());
+  };
+
+  if (model instanceof Solid) {
+    collectSolid(model, "Model");
+    return { bodies, runtimeErrors };
+  }
+
+  if (model instanceof Assembly) {
+    bodies.push(...model.toBodies());
+    return { bodies, runtimeErrors };
+  }
+
+  if (Array.isArray(model)) {
+    for (let i = 0; i < model.length; i += 1) {
+      const item = model[i];
+      if (item instanceof Solid) {
+        collectSolid(item, `Model[${i}]`);
+        continue;
+      }
+      if (item instanceof Assembly) {
+        bodies.push(...item.toBodies());
+        continue;
+      }
+      if (isToolBody(item)) {
+        continue;
+      }
+      const valueType = item === null ? "null" : typeof item;
+      runtimeErrors.push(`Model[${i}] must be a Solid or Assembly, got ${valueType}.`);
+    }
+    return { bodies, runtimeErrors };
+  }
+
+  const valueType = model === null ? "null" : typeof model;
+  if (valueType === "undefined") {
+    runtimeErrors.push(
+      "Model script must return geometry: Solid, Assembly, array of Solid/Assembly, or { model, camera }.",
+    );
+  } else {
+    runtimeErrors.push(
+      `Model script returned unsupported type: ${valueType}. ` +
+      "Expected Solid, Assembly, array of Solid/Assembly, or { model, camera }.",
+    );
+  }
+
+  return { bodies, runtimeErrors };
+}
+
 export function runScenePostModelValidation(input: {
   scene: NormalizedScene;
   validators?: readonly SceneValidator<any>[];
   tests?: readonly SceneTest<any>[];
+  modelFactory?: (context: { params: Record<string, number | string | boolean> }) => unknown;
+  geometryValidation?: GeometryValidationConfig;
+  constraints?: readonly SceneConstraint[];
   bodies: Body[];
   model?: unknown;
 }): SceneValidationReport {
@@ -319,11 +441,57 @@ export function runScenePostModelValidation(input: {
   }
 
   if (input.tests) {
+    const evaluateAtParams = input.modelFactory
+      ? (overrides: Partial<Record<string, number | string | boolean>>) => {
+        const resolvedParams: Record<string, number | string | boolean> = {
+          ...input.scene.params,
+        };
+        for (const [key, value] of Object.entries(overrides)) {
+          if (typeof value !== "undefined") {
+            resolvedParams[key] = value;
+          }
+        }
+        let producedModel: unknown;
+        const sceneDiagnostics: SceneDiagnostic[] = [];
+        try {
+          producedModel = input.modelFactory?.({ params: resolvedParams });
+        } catch (error) {
+          producedModel = undefined;
+          sceneDiagnostics.push({
+            code: "scene.test.failed",
+            stage: "tests",
+            severity: "error",
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+
+        const collected = collectBodiesForValidation(producedModel);
+        const params = Object.entries(resolvedParams)
+          .filter(([, value]) => typeof value === "number")
+          .map(([name, value]) => ({ name, value: value as number }));
+        const layered = runLayeredValidation({
+          runtimeErrors: collected.runtimeErrors,
+          params,
+          bodies: collected.bodies,
+          geometryValidation: input.geometryValidation ?? input.scene.geometryValidation,
+          constraints: input.constraints,
+        });
+
+        return {
+          params: resolvedParams,
+          bodies: collected.bodies,
+          diagnostics: layered.diagnostics,
+          sceneDiagnostics,
+        };
+      }
+      : undefined;
+
     input.tests.forEach((test) => {
       const message = test.run({
         params: input.scene.params,
         bodies: input.bodies,
         model: input.model,
+        evaluateAtParams,
       });
       if (typeof message === "string" && message.trim().length > 0) {
         diagnostics.push({
@@ -378,6 +546,7 @@ export function normalizeScene(
     validators?: readonly SceneValidator[];
     tests?: readonly SceneTest[];
     constraints?: readonly SceneConstraint[];
+    modelFactory?: (context: { params: Record<string, number | string | boolean> }) => unknown;
   };
 } {
   if (!isSceneEnvelope(value)) {
@@ -417,6 +586,9 @@ export function normalizeScene(
       validators: scene.validators,
       tests: scene.tests,
       constraints: scene.constraints,
+      modelFactory: typeof scene.model === "function"
+        ? scene.model as (context: { params: Record<string, number | string | boolean> }) => unknown
+        : undefined,
     },
   };
 }

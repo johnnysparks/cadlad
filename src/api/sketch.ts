@@ -43,11 +43,24 @@ function segmentsIntersect(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2): boolean {
   return t > 0.001 && t < 0.999 && u > 0.001 && u < 0.999;
 }
 
+function segmentIntersectionPoint(a1: Vec2, a2: Vec2, b1: Vec2, b2: Vec2): Vec2 | null {
+  const d1x = a2[0] - a1[0], d1y = a2[1] - a1[1];
+  const d2x = b2[0] - b1[0], d2y = b2[1] - b1[1];
+  const cross = d1x * d2y - d1y * d2x;
+  if (Math.abs(cross) < 1e-10) return null;
+  const t = ((b1[0] - a1[0]) * d2y - (b1[1] - a1[1]) * d2x) / cross;
+  const u = ((b1[0] - a1[0]) * d1y - (b1[1] - a1[1]) * d1x) / cross;
+  if (!(t > 0.001 && t < 0.999 && u > 0.001 && u < 0.999)) return null;
+  return [a1[0] + t * d1x, a1[1] + t * d1y];
+}
+
 // ── Constraint types ──────────────────────────────────────────
 
 export interface SketchWarning {
   type: "error" | "warning";
   message: string;
+  code?: "too-few-points" | "degenerate-edge" | "open-profile" | "self-intersection" | "near-zero-area";
+  details?: Record<string, unknown>;
 }
 
 type ConstraintKind = "coincident" | "fixed-distance" | "perpendicular" | "equal-length" | "tangent";
@@ -596,20 +609,38 @@ export class Sketch {
 
     // Must have at least 3 points for a valid polygon
     if (pts.length < 3) {
-      warnings.push({ type: "error", message: `Profile has only ${pts.length} point(s) — need at least 3 for a polygon.` });
+      warnings.push({
+        type: "error",
+        code: "too-few-points",
+        message: `Profile has only ${pts.length} point(s) — need at least 3 for a polygon.`,
+        details: { pointCount: pts.length, minRequired: 3 },
+      });
       return warnings;
     }
 
     // Check for degenerate edges (zero-length segments)
     for (let i = 0; i < pts.length - 1; i++) {
       if (dist(pts[i], pts[i + 1]) < 1e-6) {
-        warnings.push({ type: "warning", message: `Degenerate edge at point ${i} — two coincident points. This may cause manifold errors.` });
+        warnings.push({
+          type: "warning",
+          code: "degenerate-edge",
+          message: `Degenerate edge ${i}-${i + 1} collapses to a point at (${pts[i][0].toFixed(3)}, ${pts[i][1].toFixed(3)}). This may cause manifold errors.`,
+          details: { edge: [i, i + 1], point: [pts[i][0], pts[i][1]] },
+        });
       }
     }
 
     // Check if profile is closed (first ≈ last, or .close() was called)
     if (!this._closed && dist(pts[0], pts[pts.length - 1]) > 0.1) {
-      warnings.push({ type: "warning", message: "Profile is not closed — first and last points are not coincident. Manifold will close it implicitly, which may produce unexpected geometry." });
+      warnings.push({
+        type: "warning",
+        code: "open-profile",
+        message: "Profile is not closed — first and last points are not coincident. Manifold will close it implicitly, which may produce unexpected geometry.",
+        details: {
+          firstPoint: [pts[0][0], pts[0][1]],
+          lastPoint: [pts[pts.length - 1][0], pts[pts.length - 1][1]],
+        },
+      });
     }
 
     // Check for self-intersections
@@ -619,7 +650,17 @@ export class Sketch {
         if (j === pts.length - 1 && i === 0) continue; // skip adjacent closing edge
         const j2 = (j + 1) % pts.length;
         if (segmentsIntersect(pts[i], pts[i2], pts[j], pts[j2])) {
-          warnings.push({ type: "error", message: `Self-intersection between edges ${i}-${i + 1} and ${j}-${j + 1}. This will produce unpredictable 3D geometry.` });
+          const intersection = segmentIntersectionPoint(pts[i], pts[i2], pts[j], pts[j2]);
+          const at = intersection ? ` at (${intersection[0].toFixed(3)}, ${intersection[1].toFixed(3)})` : "";
+          warnings.push({
+            type: "error",
+            code: "self-intersection",
+            message: `Self-intersection between edges ${i}-${i + 1} and ${j}-${j + 1}${at}. This will produce unpredictable 3D geometry.`,
+            details: {
+              edges: [[i, i + 1], [j, j + 1]],
+              intersection: intersection ? [intersection[0], intersection[1]] : undefined,
+            },
+          });
           break; // one is enough
         }
       }
@@ -629,7 +670,12 @@ export class Sketch {
     // Check area — too small profiles produce invisible geometry
     const area = Math.abs(signedArea(pts));
     if (area < 0.01) {
-      warnings.push({ type: "error", message: `Profile area is near zero (${area.toFixed(4)}). The profile may be degenerate or all points are collinear.` });
+      warnings.push({
+        type: "error",
+        code: "near-zero-area",
+        message: `Profile area is near zero (${area.toFixed(4)}). The profile may be degenerate or all points are collinear.`,
+        details: { area, epsilon: 0.01 },
+      });
     }
 
     return warnings;
