@@ -5,6 +5,16 @@
 
 ---
 
+## 0. Current completion snapshot (April 2026)
+
+- ✅ Core eval loop shipped (`types`, `model-adapter`, `scorer`, `prompts`, `runner`, CLI wiring).
+- ✅ Batch + reporting shipped (`batch`, `eval-report`, issues/deadweight summaries).
+- ✅ CI plumbing shipped (`scripts/ci-eval.sh`, workflow).
+- 🟡 Judge plumbing is mostly shipped in runner/scoring, but `--judge/--no-judge` CLI ergonomics still need final wiring.
+- 🟡 Ad-hoc task synthesis (`cadlad eval --task "..."`) and benchmark reference image pack are still open.
+
+---
+
 ## 1. Minimum Viable Architecture
 
 ```
@@ -232,52 +242,52 @@ No other dependencies. The model adapter uses `fetch()` directly — no SDK impo
 ### Week 1: Core Loop (ship a working `cadlad eval` by Friday)
 
 **Day 1-2: Types + Model Adapter**
-- [ ] `src/eval/types.ts` — TaskSpec, EvalResult, RunLog, ScoringRubric, ModelConfig
-- [ ] `src/eval/model-adapter.ts` — `generate(prompt, images?) → string`
+- [x] `src/eval/types.ts` — TaskSpec, EvalResult, RunLog, ScoringRubric, ModelConfig
+- [x] `src/eval/model-adapter.ts` — `generate(prompt, images?) → string`
   - Ollama backend (localhost:11434, `/api/generate`)
   - Anthropic backend (`/v1/messages`, vision support)
   - OpenAI backend (`/v1/chat/completions`, vision support)
-- [ ] Test: can call ollama://llama3.2 and get a `.forge.ts` back
+- [x] Adapter test coverage added in `src/eval/__tests__/model-adapter.test.ts`
 
 **Day 3: Scorer + Prompt**
-- [ ] `src/eval/scorer.ts` — score an EvaluationBundle against acceptance criteria
+- [x] `src/eval/scorer.ts` — score an EvaluationBundle against acceptance criteria
   - Geometry score (volume in range, body count, bbox bounds)
   - Constraint score (validation errors = 0, warnings low)
   - API surface score (did it actually use the required primitives?)
-- [ ] `src/eval/prompts.ts` — system prompt builder (API ref subset, coord system, constraints)
-- [ ] First benchmark YAML: `tasks/benchmark/box-with-hole.yaml`
+- [x] `src/eval/prompts.ts` — system prompt builder (API ref subset, coord system, constraints)
+- [x] First benchmark YAML: `tasks/benchmark/box-with-hole.yaml`
 
 **Day 4: Runner (the loop)**
-- [ ] `src/eval/runner.ts` — orchestrate: prompt → generate → write → run → snap → score → retry
-- [ ] Wire into CLI: `cadlad eval <task.yaml> --model <url>`
-- [ ] NDJSON logging to `eval-logs/`
+- [x] `src/eval/runner.ts` — orchestrate: prompt → generate → write → run → snap → score → retry
+- [x] Wire into CLI: `cadlad eval <task.yaml> --model <url>`
+- [x] NDJSON logging to `eval-logs/`
 
 **Day 5: Second benchmark + polish**
-- [ ] Add remaining 4 benchmark YAMLs with reference images
-- [ ] `cadlad eval tasks/benchmark/` runs all 5
+- [x] Added remaining 4 benchmark YAMLs (reference images still optional/not required)
+- [x] `cadlad eval tasks/benchmark/` runs all 5
 - [ ] Fix whatever broke on real models
 
 ### Week 2: Reports + Judge + Batch
 
 **Day 6-7: Eval Report**
-- [ ] `src/eval/report.ts` — aggregate NDJSON logs into summary/issues/deadweight
-- [ ] `cadlad eval-report` CLI command
-- [ ] `cadlad eval-report --compare` — model-vs-model markdown table
+- [x] `src/eval/report.ts` — aggregate NDJSON logs into summary/issues/deadweight
+- [x] `cadlad eval-report` CLI command
+- [x] `cadlad eval-report --compare` — model-vs-model markdown table
 
 **Day 8: LLM-as-Judge (optional visual eval)**
-- [ ] `src/eval/judge.ts` — send screenshots + task description to a vision model
+- [x] `src/eval/judge.ts` — send screenshots + task description to a vision model
   - "Does this look like {description}? Score 1-5. What's wrong?"
-- [ ] Integrate judge score into overall scoring (weighted: 60% deterministic, 40% judge)
-- [ ] Can be skipped (`--no-judge`) for non-vision models or speed
+- [x] Integrate judge score into overall scoring (weighted: 60% deterministic, 40% judge)
+- [ ] Can be skipped (`--no-judge`) for non-vision models or speed (runner supports optional judge; CLI flag wiring still pending)
 
 **Day 9: Multi-model batch + parallelism**
-- [ ] `--model` flag accepts multiple values
-- [ ] Run tasks in parallel per model (respect ollama's single-inference limit)
-- [ ] Auto-generate comparison report after batch completes
+- [x] `--model` flag accepts multiple values
+- [x] Run tasks in parallel per model (respect ollama's single-inference limit)
+- [x] Auto-generate comparison report after batch completes
 
 **Day 10: Ad-hoc tasks + CI integration**
 - [ ] `cadlad eval --task "description"` generates a TaskSpec on the fly
-- [ ] `scripts/ci-eval.sh` — run benchmarks in CI, fail on regression
+- [x] `scripts/ci-eval.sh` — run benchmarks in CI, fail on regression
 - [ ] Write reference images for all 5 benchmarks
 
 ---

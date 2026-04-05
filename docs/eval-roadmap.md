@@ -5,6 +5,21 @@
 
 ---
 
+## Status check (April 2026)
+
+- ✅ Step 1 complete: `src/eval/types.ts` + benchmark task schema are implemented.
+- ✅ Step 2 complete: multi-backend `src/eval/model-adapter.ts` is implemented.
+- ✅ Step 3 complete: scorer + prompt builder implemented.
+- ✅ Step 4 complete: runner + `cadlad eval` CLI wiring implemented.
+- ✅ Step 5 complete: all 5 benchmark YAML task files exist.
+- ✅ Step 6 complete: `src/eval/report.ts` + `cadlad eval-report` implemented.
+- 🟡 Step 7 partial: judge module + weighted scoring integration are implemented; CLI `--judge/--no-judge` UX remains to be finalized.
+- ✅ Step 8 complete: batch runner + multi-model/concurrency support implemented.
+- ❌ Step 9 not done: ad-hoc task generation (`cadlad eval --task`) not implemented yet.
+- 🟡 Step 10 mostly done: CI eval script/workflow exists; benchmark reference image pack is still open.
+
+---
+
 ## Parallelism Map
 
 ```
