@@ -1,6 +1,6 @@
 # Phase 1 — Machine-Readable Feedback & Semantic MCP Surface
 
-> **Status**: ~75% complete. Core evaluation pipeline and read-only MCP tools are done. Remaining work: CLI JSON output, feature-level edit tools, and upgrading domain analysis from heuristic to structural.
+> **Status**: ~90% complete. Core evaluation pipeline, CLI JSON output, and read-only MCP tools are done. Remaining work is structural (non-heuristic) domain analysis.
 >
 > **Depends on**: nothing (foundational phase)
 > **Unlocks**: Phase 2 (agent memory), Phase 3 (agent learning), Phase 4 (constraints)
@@ -216,15 +216,14 @@ For each domain tool, the upgrade path is:
 
 | Item | Status | Effort | Priority |
 |---|---|---|---|
-| CLI `--json` output (0.1.1) | not started | S (~50 LOC) | **high** — unblocks CLI-based agents |
 | Structural wall thickness (1.3.1) | not started | M (ray casting) | low |
 | Structural overhang analysis (1.3.1) | not started | S (reuse constraint code) | low |
 | Structural draft/undercut (1.3.1) | not started | M | low |
 
 **Recommended next actions for agents working on Phase 1:**
-1. Implement `cadlad run --json` — small, high-value, no dependencies
-2. Prototype `add_feature("through_hole", ...)` — proves the code generation pattern
-3. Extract overhang normal analysis from constraint checker into reusable utility
+1. Extract overhang normal analysis from constraint checker into reusable utility
+2. Add ray-based wall thickness analysis for `check_printability`
+3. Add per-face draft + undercut analysis for moldability checks
 
 ---
 

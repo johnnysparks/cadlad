@@ -12,10 +12,10 @@ Each phase has its own detailed doc with implementation status, file references,
 
 | Phase | Doc | Status | Focus |
 |---|---|---|---|
-| **1** | [roadmap-phase-1.md](./roadmap-phase-1.md) | ~75% done | Machine-readable feedback & semantic MCP surface |
+| **1** | [roadmap-phase-1.md](./roadmap-phase-1.md) | ~90% done | Machine-readable feedback & semantic MCP surface |
 | **2** | [roadmap-phase-2.md](./roadmap-phase-2.md) | ~90% done | Agent memory: events, revisions, branches |
 | **3** | [roadmap-phase-3.md](./roadmap-phase-3.md) | ~60% done | Agent learning & self-improvement |
-| **4** | [roadmap-phase-4.md](./roadmap-phase-4.md) | ~40% done | Design intent, constraints & manufacturing |
+| **4** | [roadmap-phase-4.md](./roadmap-phase-4.md) | ~70% done | Design intent, constraints & manufacturing |
 | **5** | [roadmap-phase-5.md](./roadmap-phase-5.md) | not started | Export, ecosystem & human UX |
 
 ---
@@ -72,18 +72,11 @@ CadLad is a working code-first parametric 3D CAD system. The core loop — write
 ### What's genuinely NOT done (marked [ ] in phase docs)
 
 **Phase 1 gaps:**
-- `cadlad run --json` — CLI agents get no structured output
 - Domain analysis is heuristic-only (bbox proxies), not structural (ray-cast, per-face)
 
 **Phase 2 gaps:**
 - All memory features (events, revisions, branches) are **worker-only** — local CLI agents can't use them
-- No local SQLite event store, no CLI commands for branch/revision management
-
-**Phase 1.5 gaps (now folded into Phase 4):**
-- Tool bodies (`toolBody()`) — not implemented
-- Design intent hints — only empty-body detection exists; magic numbers, repeated geometry, missed symmetry, deep boolean chains, unparameterized dimensions are all unstarted
-- Assembly-preserving patterns (`mirrorAssembly`, `linearPatternAssembly`, `circularPatternAssembly`) — not implemented
-- Parametric robustness testing (`paramSweepTest`) — not implemented
+- No local SQLite event store parity with the worker-backed event model
 
 **Phase 3 gaps:**
 - Model quality corpus (training examples from approved/failed models) — not implemented
@@ -92,6 +85,7 @@ CadLad is a working code-first parametric 3D CAD system. The core loop — write
 **Phase 4 gaps:**
 - Manufacturing profiles (`profile("fdm_printing", ...)`) — not implemented
 - Constraint-aware fix suggestions — not implemented
+- Design intent hints need precision/recall refinement (baseline heuristics are implemented)
 - Full constrained sketch API (beyond current 5 constraint types) — partial
 
 **Phase 5 (export, human UX, ecosystem):**
@@ -113,21 +107,19 @@ These aren't roadmap features but affect every agent working on the codebase:
 
 Today an agent modeling in CadLad hits these walls, in order of pain:
 
-1. **No structured CLI output.** The MCP tools return structured data, but `cadlad run` returns human-readable text. CLI-based agents must parse prose or use the MCP server.
+1. **No semantic write operations.** Agents still write raw `.forge.ts`; higher-level intent transforms are not available yet.
 
-2. **No semantic write operations.** Agents must write raw `.forge.ts` code; higher-level intent transforms are not available yet.
+2. **Design intent is advisory, not enforced.** The constraint system checks `wall_thickness` and `symmetry` post-hoc; hints exist, but they are guidance rather than automatic remediation.
 
-3. **Design intent is advisory, not enforced.** The constraint system checks `wall_thickness` and `symmetry` post-hoc, but nothing in the system *teaches* agents to model well (use datums, mirror for symmetry, batch booleans with tool bodies). The hints system is a stub.
+3. **Domain knowledge is still in CLAUDE.md.** The printability/moldability tools are heuristic proxies. Real DFM analysis (minimum wall by ray-cast, undercut detection) would let agents skip the domain knowledge entirely.
 
-4. **Domain knowledge is still in CLAUDE.md.** The printability/moldability tools are heuristic proxies. Real DFM analysis (minimum wall by ray-cast, undercut detection) would let agents skip the domain knowledge entirely.
-
-5. **No local agent memory.** Event store, revisions, and branches only work through the Cloudflare worker. A local agent has no revision history, no branching, no comparison.
+4. **No local agent memory parity.** Event store, revisions, and branches are stronger in worker sessions than local CLI workflows.
 
 ---
 
 ## Sequencing principles
 
-1. **Feedback speed is everything.** Structured stats in 200ms beat a 5s screenshot. Phase 1 completion (especially CLI JSON) is the highest-leverage remaining investment.
+1. **Feedback speed is everything.** Structured stats in 200ms beat a 5s screenshot. Keep this loop fast and stable for agents.
 
 2. **Semantic operations over raw code.** Every MCP tool that lets an agent express intent instead of writing implementation reduces error rate. Feature-level edit tools are the biggest missing piece.
 
@@ -157,13 +149,13 @@ Today an agent modeling in CadLad hits these walls, in order of pain:
 Some items must be done in order. Others can be parallelized.
 
 ```
-CLI --json output (Phase 1)          ← no deps, do anytime
-Tool bodies (Phase 4.1)              ← no deps, do anytime
+Tool bodies (Phase 4.1)              ← done
+CLI --json output (Phase 1)          ← done
 Design intent hints (Phase 4.2)      ← needs expanded HintContext first
   └── HintContext expansion          ← wire source/features/stats into hints.ts
   └── Individual hint detectors      ← can parallelize after HintContext
-Assembly-preserving patterns (Phase 4.3)  ← no deps, do anytime
-paramSweepTest (Phase 4.4)           ← no deps, do anytime
+Assembly-preserving patterns (Phase 4.3)  ← done
+paramSweepTest (Phase 4.4)           ← done
 Manufacturing profiles (Phase 4.5)   ← depends on constraint infrastructure (done)
 Constraint fix suggestions (Phase 4.6)   ← depends on constraint infrastructure (done)
 Feature edit MCP tools (Phase 1.2)   ← hard; needs code generation layer
@@ -175,9 +167,9 @@ Model quality corpus (Phase 3.4)     ← needs approval event type first
 ```
 
 **Best parallelization opportunities** (independent, can run simultaneously):
-- CLI `--json` + tool bodies + assembly-preserving patterns + `paramSweepTest`
-- Individual hint detectors (after HintContext is expanded)
-- Manufacturing profiles (one per agent — FDM, injection molding, CNC)
+- Manufacturing profiles + constraint suggestions + local parity event store
+- Individual hint detector refinement (precision/recall tuning)
+- Phase 3 learning-loop items (workaround sharing + corpus work)
 
 ### Implementation conventions
 

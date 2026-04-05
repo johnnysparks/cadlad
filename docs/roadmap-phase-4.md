@@ -1,6 +1,6 @@
 # Phase 4 — Design Intent, Constraints & Manufacturing
 
-> **Status**: ~40% complete. The constrained sketch solver (5 constraint types, driving dimensions, convergence reporting) and declarative scene constraints (4 constraint types with enforcement) are real and tested. The gaps are substantial: design intent hints are a stub, tool bodies don't exist, assembly-preserving patterns don't exist, manufacturing profiles don't exist, and constraint-aware fix suggestions don't exist.
+> **Status**: ~70% complete. Core design-intent primitives are in: tool bodies, assembly-preserving patterns, `paramSweepTest`, and heuristic hinting are implemented. Remaining gaps are manufacturing profiles, richer hint intelligence, and constraint-aware fix suggestions.
 >
 > **Depends on**: Phase 1 (evaluation pipeline), Phase 1.5 API additions (batch booleans, sketch profiles, reference geometry — all done)
 > **Unlocks**: Phase 5 (manufacturing profiles feed into export, constraint scores feed into studio UX)
@@ -149,7 +149,7 @@ Tool bodies are construction-only solids (not rendered in final output) used for
 
 **Current state:** `src/api/hints.ts` now runs heuristic advisory checks for empty bodies, deep boolean chains, magic numbers, repeated geometry signatures, bbox symmetry opportunities, and unparameterized sketch dimensions. `HintContext` now accepts source text, geometry stats, and params so hinting can combine source-level + geometry-level signals.
 
-**5 planned hints (all unstarted):**
+**Planned refinements (baseline heuristics already implemented):**
 
 | Hint | Detection method | Complexity |
 |---|---|---|
@@ -188,14 +188,14 @@ The existing pattern methods (`linearPattern`, `circularPattern`, `mirrorUnion`)
 
 ### 4.4 Parametric robustness testing
 
-**Status: NOT IMPLEMENTED**
+**Status: PARTIAL — `paramSweepTest` implemented**
 
-- [ ] `paramSweepTest(paramName, values)` — helper for `defineScene().tests` that evaluates the model at each param value and reports failures (empty geometry, self-intersection, validation errors)
-- [ ] Enhanced sketch `validate()` that reports *why* validation failed (which edges intersect, where area goes to zero)
+- [x] `paramSweepTest(paramName, values)` — helper in `defineScene().tests` that evaluates alternate parameter values and reports fragile cases
+- [ ] Enhanced sketch `validate()` diagnostics that report *why* validation failed (which edges intersect, where area goes to zero)
 
-**Why this matters:** A model that works at default parameters but breaks at min/max is fragile. Agents should test across the parameter range before declaring success. `paramSweepTest` makes this a one-liner in the test block.
+**Why this matters:** A model that works at default parameters but breaks at min/max is fragile. Agents should test across the parameter range before declaring success. `paramSweepTest` now makes this a one-liner in the test block.
 
-**Scope:** Medium. The sweep itself is straightforward (loop over values, evaluate, collect failures). The hard part is making evaluation fast enough for N parameter values — may need geometry caching by source hash.
+**Scope:** Medium. The baseline sweep exists; the remaining work is richer failure reporting and performance optimizations for large parameter sets.
 
 ### 4.5 Manufacturing profiles
 
@@ -256,19 +256,19 @@ Suggested: increase shell thickness parameter from 1.5 to 2.5mm.
 
 | Item | Status | Effort | Priority |
 |---|---|---|---|
-| Tool bodies (4.1) | not started | S-M | **high** — enables pro boolean patterns |
-| Design intent hints (4.2) | stub only | M | **high** — teaches agents good patterns |
+| Tool bodies (4.1) | done | S-M | **high** — enables pro boolean patterns |
+| Design intent hints (4.2) | baseline heuristics done; refine precision/recall | M | **high** — teaches agents good patterns |
 | Assembly-preserving patterns (4.3) | done | S | medium |
-| Parametric robustness testing (4.4) | not started | M | medium |
+| Parametric robustness testing (4.4) | `paramSweepTest` done; deeper sketch failure diagnostics pending | M | medium |
 | Manufacturing profiles (4.5) | not started | M per profile | medium — FDM first |
 | Constraint-aware suggestions (4.6) | not started | S per constraint | medium |
 | Skills/workflow docs (4.7) | not started | S-M | medium |
 
 **Recommended next actions for agents working on Phase 4:**
-1. **Implement tool bodies** — small, high-value, enables the "collect cutters, subtract once" pattern
-2. **Expand HintContext and implement deep-boolean-chain hint** — simplest hint to start with (regex on source), proves the pipeline
-3. **Implement FDM manufacturing profile** — first concrete profile, exercises the constraint infrastructure
-4. **Add `paramSweepTest` helper** — simple loop, high value for model robustness
+1. **Implement FDM manufacturing profile** — first concrete profile, exercises the constraint infrastructure
+2. **Add structured `suggestedFix` output to constraint diagnostics** — convert violations into actionable agent edits
+3. **Improve hint precision/recall** — reduce false positives for magic-number and symmetry nudges
+4. **Enhance sketch validation diagnostics** — explain *why* a sketch fails, not just that it failed
 
 ---
 
@@ -300,7 +300,7 @@ These would be additive to the existing solver. Each constraint type is ~30 line
 | `src/api/sketch.ts:482-510` | Common sketch profiles (slot, lShape, channel, tShape) |
 | `src/api/reference.ts` | Plane, axis, datum types + factories + feature declarations |
 | `src/api/constraints.ts` | Constraint types + `constraint()` factory (42 lines) |
-| `src/api/hints.ts` | Hint system — **stub** (31 lines, only empty-body) |
+| `src/api/hints.ts` | Hint system — heuristic rules for boolean depth, symmetry, magic numbers, repeated geometry, unparameterized dimensions |
 | `src/validation/layered-validation.ts:255-359` | Declarative constraint enforcement |
 | `src/api/__tests__/sketch.test.ts:169-259` | Constrained sketch tests |
 | `src/api/__tests__/runtime.test.ts:283-322` | Declarative constraint tests |
