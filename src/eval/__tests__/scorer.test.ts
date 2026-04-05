@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scoreEvaluation } from "../scorer.js";
+import { scoreEval } from "../scorer.js";
 import type { TaskSpec } from "../types.js";
 import type { EvaluationBundle } from "../../engine/types.js";
 
@@ -30,8 +30,8 @@ function makeBundle(overrides?: Partial<EvaluationBundle>): EvaluationBundle {
   };
 }
 
-describe("scoreEvaluation", () => {
-  it("passes when geometry, constraints, and required API usage are present", () => {
+describe("scoreEval", () => {
+  it("computes perfect scores when all checks pass", () => {
     const task: TaskSpec = {
       id: "box-with-hole",
       difficulty: 1,
@@ -41,40 +41,45 @@ describe("scoreEvaluation", () => {
         volume_min: 20000,
         volume_max: 24000,
         validation_errors: 0,
+        has_params: ["width", "height"],
       },
       api_surface: ["box", "cylinder", "subtract", "translate"],
       max_iterations: 3,
     };
 
-    const result = scoreEvaluation({
+    const result = scoreEval(
       task,
-      bundle: makeBundle(),
-      source: "const body = box(40,30,20).subtract(cylinder(22,5)).translate(0,0,10);",
-    });
+      makeBundle(),
+      "const width = param('width', 10, 1, 100); const height = param('height', 10, 1, 100); return box(40,30,20).subtract(cylinder(22,5)).translate(0,0,10);",
+    );
 
+    expect(result.geometry).toBe(100);
+    expect(result.constraints).toBe(100);
+    expect(result.api).toBe(100);
+    expect(result.total).toBe(100);
     expect(result.pass).toBe(true);
-    expect(result.score).toBe(100);
-    expect(result.feedback).toHaveLength(0);
   });
 
-  it("fails when required primitives are missing from generated source", () => {
+  it("redistributes judge weight and applies warning penalty", () => {
     const task: TaskSpec = {
-      id: "api-check",
+      id: "warning-heavy",
       difficulty: 1,
-      description: "api usage",
+      description: "warning handling",
       acceptance: { validation_errors: 0 },
       api_surface: ["box", "subtract"],
     };
 
-    const result = scoreEvaluation({
+    const result = scoreEval(
       task,
-      bundle: makeBundle(),
-      source: "return box(10, 10, 10);",
-    });
+      makeBundle({ summary: { errorCount: 0, warningCount: 2 } }),
+      "return box(10,10,10);",
+    );
 
+    expect(result.constraints).toBe(90);
     expect(result.api).toBe(50);
-    expect(result.feedback.some((line) => line.includes("subtract"))).toBe(true);
-    expect(result.pass).toBe(true);
-    expect(result.score).toBeCloseTo(88.89, 2);
+    expect(result.weights.geometry).toBeCloseTo(0.4444, 3);
+    expect(result.weights.constraints).toBeCloseTo(0.3333, 3);
+    expect(result.weights.api).toBeCloseTo(0.2222, 3);
+    expect(result.judge).toBe(0);
   });
 });

@@ -1,71 +1,91 @@
-import type { TaskSpec } from "./types.js";
+import type { ScoreBreakdown, TaskSpec } from "./types.js";
 
-const API_HINTS: Record<string, string> = {
-  assembly: "assembly(name).add(partName, solid, [x,y,z]) for multi-part models.",
-  box: "box(width, depth, height).",
-  chamfer: "solid.chamfer(subdivisions).",
-  channel: "Sketch.channel(width, depth, web).",
-  circle: "Sketch.circle(radius).",
-  constraint: "constraint(\"type\", config) for scene-level constraints.",
-  cylinder: "cylinder(height, radius).",
-  draft: "solid.draft(angleDeg) for taper.",
-  extrude: "sketch.extrude(height).",
-  extrudeAlong: "sketch.extrudeAlong([x,y,z], height).",
-  fillet: "solid.fillet(subdivisions).",
-  intersect: "solid.intersect(other).",
-  loft: "loft(profiles, heights).",
-  lShape: "Sketch.lShape(totalW, totalH, legW, legH).",
-  mirror: "solid.mirror(normal, offset).",
-  param: "param(name, defaultValue, { min, max, step, unit }).",
-  rect: "Sketch.rect(width, height).",
-  revolve: "sketch.revolve(segments).",
-  rotate: "solid.rotate(xDeg, yDeg, zDeg).",
-  roundedBox: "roundedBox(width, depth, height, radius).",
-  roundedRect: "roundedRect(width, depth, radius, height).",
-  scale: "solid.scale(x, y, z).",
-  shell: "solid.shell(thickness).",
-  sketch: "Sketch.begin().<shape>().close().",
-  slot: "Sketch.slot(length, width).",
-  smooth: "solid.smooth(subdivisions, minSharpAngle).",
-  sphere: "sphere(radius).",
-  subtract: "solid.subtract(cutter), oversizing cutters by 1-2mm.",
-  sweep: "sweep(profilePoints, pathPoints) or sketch.sweep(path).",
-  taperedBox: "taperedBox(height, w1, d1, w2, d2).",
-  translate: "solid.translate(x, y, z).",
-  tShape: "Sketch.tShape(stemW, stemH, capW, capH).",
-  union: "solid.union(other).",
+const API_ONE_LINERS: Record<string, string> = {
+  box: "box(width, depth, height) → centered box",
+  cylinder: "cylinder(height, radius) → Z-aligned cylinder",
+  sphere: "sphere(radius, segments?) → centered sphere",
+  roundedBox: "roundedBox(w, d, h, radius, segments?) → all edges rounded",
+  subtract: ".subtract(other) → boolean cut (oversize cutters by 1-2mm)",
+  union: ".union(other) → boolean merge",
+  translate: ".translate(x, y, z) → move",
+  rotate: ".rotate([x, y, z]) → rotate degrees",
+  color: ".color(\"#hex\") → set color",
+  param: "param(\"name\", default, min, max) → slider parameter",
+  sketch: "Sketch.begin().moveTo(x,y)...close() → 2D profile",
+  extrude: "sketch.extrude(height) → push along Z",
+  extrudeAlong: "sketch.extrudeAlong([x,y,z], height) → push along direction",
+  lShape: "lShape(...) → sketch helper",
+  slot: "slot(...) → sketch helper",
+  channel: "channel(...) → sketch helper",
+  tShape: "tShape(...) → sketch helper",
+  assembly: "assembly(\"name\").add(\"part\", solid, [x,y,z])",
+  shell: ".shell(thickness) → hollow out",
+  draft: ".draft(angleDeg) → taper walls",
+  fillet: ".fillet(subdivisions) → round edges",
+  constraint: "constraint(\"type\", config)",
 };
 
 export function buildSystemPrompt(task: TaskSpec): string {
-  const apiReference = task.api_surface
-    .map((name) => `- ${name}: ${API_HINTS[name] ?? "Use CadLad API docs for this primitive."}`)
+  const apiLines = task.api_surface
+    .map((entry) => `- ${entry}: ${API_ONE_LINERS[entry] ?? `${entry}(...) → use CadLad API`}`)
     .join("\n");
+  const acceptance = acceptanceBullets(task);
 
   return [
     "You are a 3D CAD modeling assistant. Generate CadLad .forge.ts code.",
+    "Coordinate system: Z-up. Ground plane is Z=0. Build upward.",
+    "Return contract: return a Solid, Assembly, or { model, camera }.",
     "",
-    "COORDINATE SYSTEM: Z-up. Ground plane is Z=0. Build upward.",
-    "RETURN: A single .forge.ts file that returns a Solid, Assembly, or { model, camera }.",
+    "API reference subset:",
+    apiLines,
     "",
-    "API REFERENCE (subset):",
-    apiReference,
+    "Task description:",
+    task.description.trim(),
     "",
-    "RULES:",
-    "- Use param() for dimensions that should be adjustable",
-    "- Always oversize boolean cutters by 1-2mm",
-    "- Use assembly() when parts need different colors",
-    "- Return the model — don't just define it",
+    "Acceptance criteria:",
+    acceptance,
+    "",
+    "Rules:",
+    "- Use param() for dimensions.",
+    "- Oversize boolean cutters by 1-2mm.",
+    "- Use assembly() for multi-color models.",
+    "- Return the model.",
     "",
     "Output ONLY the .forge.ts code in a ```typescript fence.",
   ].join("\n");
 }
 
-export function buildUserPrompt(task: TaskSpec): string {
-  const acceptanceLines = Object.entries(task.acceptance).map(([key, value]) => `- ${key}: ${formatValue(value)}`);
-  const imageNotes = task.reference_images && task.reference_images.length > 0
-    ? `\nREFERENCE IMAGES:\n${task.reference_images.map((path) => `- ${path}`).join("\n")}`
-    : "";
+export function buildRetryPrompt(
+  task: TaskSpec,
+  prevSource: string,
+  errors: string[],
+  score: ScoreBreakdown,
+): string {
+  const issues = errors.length > 0 ? errors.map((error) => `- ${error}`).join("\n") : "- No runtime errors reported.";
 
+  return [
+    "Your previous CadLad .forge.ts response did not satisfy the task.",
+    "Fix the model and produce a corrected version.",
+    "",
+    `Task: ${task.description.trim()}`,
+    "",
+    "Acceptance criteria:",
+    acceptanceBullets(task),
+    "",
+    "What went wrong:",
+    issues,
+    `- Scores: total=${score.total.toFixed(2)}, geometry=${score.geometry.toFixed(2)}, constraints=${score.constraints.toFixed(2)}, api=${score.api.toFixed(2)}, judge=${score.judge.toFixed(2)}`,
+    "",
+    "Previous code:",
+    "```typescript",
+    prevSource.trim(),
+    "```",
+    "",
+    "Return ONLY corrected .forge.ts code in a ```typescript fence.",
+  ].join("\n");
+}
+
+export function buildUserPrompt(task: TaskSpec): string {
   return [
     `TASK ID: ${task.id}`,
     "",
@@ -73,14 +93,21 @@ export function buildUserPrompt(task: TaskSpec): string {
     task.description.trim(),
     "",
     "ACCEPTANCE CRITERIA:",
-    ...acceptanceLines,
-    imageNotes,
+    acceptanceBullets(task),
   ].join("\n");
+}
+
+function acceptanceBullets(task: TaskSpec): string {
+  const entries = Object.entries(task.acceptance);
+  if (entries.length === 0) {
+    return "- none specified";
+  }
+  return entries.map(([key, value]) => `- ${key}: ${formatValue(value)}`).join("\n");
 }
 
 function formatValue(value: unknown): string {
   if (Array.isArray(value)) {
-    return `[${value.map((item) => formatValue(item)).join(", ")}]`;
+    return `[${value.map((entry) => formatValue(entry)).join(", ")}]`;
   }
   if (value && typeof value === "object") {
     return JSON.stringify(value);

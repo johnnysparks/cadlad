@@ -69,6 +69,22 @@ export interface TaskSpec {
   pass_threshold?: number;
 }
 
+
+export interface ScoreBreakdown {
+  total: number;
+  pass: boolean;
+  geometry: number;
+  constraints: number;
+  api: number;
+  judge: number;
+  weights: {
+    geometry: number;
+    constraints: number;
+    api: number;
+    judge: number;
+  };
+}
+
 export interface EvalResult {
   pass: boolean;
   score: number;

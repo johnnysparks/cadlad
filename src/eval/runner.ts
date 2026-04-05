@@ -3,6 +3,16 @@ import { execSync } from "node:child_process";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { evaluateModel } from "../api/runtime.js";
+import { scoreEval } from "./scorer.js";
+import { buildSystemPrompt, buildUserPrompt } from "./prompts.js";
+import { generateCode, parseModelConfig } from "./model-adapter.js";
+import type { EvalEvent, PrimitiveName, RunSummary, ScoreBreakdown, TaskAcceptanceCriteria, TaskSpec } from "./types.js";
+
+export interface EvalRunnerOptions {
+  taskPath: string;
+  modelRef: string;
+  passThreshold?: number;
+}
 import { initManifold } from "../engine/manifold-backend.js";
 import { createModelAdapter, extractCode } from "./model-adapter.js";
 import { buildRetryPrompt, buildSystemPrompt, buildUserPrompt } from "./prompts.js";
@@ -11,6 +21,10 @@ import { parseTaskSpec, type EvalEvent, type ModelConfig, type TaskSpec } from "
 
 export interface EvalRunResult {
   pass: boolean;
+  score: ScoreBreakdown;
+  sourcePath: string;
+  logPath: string;
+  screenshotPaths: string[];
   score: number;
   iterations: number;
   total_tokens: number;
@@ -183,6 +197,25 @@ export async function runEval(task: TaskSpec, config: ModelConfig): Promise<Eval
       },
     });
 
+  const score = scoreEval(task, modelResult.evaluation, source);
+
+  appendEvent(logPath, {
+    ts: Date.now(),
+    run_id: runId,
+    task_id: task.id,
+    event: "score.computed",
+    data: {
+      total: score.total,
+      geometry: score.geometry,
+      constraints: score.constraints,
+      visual: score.judge,
+      api: score.api,
+      weights: score.weights,
+    },
+  });
+
+  const passThreshold = options.passThreshold ?? 70;
+  const pass = score.pass && score.total >= passThreshold;
     const iterationScreenshots = await tryCaptureScreenshots(sourcePath);
     screenshotPaths.push(...iterationScreenshots);
     if (iterationScreenshots.length > 0) {
@@ -295,6 +328,8 @@ export async function runEval(task: TaskSpec, config: ModelConfig): Promise<Eval
     task_id: task.id,
     event: "run.completed",
     data: {
+      final_score: score.total,
+      iterations: 1,
       final_score: latestScore.score,
       iterations: completedIterations,
       total_tokens: totalTokens,
@@ -310,6 +345,13 @@ export async function runEval(task: TaskSpec, config: ModelConfig): Promise<Eval
     event: "run.summary",
     data: {
       model: options.modelRef,
+      pass,
+      score: score.total,
+      iterations: 1,
+      total_tokens: totalTokens,
+      total_duration_ms: Date.now() - runStart,
+      eval_bundle: modelResult.evaluation,
+      failure_reason: pass ? undefined : "Score below threshold",
       pass: finalPass,
       score: latestScore.score,
       iterations: completedIterations,
