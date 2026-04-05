@@ -8,15 +8,13 @@
   ],
   "description": "Code-first parametric CAD for TypeScript — browser & CLI",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "bin": {
     "cadlad": "./dist/cli/index.js"
   },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "build:cli": "tsc -p tsconfig.cli.json",
+    "build:cli": "tsc -p apps/cli/tsconfig.json",
     "preview": "vite preview",
     "snap": "node scripts/render-node.mjs",
     "headless:doctor": "node scripts/headless-doctor.mjs",

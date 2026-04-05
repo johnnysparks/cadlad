@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "dependencies": {
-    "@cadlad/api": "workspace:*",
-    "@cadlad/rendering": "workspace:*",
-    "@cadlad/validation": "workspace:*",
+    "@cadlad/api": "*",
+    "@cadlad/rendering": "*",
+    "@cadlad/validation": "*",
     "monaco-editor": "^0.52.0",
     "three": "^0.170.0"
   }

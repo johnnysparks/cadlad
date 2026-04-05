@@ -10,6 +10,6 @@
     "./sketch": "./sketch.js"
   },
   "dependencies": {
-    "@cadlad/kernel": "workspace:*"
+    "@cadlad/kernel": "*"
   }
 }

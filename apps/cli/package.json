@@ -6,11 +6,11 @@
     "cadlad": "./index.js"
   },
   "dependencies": {
-    "@cadlad/api": "workspace:*",
-    "@cadlad/kernel": "workspace:*",
-    "@cadlad/validation": "workspace:*",
-    "@cadlad/session-core": "workspace:*",
-    "@cadlad/eval": "workspace:*",
+    "@cadlad/api": "*",
+    "@cadlad/kernel": "*",
+    "@cadlad/validation": "*",
+    "@cadlad/session-core": "*",
+    "@cadlad/eval": "*",
     "tsx": "^4.20.6"
   }
 }
