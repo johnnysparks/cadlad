@@ -126,6 +126,9 @@ cadlad run projects/box-with-hole.forge.ts --json
 
 # Export to STL
 cadlad export projects/box-with-hole.forge.ts -o output.stl
+
+# List configured providers and discover available models in this environment
+cadlad models
 ```
 
 ## Architecture

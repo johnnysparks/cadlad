@@ -56,9 +56,22 @@ async function main() {
     case "eval-report":
       await cmdEvalReport(args);
       break;
+    case "models":
+      await cmdModels(args);
+      break;
     default:
       printUsage();
   }
+}
+
+interface ModelAvailabilitySummary {
+  provider: "ollama" | "openai" | "anthropic" | "lmstudio";
+  configured: boolean;
+  endpoint: string;
+  auth: "required" | "configured" | "not-required";
+  available: boolean;
+  models: string[];
+  note?: string;
 }
 
 async function cmdRun(args: string[], options: { watchMode: boolean }) {
@@ -421,6 +434,253 @@ async function cmdEvalReport(args: string[]) {
   printSummary(scopedReport);
 }
 
+async function cmdModels(args: string[]) {
+  const parsed = parseModelsArgs(args);
+  const timeoutMs = parsed.timeoutMs;
+  const results = await Promise.all([
+    discoverOllamaModels(timeoutMs),
+    discoverOpenAIModels(timeoutMs),
+    discoverAnthropicModels(timeoutMs),
+    discoverLmStudioModels(timeoutMs),
+  ]);
+
+  if (parsed.json) {
+    console.log(JSON.stringify({ generatedAt: new Date().toISOString(), providers: results }, null, 2));
+    return;
+  }
+
+  console.log("Configured and available models:\n");
+  for (const result of results) {
+    const configured = result.configured ? "yes" : "no";
+    const reachable = result.available ? "yes" : "no";
+    console.log(`${result.provider}`);
+    console.log(`  configured: ${configured}`);
+    console.log(`  endpoint:   ${result.endpoint}`);
+    console.log(`  auth:       ${result.auth}`);
+    console.log(`  reachable:  ${reachable}`);
+    if (result.models.length > 0) {
+      console.log("  models:");
+      result.models.forEach((model) => console.log(`    - ${model}`));
+    } else {
+      console.log("  models:     (none discovered)");
+    }
+    if (result.note) {
+      console.log(`  note:       ${result.note}`);
+    }
+    console.log("");
+  }
+}
+
+function parseModelsArgs(args: string[]): { json: boolean; timeoutMs: number } {
+  const parsed = {
+    json: false,
+    timeoutMs: 2000,
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--json") {
+      parsed.json = true;
+      continue;
+    }
+    if (arg === "--timeout-ms") {
+      const next = Number(args[index + 1]);
+      if (Number.isFinite(next) && next >= 100) {
+        parsed.timeoutMs = Math.floor(next);
+      }
+      index += 1;
+    }
+  }
+
+  return parsed;
+}
+
+async function discoverOllamaModels(timeoutMs: number): Promise<ModelAvailabilitySummary> {
+  const endpoint = "http://localhost:11434";
+  const configured = true;
+
+  try {
+    const payload = await fetchJsonWithTimeout(`${endpoint}/api/tags`, timeoutMs);
+    const models = Array.isArray(payload?.models)
+      ? payload.models
+        .map((entry: { name?: unknown }) => (typeof entry.name === "string" ? entry.name : ""))
+        .filter((name: string) => name.length > 0)
+      : [];
+
+    return {
+      provider: "ollama",
+      configured,
+      endpoint,
+      auth: "not-required",
+      available: true,
+      models,
+      note: models.length === 0 ? "Ollama responded but returned no installed models." : undefined,
+    };
+  } catch (error) {
+    return {
+      provider: "ollama",
+      configured,
+      endpoint,
+      auth: "not-required",
+      available: false,
+      models: [],
+      note: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function discoverOpenAIModels(timeoutMs: number): Promise<ModelAvailabilitySummary> {
+  const endpoint = "https://api.openai.com";
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return {
+      provider: "openai",
+      configured: false,
+      endpoint,
+      auth: "required",
+      available: false,
+      models: [],
+      note: "Set OPENAI_API_KEY to enable model discovery.",
+    };
+  }
+
+  try {
+    const payload = await fetchJsonWithTimeout(`${endpoint}/v1/models`, timeoutMs, {
+      authorization: `Bearer ${apiKey}`,
+    });
+    const models = Array.isArray(payload?.data)
+      ? payload.data
+        .map((entry: { id?: unknown }) => (typeof entry.id === "string" ? entry.id : ""))
+        .filter((id: string) => id.length > 0)
+      : [];
+
+    return {
+      provider: "openai",
+      configured: true,
+      endpoint,
+      auth: "configured",
+      available: true,
+      models,
+      note: models.length === 0 ? "OpenAI responded but returned no models." : undefined,
+    };
+  } catch (error) {
+    return {
+      provider: "openai",
+      configured: true,
+      endpoint,
+      auth: "configured",
+      available: false,
+      models: [],
+      note: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function discoverAnthropicModels(timeoutMs: number): Promise<ModelAvailabilitySummary> {
+  const endpoint = "https://api.anthropic.com";
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return {
+      provider: "anthropic",
+      configured: false,
+      endpoint,
+      auth: "required",
+      available: false,
+      models: [],
+      note: "Set ANTHROPIC_API_KEY to enable model discovery.",
+    };
+  }
+
+  try {
+    const payload = await fetchJsonWithTimeout(`${endpoint}/v1/models`, timeoutMs, {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    });
+    const models = Array.isArray(payload?.data)
+      ? payload.data
+        .map((entry: { id?: unknown }) => (typeof entry.id === "string" ? entry.id : ""))
+        .filter((id: string) => id.length > 0)
+      : [];
+
+    return {
+      provider: "anthropic",
+      configured: true,
+      endpoint,
+      auth: "configured",
+      available: true,
+      models,
+      note: models.length === 0 ? "Anthropic responded but returned no models." : undefined,
+    };
+  } catch (error) {
+    return {
+      provider: "anthropic",
+      configured: true,
+      endpoint,
+      auth: "configured",
+      available: false,
+      models: [],
+      note: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function discoverLmStudioModels(timeoutMs: number): Promise<ModelAvailabilitySummary> {
+  const endpoint = "http://localhost:1234";
+
+  try {
+    const payload = await fetchJsonWithTimeout(`${endpoint}/v1/models`, timeoutMs);
+    const models = Array.isArray(payload?.data)
+      ? payload.data
+        .map((entry: { id?: unknown }) => (typeof entry.id === "string" ? entry.id : ""))
+        .filter((id: string) => id.length > 0)
+      : [];
+
+    return {
+      provider: "lmstudio",
+      configured: true,
+      endpoint,
+      auth: "not-required",
+      available: true,
+      models,
+      note: models.length === 0 ? "LM Studio responded but returned no loaded models." : undefined,
+    };
+  } catch (error) {
+    return {
+      provider: "lmstudio",
+      configured: true,
+      endpoint,
+      auth: "not-required",
+      available: false,
+      models: [],
+      note: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function fetchJsonWithTimeout(url: string, timeoutMs: number, headers?: Record<string, string>): Promise<any> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers,
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => undefined);
+    if (!response.ok) {
+      const detail = typeof payload?.error?.message === "string"
+        ? payload.error.message
+        : typeof payload?.error === "string"
+          ? payload.error
+          : JSON.stringify(payload);
+      throw new Error(`HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
+    }
+    return payload;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function collectTaskFiles(taskPath: string): string[] {
   const absolute = resolve(taskPath);
   const stat = statSync(absolute);
@@ -501,6 +761,8 @@ Usage:
                                        Run one or many eval tasks across one or many models
   cadlad eval-report [--task <task-id>] [--compare] [--issues] [--deadweight] [--json]
                                        Aggregate eval logs into summary/comparison/issue reports
+  cadlad models [--json] [--timeout-ms <ms>]
+                                       List configured providers and discover available models in current env
   cadlad studio                         Launch browser studio
 `);
 }
