@@ -17,6 +17,8 @@ import { evaluateModel } from "../api/runtime.js";
 import { loadModelSource } from "./source-loader.js";
 import { buildRunJsonOutput, buildRunReport, formatRunReportText } from "./run-output.js";
 import { formatValidationDiagnostic } from "../validation/layered-validation.js";
+import { LocalHistoryStore } from "./local-history-store.js";
+import { RevisionBranchError } from "../core/revision-branch.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -27,6 +29,15 @@ async function main() {
       break;
     case "validate":
       await cmdRun(args, { watchMode: args.includes("--watch") });
+      break;
+    case "branch":
+      await cmdBranch(args);
+      break;
+    case "compare":
+      await cmdCompare(args);
+      break;
+    case "history":
+      await cmdHistory(args);
       break;
     case "export":
       await cmdExport(args);
@@ -79,6 +90,23 @@ async function cmdRun(args: string[], options: { watchMode: boolean }) {
           }
         }
         return false;
+      }
+
+      if (parsed.recordEvents) {
+        const historyStore = new LocalHistoryStore(file);
+        const runRecord = await historyStore.recordRun({
+          source: code,
+          params: Object.fromEntries(result.params.map((param) => [param.name, param.value])),
+          actor: { kind: parsed.actorKind, ...(parsed.actorId ? { id: parsed.actorId } : {}) },
+          modelResult: result,
+          recordEvents: true,
+        });
+
+        if (!printJson) {
+          console.log(
+            `[cadlad] Recorded revision ${runRecord.revision.revision} on branch ${runRecord.branch.name} (${runRecord.eventCount} events).`,
+          );
+        }
       }
 
       const report = buildRunReport(result);
@@ -138,6 +166,95 @@ async function cmdRun(args: string[], options: { watchMode: boolean }) {
 
   watch(resolve(file), scheduleRun);
   await new Promise(() => {});
+}
+
+async function cmdBranch(args: string[]) {
+  const parsed = parseBranchArgs(args);
+  if (!parsed.file) {
+    console.error("Usage: cadlad branch <list|create|checkout> [args] --file <file.forge.ts>");
+    process.exit(1);
+  }
+
+  const historyStore = new LocalHistoryStore(parsed.file);
+
+  try {
+    if (parsed.subcommand === 'create') {
+      if (!parsed.name) {
+        console.error('Usage: cadlad branch create <name> [--from <revision>] --file <file.forge.ts>');
+        process.exit(1);
+      }
+      const branch = historyStore.createBranch(parsed.name, parsed.fromRevision);
+      console.log(`Created branch ${branch.name} (${branch.id}) at revision ${branch.headRevision}.`);
+      return;
+    }
+
+    if (parsed.subcommand === 'checkout') {
+      if (!parsed.target) {
+        console.error('Usage: cadlad branch checkout <branch-id-or-name> --file <file.forge.ts>');
+        process.exit(1);
+      }
+      const checkout = historyStore.checkoutBranch(parsed.target);
+      console.log(`Checked out ${checkout.branch.name} at revision ${checkout.branch.headRevision}.`);
+      return;
+    }
+
+    const branches = historyStore.listBranches();
+    if (parsed.json) {
+      console.log(JSON.stringify(branches, null, 2));
+      return;
+    }
+
+    for (const branch of branches.branches) {
+      const active = branch.id === branches.activeBranchId ? '*' : ' ';
+      console.log(`${active} ${branch.name} (${branch.id}) head=${branch.headRevision} base=${branch.baseRevision ?? 'n/a'}`);
+    }
+  } catch (error) {
+    handleRevisionBranchError(error);
+  }
+}
+
+async function cmdCompare(args: string[]) {
+  const parsed = parseCompareArgs(args);
+  if (!parsed.file || !parsed.branchA || !parsed.branchB) {
+    console.error('Usage: cadlad compare <branch-a> <branch-b> --file <file.forge.ts> [--json]');
+    process.exit(1);
+  }
+
+  const historyStore = new LocalHistoryStore(parsed.file);
+  try {
+    const comparison = historyStore.compareBranches(parsed.branchA, parsed.branchB);
+    if (parsed.json) {
+      console.log(JSON.stringify(comparison, null, 2));
+      return;
+    }
+
+    console.log(`Compare ${comparison.branches.a.name} (rev ${comparison.branches.a.headRevision}) vs ${comparison.branches.b.name} (rev ${comparison.branches.b.headRevision})`);
+    console.log(`  Error delta: ${comparison.diff.validation.errorCountDelta}`);
+    console.log(`  Warning delta: ${comparison.diff.validation.warningCountDelta}`);
+    console.log(`  Stats delta: ${JSON.stringify(comparison.diff.stats)}`);
+  } catch (error) {
+    handleRevisionBranchError(error);
+  }
+}
+
+async function cmdHistory(args: string[]) {
+  const parsed = parseHistoryArgs(args);
+  if (!parsed.file) {
+    console.error('Usage: cadlad history --file <file.forge.ts> [--limit N] [--offset N] [--json]');
+    process.exit(1);
+  }
+
+  const historyStore = new LocalHistoryStore(parsed.file);
+  const history = historyStore.getHistory(parsed.limit, parsed.offset);
+  if (parsed.json) {
+    console.log(JSON.stringify(history, null, 2));
+    return;
+  }
+
+  console.log(`Revisions (${history.total} total):`);
+  for (const revision of history.revisions) {
+    console.log(`  r${revision.revision} branch=${revision.branchId} events=${revision.eventIds.length} sourceHash=${revision.sourceHash.slice(0, 10)}...`);
+  }
 }
 
 async function cmdExport(args: string[]) {
@@ -222,21 +339,35 @@ function printUsage() {
 CadLad — Code-first parametric CAD
 
 Usage:
-  cadlad run <file.forge.ts> [--json] [--include-mesh]
+  cadlad run <file.forge.ts> [--json] [--include-mesh] [--record-events]
                                        Validate/evaluate once (JSON for agents/CI)
   cadlad validate <file.forge.ts> [--watch] [--json]
                                        Validate locally (watch loop optional)
+  cadlad branch [list] --file <file.forge.ts> [--json]
+                                       List local branches
+  cadlad branch create <name> --file <file.forge.ts> [--from <revision>]
+                                       Create local branch
+  cadlad branch checkout <branch-id-or-name> --file <file.forge.ts>
+                                       Switch active local branch
+  cadlad compare <branch-a> <branch-b> --file <file.forge.ts> [--json]
+                                       Compare local branch heads
+  cadlad history --file <file.forge.ts> [--limit N] [--offset N] [--json]
+                                       Show local revision history
   cadlad export <file> -o output.stl    Export model to STL
   cadlad studio                         Launch browser studio
 `);
 }
 
-function parseRunArgs(args: string[]): { file?: string; json: boolean; includeMesh: boolean } {
+function parseRunArgs(args: string[]): { file?: string; json: boolean; includeMesh: boolean; recordEvents: boolean; actorKind: 'human' | 'agent'; actorId?: string } {
   let file: string | undefined;
   let json = false;
   let includeMesh = false;
+  let recordEvents = false;
+  let actorKind: 'human' | 'agent' = 'human';
+  let actorId: string | undefined;
 
-  for (const arg of args) {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
     if (arg === "--json") {
       json = true;
       continue;
@@ -245,12 +376,142 @@ function parseRunArgs(args: string[]): { file?: string; json: boolean; includeMe
       includeMesh = true;
       continue;
     }
+    if (arg === '--record-events') {
+      recordEvents = true;
+      continue;
+    }
+    if (arg === '--actor') {
+      const next = args[index + 1];
+      if (next === 'human' || next === 'agent') {
+        actorKind = next;
+        index += 1;
+      }
+      continue;
+    }
+    if (arg === '--actor-id') {
+      actorId = args[index + 1];
+      index += 1;
+      continue;
+    }
     if (arg === "--watch") continue;
     if (arg.startsWith("-")) continue;
     if (!file) file = arg;
   }
 
-  return { file, json, includeMesh };
+  return { file, json, includeMesh, recordEvents, actorKind, actorId };
+}
+
+function parseBranchArgs(args: string[]): {
+  subcommand: 'list' | 'create' | 'checkout';
+  file?: string;
+  name?: string;
+  target?: string;
+  fromRevision?: number;
+  json: boolean;
+} {
+  const first = args[0];
+  const subcommand = first === 'create' || first === 'checkout' ? first : 'list';
+  const parsed = {
+    subcommand,
+    file: undefined as string | undefined,
+    name: undefined as string | undefined,
+    target: undefined as string | undefined,
+    fromRevision: undefined as number | undefined,
+    json: false,
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--json') {
+      parsed.json = true;
+      continue;
+    }
+    if (arg === '--file') {
+      parsed.file = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === '--from') {
+      parsed.fromRevision = Number(args[index + 1]);
+      index += 1;
+      continue;
+    }
+  }
+
+  if (subcommand === 'create') {
+    parsed.name = args[1];
+  }
+  if (subcommand === 'checkout') {
+    parsed.target = args[1];
+  }
+
+  return parsed;
+}
+
+function parseCompareArgs(args: string[]): { file?: string; branchA?: string; branchB?: string; json: boolean } {
+  const parsed = {
+    file: undefined as string | undefined,
+    branchA: args[0],
+    branchB: args[1],
+    json: false,
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--json') {
+      parsed.json = true;
+      continue;
+    }
+    if (arg === '--file') {
+      parsed.file = args[index + 1];
+      index += 1;
+      continue;
+    }
+  }
+
+  return parsed;
+}
+
+function parseHistoryArgs(args: string[]): { file?: string; limit: number; offset: number; json: boolean } {
+  const parsed = {
+    file: undefined as string | undefined,
+    limit: 50,
+    offset: 0,
+    json: false,
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--json') {
+      parsed.json = true;
+      continue;
+    }
+    if (arg === '--file') {
+      parsed.file = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === '--limit') {
+      parsed.limit = Number(args[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (arg === '--offset') {
+      parsed.offset = Number(args[index + 1]);
+      index += 1;
+      continue;
+    }
+  }
+
+  return parsed;
+}
+
+function handleRevisionBranchError(error: unknown): never {
+  if (error instanceof RevisionBranchError) {
+    console.error(error.message);
+    process.exit(1);
+  }
+  throw error;
 }
 
 main().catch((err) => {
