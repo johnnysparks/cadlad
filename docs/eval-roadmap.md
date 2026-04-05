@@ -540,9 +540,138 @@ Run `npm run typecheck`. Commit. Push.
 
 ---
 
+## Step 7: LLM-as-Judge (Visual Evaluation)
+
+```
+You are working on the CadLad project (code-first parametric 3D CAD in TypeScript).
+Branch: claude/agent-evaluation-loop-GXddC
+
+Pull latest from origin first.
+
+Read these files:
+- src/eval/types.ts (TaskSpec, ScoreBreakdown, EvalEvent, ModelConfig)
+- src/eval/model-adapter.ts (createModelAdapter, GenerateRequest — the judge uses
+  the same adapter interface to call a vision model)
+- src/eval/scorer.ts (scoreEval — see how judge score is currently hardcoded to 0
+  and weight gets redistributed; you'll make it real)
+- src/eval/runner.ts (the main loop — you'll integrate the judge call after screenshots)
+- docs/agent-eval-loop.md Appendix B (scoring formula with judge weight)
+
+TASK A: Create `src/eval/judge.ts` (~80 LOC)
+
+The judge sends screenshots + task description to a vision-capable LLM and gets
+back a structured assessment. This is OPTIONAL — it's skipped when --no-judge is
+passed or when the judge model doesn't support vision.
+
+Export:
+```typescript
+interface JudgeVerdict {
+  score: number;        // 1-5 scale
+  pass: boolean;        // score >= 3
+  feedback: string;     // 1-2 sentence explanation
+  normalized: number;   // mapped to 0-100 (1→0, 2→25, 3→50, 4→75, 5→100)
+}
+
+async function judgeModel(opts: {
+  task: TaskSpec;
+  screenshotPaths: string[];   // absolute paths to PNG files from vibe-snap
+  model: ModelAdapter;         // the vision model to use as judge
+  source?: string;             // optional: the .forge.ts code for context
+}): Promise<JudgeVerdict>
+```
+
+Implementation:
+
+1. Read each screenshot file as a Buffer (readFileSync).
+   Cap at 4 images max — if more, pick: iso, front, right, top (in that priority).
+
+2. Build the judge prompt. It should be terse (~150 tokens) to minimize cost:
+
+   ```
+   You are evaluating a 3D CAD model. Score it 1-5.
+
+   TASK: {task.description}
+
+   CRITERIA:
+   5 = Clearly matches the description. Correct shape, proportions, and features.
+   4 = Mostly correct. Minor issues (slightly wrong proportions, missing small detail).
+   3 = Recognizable attempt. Right general shape but notable problems.
+   2 = Partially relevant. Some elements present but major issues.
+   1 = Wrong or broken. Does not resemble the description.
+
+   Look at the screenshot(s) from multiple angles. Respond in EXACTLY this format:
+   SCORE: <1-5>
+   PASS: <yes/no>
+   FEEDBACK: <one sentence>
+   ```
+
+3. Call model.generate() with the prompt and screenshot Buffers as images.
+
+4. Parse the response:
+   - Extract SCORE line with regex: /SCORE:\s*(\d)/
+   - Extract PASS line: /PASS:\s*(yes|no)/i
+   - Extract FEEDBACK line: /FEEDBACK:\s*(.+)/
+   - If parsing fails, default to score=2, pass=false, feedback="Judge response unparseable"
+
+5. Return JudgeVerdict with normalized = (score - 1) * 25.
+
+TASK B: Update `src/eval/scorer.ts`
+
+Add a new export that incorporates the judge score:
+
+```typescript
+function applyJudgeScore(base: ScoreBreakdown, judgeScore: number): ScoreBreakdown
+```
+
+This takes the existing ScoreBreakdown (where judge=0 and total used redistributed
+weights) and recalculates with the real judge score:
+- total = geometry * 0.4 + constraints * 0.3 + api_surface * 0.2 + judgeScore * 0.1
+- Update the judge and total fields, return new object.
+
+TASK C: Update `src/eval/runner.ts`
+
+Integrate the judge into the eval loop. Changes needed:
+
+1. Add optional judgeModel parameter to runEval:
+   ```typescript
+   async function runEval(task: TaskSpec, config: ModelConfig, opts?: {
+     judgeConfig?: ModelConfig;  // separate model for judging (e.g. anthropic://claude-sonnet-4-6)
+   }): Promise<EvalResult>
+   ```
+
+2. After screenshots succeed (you already have screenshot paths), if judgeConfig
+   is provided:
+   - Create a judge adapter via createModelAdapter(judgeConfig)
+   - Call judgeModel({ task, screenshotPaths, model: judgeAdapter, source: currentCode })
+   - Log "judge.prompt_sent" event: { prompt_tokens, image_count }
+   - Log "judge.verdict" event: { score, pass, feedback, normalized }
+   - Call applyJudgeScore() to update the score breakdown
+
+3. If judgeConfig is not provided, skip judge entirely (current behavior — score
+   stays with redistributed weights).
+
+TASK D: Update `src/cli/index.ts` cmdEval
+
+Add two new flags:
+- `--judge <model-url>`: model to use as visual judge (e.g. `--judge anthropic://claude-sonnet-4-6`)
+- `--no-judge`: explicitly skip judge even if a default is configured
+
+Pass judgeConfig through to runEval. If neither flag given, no judge (backward compatible).
+
+Update the summary line to show judge info when used:
+```
+[eval] box-with-hole  PASS  score=82 (judge:75)  iterations=2  tokens=2,104  time=5.1s
+```
+
+Update printUsage() with the new flags.
+
+Run `npm run typecheck`. Commit. Push.
+```
+
+---
+
 ## Next Steps (not written yet)
 
-- Step 7: LLM-as-Judge (`src/eval/judge.ts`)
 - Step 8: Multi-model batch + parallel runs
 - Step 9: Ad-hoc tasks (`cadlad eval --task "..."`)
 - Step 10: CI integration (`scripts/ci-eval.sh`)
