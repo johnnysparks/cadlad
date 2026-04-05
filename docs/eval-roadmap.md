@@ -388,9 +388,160 @@ Run `npm run typecheck` (just to make sure nothing's broken). Commit. Push.
 
 ---
 
+## Step 6: Eval Report Aggregation
+
+```
+You are working on the CadLad project (code-first parametric 3D CAD in TypeScript).
+Branch: claude/agent-evaluation-loop-GXddC
+
+Pull latest from origin first.
+
+Read these files:
+- src/eval/types.ts (EvalResult, EvalEvent, ScoreBreakdown, TaskSpec)
+- src/eval/runner.ts (understand NDJSON log format — where files are written,
+  the event types logged, and the "run.completed" / "run.started" event shapes)
+- src/cli/index.ts (existing CLI switch — you'll add "eval-report" command)
+- docs/agent-eval-loop.md section 3 "Aggregation Reports" (summary/issues/deadweight specs)
+
+TASK A: Create `src/eval/report.ts` (~180 LOC)
+
+This module reads NDJSON log files from eval-logs/ and produces three report types.
+
+1. Export `aggregateLogs(logDir: string): AggregatedReport`
+
+   AggregatedReport type (define in this file or add to types.ts):
+   ```typescript
+   interface TaskSummary {
+     task_id: string;
+     runs: number;
+     pass_rate: number;          // 0.0 - 1.0
+     avg_score: number;
+     avg_iterations: number;
+     avg_tokens: number;
+     avg_duration_ms: number;
+     by_model: Record<string, {  // keyed by model URL
+       runs: number;
+       pass_rate: number;
+       avg_score: number;
+       avg_iterations: number;
+       avg_tokens: number;
+     }>;
+   }
+
+   interface AggregatedReport {
+     generated_at: string;       // ISO timestamp
+     total_runs: number;
+     overall_pass_rate: number;
+     tasks: TaskSummary[];
+     models: string[];           // unique model URLs seen
+   }
+   ```
+
+   Implementation:
+   - Recursively glob eval-logs/**/*.ndjson
+   - For each file, read lines, parse JSON, find the "run.completed" event
+   - The "run.completed" event data has: { model, pass, final_score, iterations,
+     total_tokens, duration_ms, task_id }
+   - Also read "run.started" for the model field if run.completed doesn't have it
+   - Group by task_id, then by model within each task
+   - Compute averages and pass rates
+
+2. Export `generateIssuesReport(report: AggregatedReport): IssueReport`
+
+   ```typescript
+   interface EvalIssue {
+     task_id: string;
+     severity: "critical" | "warning";
+     issue: string;
+     detail: string;
+   }
+   interface IssueReport {
+     issues: EvalIssue[];
+   }
+   ```
+
+   Flag these patterns:
+   - "critical": task pass_rate === 0 across all models (task may be impossible or prompt is bad)
+   - "critical": task pass_rate === 0 for a specific model that passes other tasks (model-specific gap)
+   - "warning": task avg_iterations === max_iterations (tasks are timing out, prompt may need work)
+   - "warning": task avg_score < 50 even when passing (barely passing — fragile)
+
+3. Export `generateDeadweightReport(logDir: string, tasksDir: string): DeadweightReport`
+
+   ```typescript
+   interface DeadweightEntry {
+     api_method: string;
+     referenced_in_tasks: string[];   // task IDs that list it in api_surface
+     success_rate: number;            // how often code using this method passes
+     issue: string;
+   }
+   interface DeadweightReport {
+     entries: DeadweightEntry[];
+   }
+   ```
+
+   Implementation:
+   - Load all task YAML files from tasksDir to get api_surface lists
+   - For each NDJSON log, find "build.code_generated" events (which have source_hash
+     and the code is in eval-scratch/) and "run.completed" events
+   - For each api_surface method, check if it appears in the generated code (read
+     from eval-scratch if available, or just check "score.computed" events which
+     should include the api_surface score breakdown)
+   - Flag methods with < 30% success rate as deadweight
+   - Flag methods that appear in api_surface but are never found in generated code
+
+TASK B: Add `eval-report` command to `src/cli/index.ts`
+
+Add a new case in the switch:
+```
+case "eval-report":
+  await cmdEvalReport(args);
+  break;
+```
+
+The cmdEvalReport function parses these flags:
+- No flags: print summary table to stdout
+- `--task <task-id>`: filter to one task's history
+- `--compare`: print model-vs-model comparison table
+- `--issues`: print issues report
+- `--deadweight`: print deadweight report
+- `--json`: output as JSON instead of formatted text
+
+Default summary output format (markdown table to stdout):
+```
+## Eval Summary (42 runs, 2025-04-05)
+
+| Task              | Runs | Pass Rate | Avg Score | Avg Iters | Avg Tokens |
+|-------------------|------|-----------|-----------|-----------|------------|
+| box-with-hole     |   12 |    83%    |    78.2   |    1.8    |    1,204   |
+| parametric-bracket|    8 |    62%    |    65.1   |    3.2    |    2,847   |
+| dice              |   10 |    40%    |    52.3   |    4.1    |    3,102   |
+| phone-stand       |    6 |    17%    |    38.7   |    6.8    |    5,420   |
+| battery-cover     |    6 |     0%    |    22.1   |   10.0    |    8,905   |
+```
+
+--compare format:
+```
+## Model Comparison
+
+| Task              | ollama://llama3.2 | ollama://qwen3:8b | anthropic://claude-sonnet-4-6 |
+|-------------------|----|----|----|
+| box-with-hole     | 75% (1.9 iter)    | 83% (1.5 iter)    | 100% (1.0 iter)               |
+| parametric-bracket| 50% (3.5 iter)    | 62% (2.8 iter)    | 88% (1.2 iter)                |
+```
+
+--issues format: bullet list with severity emoji (X for critical, ! for warning)
+--deadweight format: simple table of method | tasks | success rate | issue
+
+Update printUsage() to include eval-report and its flags.
+
+Run `npm run typecheck`. Commit. Push.
+```
+
+---
+
 ## Next Steps (not written yet)
 
-- Step 6: Eval Report aggregation (`cadlad eval-report`)
 - Step 7: LLM-as-Judge (`src/eval/judge.ts`)
 - Step 8: Multi-model batch + parallel runs
 - Step 9: Ad-hoc tasks (`cadlad eval --task "..."`)
