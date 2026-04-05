@@ -254,7 +254,7 @@ This means local agents start cold every time. The MCP server (`mcp/src/server.t
 
 - [x] **Local revision/branch management** — Core revision/branch logic (checkpointing, branch CRUD, comparison) now lives in `src/core/revision-branch.ts` and is consumed by `worker/src/live-session.ts`, so the worker and local backends can share one implementation.
 
-- [ ] **CLI integration** — `cadlad run` should optionally write events to the local store. `cadlad branch`, `cadlad compare`, `cadlad history` commands for local branch/revision management.
+- [x] **CLI integration** — `cadlad run --record-events` now writes `source.replaced` + `evaluation.completed` events to a local store (`.cadlad/events.json`), and new `cadlad branch`, `cadlad compare`, and `cadlad history` commands provide local branch/revision management.
 
 - [ ] **Shared interfaces** — Define `RevisionStore`, `BranchStore` interfaces that both local and worker backends implement. The MCP tools should work against either backend transparently.
 
