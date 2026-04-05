@@ -33,6 +33,75 @@ export interface BranchLike {
   actor: EventActor;
 }
 
+export interface RevisionStore<TRevision extends RevisionSnapshotLike = RevisionSnapshotLike> {
+  listRevisions(): Promise<TRevision[]>;
+  getRevision(revision: number): Promise<TRevision | undefined>;
+  upsertRevision(snapshot: TRevision): Promise<void>;
+}
+
+export interface BranchStore<TBranch extends BranchLike = BranchLike> {
+  listBranches(): Promise<TBranch[]>;
+  getBranch(branchId: string): Promise<TBranch | undefined>;
+  createBranch(branch: TBranch): Promise<void>;
+  updateBranch(branch: TBranch): Promise<void>;
+}
+
+export interface RevisionBranchStore<
+  TRevision extends RevisionSnapshotLike = RevisionSnapshotLike,
+  TBranch extends BranchLike = BranchLike,
+> extends RevisionStore<TRevision>, BranchStore<TBranch> {}
+
+export class InMemoryRevisionBranchStore<
+  TRevision extends RevisionSnapshotLike = RevisionSnapshotLike,
+  TBranch extends BranchLike = BranchLike,
+> implements RevisionBranchStore<TRevision, TBranch> {
+  private revisions: TRevision[];
+  private branches: TBranch[];
+
+  constructor(input: { revisions?: TRevision[]; branches?: TBranch[] } = {}) {
+    this.revisions = [...(input.revisions ?? [])];
+    this.branches = [...(input.branches ?? [])];
+  }
+
+  async listRevisions(): Promise<TRevision[]> {
+    return [...this.revisions];
+  }
+
+  async getRevision(revision: number): Promise<TRevision | undefined> {
+    return this.revisions.find((entry) => entry.revision === revision);
+  }
+
+  async upsertRevision(snapshot: TRevision): Promise<void> {
+    const idx = this.revisions.findIndex((entry) => entry.revision === snapshot.revision);
+    if (idx >= 0) {
+      this.revisions[idx] = snapshot;
+      return;
+    }
+    this.revisions.push(snapshot);
+  }
+
+  async listBranches(): Promise<TBranch[]> {
+    return [...this.branches];
+  }
+
+  async getBranch(branchId: string): Promise<TBranch | undefined> {
+    return this.branches.find((entry) => entry.id === branchId);
+  }
+
+  async createBranch(branch: TBranch): Promise<void> {
+    this.branches.push(branch);
+  }
+
+  async updateBranch(branch: TBranch): Promise<void> {
+    const idx = this.branches.findIndex((entry) => entry.id === branch.id);
+    if (idx >= 0) {
+      this.branches[idx] = branch;
+      return;
+    }
+    this.branches.push(branch);
+  }
+}
+
 export interface ComparableStats {
   triangles: number;
   bodies: number;

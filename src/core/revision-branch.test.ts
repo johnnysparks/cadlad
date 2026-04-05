@@ -6,6 +6,7 @@ import {
   checkoutBranch,
   updateBranchHead,
   RevisionBranchError,
+  InMemoryRevisionBranchStore,
 } from './revision-branch.js';
 import type { BranchLike, RevisionSnapshotLike } from './revision-branch.js';
 
@@ -143,5 +144,43 @@ describe('revision-branch core module', () => {
     })).toThrowError(RevisionBranchError);
 
     expect(() => checkoutBranch(branches, revisions, 'missing')).toThrowError(RevisionBranchError);
+  });
+
+  it('supports shared in-memory revision and branch stores', async () => {
+    const store = new InMemoryRevisionBranchStore();
+    const revision: RevisionSnapshotLike = {
+      id: 'r1',
+      revision: 1,
+      branchId: 'main',
+      parentRevision: null,
+      sourceHash: 'hash-1',
+      source: 'return box(1, 1, 1);',
+      params: {},
+      eventIds: ['evt-1'],
+      createdAt: 100,
+      actor,
+    };
+    const branch: BranchLike = {
+      id: 'b1',
+      name: 'main',
+      headRevision: 1,
+      baseRevision: null,
+      createdAt: 100,
+      updatedAt: 100,
+      actor,
+    };
+
+    await store.upsertRevision(revision);
+    await store.createBranch(branch);
+
+    const loadedRevision = await store.getRevision(1);
+    const loadedBranch = await store.getBranch('b1');
+
+    expect(loadedRevision?.id).toBe('r1');
+    expect(loadedBranch?.name).toBe('main');
+
+    await store.updateBranch({ ...branch, headRevision: 2, updatedAt: 150 });
+    const branches = await store.listBranches();
+    expect(branches[0].headRevision).toBe(2);
   });
 });
