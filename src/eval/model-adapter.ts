@@ -34,8 +34,9 @@ export interface ModelAdapter {
 }
 
 export function createModelAdapter(config: ModelConfig): ModelAdapter {
+  const defaultVision = config.provider !== "ollama" || config.model.includes("vision");
   return {
-    supportsVision: config.provider !== "ollama" || config.model.includes("vision"),
+    supportsVision: config.supportsVision ?? defaultVision,
     generate(request: GenerateCodeRequest) {
       return generateCode(config, request);
     },
@@ -100,6 +101,9 @@ export function parseModelConfig(modelRef: string): ModelConfig {
       model,
       endpoint: DEFAULT_LMSTUDIO_ENDPOINT,
       requiresApiKey: false,
+      // LM Studio serves whichever model is loaded — assume vision unless overridden.
+      // Set supportsVision: false explicitly if using a text-only model.
+      supportsVision: true,
     };
   }
 

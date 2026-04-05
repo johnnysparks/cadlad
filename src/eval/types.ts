@@ -120,6 +120,9 @@ export interface ModelConfig {
   requiresApiKey?: boolean;
   temperature?: number;
   maxTokens?: number;
+  /** Override vision capability detection. Useful for local models (LM Studio, Ollama) where
+   *  multimodal support depends on the specific model loaded, not the provider. */
+  supportsVision?: boolean;
 }
 
 export type EventType =
@@ -129,6 +132,7 @@ export type EventType =
   | "build.code_generated"
   | "eval.completed"
   | "eval.screenshots"
+  | "eval.image_similarity"
   | "score.computed"
   | "judge.prompt_sent"
   | "judge.verdict"

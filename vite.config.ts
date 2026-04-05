@@ -12,6 +12,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "index.html"),
         gallery: resolve(__dirname, "gallery/index.html"),
+        viewer: resolve(__dirname, "viewer.html"),
       },
     },
   },
