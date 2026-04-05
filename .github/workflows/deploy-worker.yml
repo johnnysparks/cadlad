@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'worker/**'
+      - 'apps/worker/**'
       - '.github/workflows/deploy-worker.yml'
   workflow_dispatch:
 
@@ -25,20 +25,20 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: worker/package-lock.json
+          cache-dependency-path: apps/worker/package-lock.json
 
-      - run: npm --prefix worker ci
+      - run: npm --prefix apps/worker ci
 
       - name: Provision KV namespace
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node worker/scripts/provision-kv.mjs
+        run: node apps/worker/scripts/provision-kv.mjs
 
       - name: Deploy production live-session Worker
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: worker
+          workingDirectory: apps/worker
           command: deploy

@@ -78,7 +78,7 @@ elif [[ "$MODEL" == openai://* ]]; then
   fi
 fi
 
-node --import tsx src/cli/index.ts eval tasks/benchmark/ \
+node --import tsx apps/cli/index.ts eval content/benchmarks/ \
   --model "$MODEL" \
   --concurrency "$CONCURRENCY" \
   --no-judge \
@@ -91,7 +91,7 @@ if [ "$EVAL_EXIT" -ne 0 ]; then
 fi
 
 mkdir -p eval-logs
-CURRENT_SUMMARY=$(node --import tsx -e "import {aggregateLogs} from './src/eval/report.js'; console.log(JSON.stringify(aggregateLogs('eval-logs')))")
+CURRENT_SUMMARY=$(node --import tsx -e "import {aggregateLogs} from './packages/eval/report.js'; console.log(JSON.stringify(aggregateLogs('eval-logs')))")
 
 if [ "$UPDATE_BASELINE" -eq 1 ]; then
   printf '%s\n' "$CURRENT_SUMMARY" > "$BASELINE_FILE"
@@ -119,7 +119,7 @@ for (const task of (baseline.tasks || [])) {
 }
 if (regressions.length > 0) {
   console.error('Regressions detected:');
-  for (const r of regressions) console.error(`- ${r.task_id}: baseline=${(r.baseline*100).toFixed(1)}% current=${(r.current*100).toFixed(1)}%`);
+  for (const r of regressions) console.error(\`- \${r.task_id}: baseline=\${(r.baseline*100).toFixed(1)}% current=\${(r.current*100).toFixed(1)}%\`);
   process.exit(1);
 }
 " "$BASELINE_FILE" "$CURRENT_SUMMARY"; then

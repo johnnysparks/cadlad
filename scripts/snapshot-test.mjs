@@ -78,9 +78,10 @@ function findChromeBinary() {
 
 const args = process.argv.slice(2);
 const UPDATE = args.includes("--update");
-const EXAMPLES_DIR = argVal("--examples-dir") || join(ROOT, "projects");
+const EXAMPLES_DIR = argVal("--examples-dir") || join(ROOT, "content/projects");
+const SNAPSHOTS_DIR = argVal("--snapshots-dir") || join(ROOT, "content/snapshots");
 const BASE_URL = argVal("--url") || "http://localhost:5173";
-const TMP_DIR = join(tmpdir(), "cadlad-snapshots");
+const TMP_DIR = "/tmp/cadlad-snapshots";
 const REPORT_PATH = join(TMP_DIR, "report.json");
 const RENDER_WAIT = parseInt(argVal("--wait") || "4000");
 
@@ -153,8 +154,7 @@ async function main() {
   for (const file of files) {
     const name = basename(file, ".forge.js");
     const code = await readFile(join(EXAMPLES_DIR, file), "utf-8");
-    const exampleDir = join(EXAMPLES_DIR, name);
-    const snapshotDir = join(exampleDir, "snapshots");
+    const snapshotDir = join(SNAPSHOTS_DIR, name);
     const refPath = join(snapshotDir, "reference.png");
     const curPath = join(TMP_DIR, `${name}.png`);
     await mkdir(snapshotDir, { recursive: true });

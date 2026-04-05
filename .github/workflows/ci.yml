@@ -22,68 +22,40 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - scope: pages
+          # Global checks (lint/type/test across apps and packages via root config)
+          - scope: global
             check: lint
-            install_root: true
-            install_scope: false
             command: npm run lint
-          - scope: pages
+          - scope: global
             check: typecheck
-            install_root: true
-            install_scope: false
             command: npm run typecheck
-          - scope: pages
+          - scope: global
             check: test
-            install_root: true
-            install_scope: false
             command: npm run test
 
-          - scope: cli
-            check: lint
-            install_root: true
-            install_scope: false
-            command: eslint apps/cli
-          - scope: cli
-            check: typecheck
-            install_root: true
-            install_scope: false
-            command: ./node_modules/.bin/tsc -p apps/cli/tsconfig.json --noEmit
+          # Targeted checks for standalone runtimes
           - scope: cli
             check: test
-            install_root: true
-            install_scope: false
             command: ./node_modules/.bin/vitest run apps/cli
 
           - scope: worker
             check: lint
-            install_root: true
-            install_scope: false
             command: npm --prefix apps/worker run lint
           - scope: worker
             check: typecheck
-            install_root: false
-            install_scope: true
             command: npm --prefix apps/worker run typecheck
           - scope: worker
             check: test
-            install_root: false
-            install_scope: true
             command: npm --prefix apps/worker run test
 
-          - scope: mcp
+          - scope: mcp-gateway
             check: lint
-            install_root: true
-            install_scope: false
             command: npm --prefix apps/mcp-gateway run lint
-          - scope: mcp
+          - scope: mcp-gateway
             check: typecheck
-            install_root: false
-            install_scope: true
             command: npm --prefix apps/mcp-gateway run typecheck
-          - scope: mcp
+          - scope: mcp-gateway
             check: test
-            install_root: false
-            install_scope: true
             command: npm --prefix apps/mcp-gateway run test
 
     steps:
@@ -98,12 +70,7 @@ jobs:
             apps/worker/package-lock.json
             apps/mcp-gateway/package-lock.json
 
-      - name: Install root dependencies
-        if: matrix.install_root
+      - name: Install dependencies
         run: npm ci
-
-      - name: Install scoped dependencies
-        if: matrix.install_scope
-        run: npm --prefix ${{ matrix.scope }} ci
 
       - run: ${{ matrix.command }}

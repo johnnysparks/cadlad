@@ -74,8 +74,13 @@ const outputArg = args.find(
     a !== argVal("--angle") &&
     a !== argVal("--url"),
 );
-const outputDir = outputArg ? resolve(outputArg) : join(projectDir, "snapshots");
+
 const modelName = basename(forgePath).replace(/\.forge\.(ts|js)$/, "");
+const defaultOutputDir = forgePath.includes("content/projects")
+  ? join(ROOT, "content/snapshots", modelName)
+  : join(projectDir, "snapshots");
+
+const outputDir = outputArg ? resolve(outputArg) : defaultOutputDir;
 const baseUrl = argVal("--url") ?? "http://localhost:5173";
 
 if (!existsSync(forgePath)) {
