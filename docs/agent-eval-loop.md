@@ -67,98 +67,30 @@ tasks/
 
 ---
 
-## 2. First 5 Benchmark Tasks
+## 2. Benchmark Tasks (Current, Executable Set)
 
-These are ordered by difficulty and exercise different API surfaces.
+The biggest testability offender in the old version of this doc was a fully stubbed task list:
+- It referenced screenshot assets that are not committed anywhere (`reference_images: [...]`).
+- It used acceptance fields that don't match the current parser/scorer behavior.
+- It described benchmark geometry that diverged from the actual YAML files the CLI runs.
 
-### Task 1: "Simple Box with Hole"
-```yaml
-id: box-with-hole
-difficulty: 1
-description: |
-  A 40×30×20mm box with a 10mm diameter through-hole centered on the top face.
-acceptance:
-  - body_count: 1
-  - volume_min: 20000    # mm³ (box minus hole)
-  - volume_max: 24000
-  - validation_errors: 0
-  - has_subtraction: true
-api_surface: [box, cylinder, subtract, translate]
-reference_images: [box-with-hole-iso.png]
-max_iterations: 3
-```
+This section now points to the real task specs in `tasks/benchmark/*.yaml`, which are the source of truth used by `cadlad eval`.
 
-### Task 2: "Parametric Bracket"
-```yaml
-id: parametric-bracket
-difficulty: 2
-description: |
-  An L-shaped mounting bracket. 60mm tall arm, 40mm base arm, 5mm wall
-  thickness, 8mm mounting holes in each arm. Use param() for wall thickness.
-acceptance:
-  - body_count: 1
-  - has_params: [wall_thickness]
-  - volume_min: 15000
-  - volume_max: 25000
-  - validation_errors: 0
-api_surface: [sketch, lShape, extrude, cylinder, subtract, param]
-reference_images: [bracket-iso.png, bracket-front.png]
-max_iterations: 5
-```
+### Canonical benchmark task files
 
-### Task 3: "Dice"
-```yaml
-id: dice
-difficulty: 2
-description: |
-  A 16mm rounded cube with standard pip positions (opposite faces sum to 7).
-  Each pip is a 2.5mm hemisphere subtracted from the face.
-acceptance:
-  - body_count: 1
-  - validation_errors: 0
-  - bbox_max: [18, 18, 18]  # rounding adds a bit
-  - volume_min: 3500
-api_surface: [roundedBox, sphere, subtract, translate]
-reference_images: [dice-iso.png, dice-top.png, dice-front.png]
-max_iterations: 5
-```
+1. `tasks/benchmark/box-with-hole.yaml`
+2. `tasks/benchmark/parametric-bracket.yaml`
+3. `tasks/benchmark/dice.yaml`
+4. `tasks/benchmark/phone-stand.yaml`
+5. `tasks/benchmark/battery-cover.yaml`
 
-### Task 4: "Phone Stand"
-```yaml
-id: phone-stand
-difficulty: 3
-description: |
-  A desk phone stand. ~10° viewing angle, holds phone upright with a lip
-  at the bottom. Cable routing slot in the back. Base should be stable
-  (wide footprint relative to height).
-acceptance:
-  - body_count: 1
-  - validation_errors: 0
-  - printability: {max_overhang_ratio: 0.4}
-  - volume_min: 20000
-  - has_slot_or_channel: true
-api_surface: [sketch, extrude, subtract, draft, fillet]
-reference_images: [phone-stand-iso.png, phone-stand-side.png]
-max_iterations: 8
-```
+### Why this matters for testability
 
-### Task 5: "Multi-Part Assembly"
-```yaml
-id: battery-cover
-difficulty: 4
-description: |
-  A battery compartment with snap-fit cover. Main body is a hollow box
-  (shell), cover has flex tabs that snap into slots on the body.
-  Two parts, clearance between them.
-acceptance:
-  - body_count_min: 2
-  - assembly: true
-  - constraint_clearance: {min_mm: 0.3, max_mm: 0.8}
-  - validation_errors: 0
-api_surface: [assembly, shell, sketch, extrude, subtract, constraint]
-reference_images: [battery-iso.png, battery-exploded.png]
-max_iterations: 10
-```
+- You can run these tasks directly with no doc-to-code translation.
+- Each task has concrete, parser-compatible acceptance criteria.
+- No hidden/stubbed image dependencies are required for baseline deterministic scoring.
+
+If/when reference images are added later, they should be checked into the repo with relative paths stored in each task YAML, and validated in CI.
 
 ---
 
