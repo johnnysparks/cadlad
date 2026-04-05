@@ -25,6 +25,7 @@ export interface GenerateCodeResponse {
 const DEFAULT_OLLAMA_ENDPOINT = "http://localhost:11434";
 const DEFAULT_OPENAI_ENDPOINT = "https://api.openai.com";
 const DEFAULT_ANTHROPIC_ENDPOINT = "https://api.anthropic.com";
+const DEFAULT_LMSTUDIO_ENDPOINT = "http://localhost:1234";
 
 export async function generateCode(config: ModelConfig, request: GenerateCodeRequest): Promise<GenerateCodeResponse> {
   switch (config.provider) {
@@ -40,29 +41,49 @@ export async function generateCode(config: ModelConfig, request: GenerateCodeReq
 }
 
 export function parseModelConfig(modelRef: string): ModelConfig {
-  const match = modelRef.match(/^(ollama|openai|anthropic):\/\/(.+)$/);
+  const httpConfig = parseOpenAiCompatibleHttpRef(modelRef);
+  if (httpConfig) {
+    return httpConfig;
+  }
+
+  const match = modelRef.match(/^(ollama|openai|anthropic|lmstudio):\/\/(.+)$/);
   if (!match) {
     throw new Error(
-      `Invalid model reference "${modelRef}". Expected format: <provider>://<model>, e.g. ollama://llama3.2`,
+      `Invalid model reference "${modelRef}". Expected format: <provider>://<model> (ollama/openai/anthropic/lmstudio) or http(s)://<host>/<model>, e.g. ollama://llama3.2`,
     );
   }
 
-  const provider = match[1] as ModelConfig["provider"];
+  const provider = match[1] as "ollama" | "openai" | "anthropic" | "lmstudio";
   const model = match[2].trim();
 
   if (!model) {
     throw new Error(`Model reference "${modelRef}" is missing a model name.`);
   }
 
+  if (provider === "lmstudio") {
+    return {
+      provider: "openai",
+      model,
+      endpoint: DEFAULT_LMSTUDIO_ENDPOINT,
+      requiresApiKey: false,
+    };
+  }
+
   if (provider === "openai") {
-    return { provider, model, endpoint: DEFAULT_OPENAI_ENDPOINT, apiKeyEnvVar: "OPENAI_API_KEY" };
+    return {
+      provider,
+      model,
+      endpoint: DEFAULT_OPENAI_ENDPOINT,
+      apiKeyEnvVar: "OPENAI_API_KEY",
+      requiresApiKey: true,
+    };
   }
 
   if (provider === "anthropic") {
-    return { provider, model, endpoint: DEFAULT_ANTHROPIC_ENDPOINT, apiKeyEnvVar: "ANTHROPIC_API_KEY" };
+    return { provider, model, endpoint: DEFAULT_ANTHROPIC_ENDPOINT, apiKeyEnvVar: "ANTHROPIC_API_KEY", requiresApiKey: true };
   }
 
-  return { provider, model, endpoint: DEFAULT_OLLAMA_ENDPOINT };
+  return { provider: "ollama", model, endpoint: DEFAULT_OLLAMA_ENDPOINT };
 }
 
 async function generateViaOllama(config: ModelConfig, request: GenerateCodeRequest): Promise<GenerateCodeResponse> {
@@ -118,13 +139,13 @@ async function generateViaOllama(config: ModelConfig, request: GenerateCodeReque
 
 async function generateViaOpenAI(config: ModelConfig, request: GenerateCodeRequest): Promise<GenerateCodeResponse> {
   const endpoint = config.endpoint ?? DEFAULT_OPENAI_ENDPOINT;
-  const apiKey = resolveApiKey(config, "OPENAI_API_KEY");
+  const apiKey = config.requiresApiKey === false ? undefined : resolveApiKey(config, "OPENAI_API_KEY");
 
   const response = await fetch(`${trimTrailingSlash(endpoint)}/v1/chat/completions`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${apiKey}`,
+      ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
     },
     body: JSON.stringify({
       model: config.model,
@@ -168,6 +189,34 @@ async function generateViaOpenAI(config: ModelConfig, request: GenerateCodeReque
     },
     raw: payload,
   };
+}
+
+function parseOpenAiCompatibleHttpRef(modelRef: string): ModelConfig | null {
+  try {
+    const parsed = new URL(modelRef);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+
+    const path = parsed.pathname.replace(/^\/+/, "");
+    if (!path) {
+      throw new Error(
+        `Model reference "${modelRef}" is missing a model name in the URL path. Example: http://localhost:1234/google%2Fgemma-4-26b-a4b`,
+      );
+    }
+
+    return {
+      provider: "openai",
+      endpoint: `${parsed.protocol}//${parsed.host}`,
+      model: decodeURIComponent(path),
+      requiresApiKey: false,
+    };
+  } catch (error) {
+    if (error instanceof TypeError) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 async function generateViaAnthropic(config: ModelConfig, request: GenerateCodeRequest): Promise<GenerateCodeResponse> {

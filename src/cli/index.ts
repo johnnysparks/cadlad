@@ -302,7 +302,7 @@ async function cmdExport(args: string[]) {
 async function cmdEval(args: string[]) {
   const parsed = parseEvalArgs(args);
   if (!parsed.taskPath) {
-    console.error("Usage: cadlad eval <task.yaml> [--model <provider://model>] [--pass-threshold <number>]");
+    console.error("Usage: cadlad eval <task.yaml> [--model <provider://model|http://host/model>] [--pass-threshold <number>]");
     process.exit(1);
   }
 
@@ -386,7 +386,7 @@ Usage:
   cadlad history --file <file.forge.ts> [--limit N] [--offset N] [--json]
                                        Show local revision history
   cadlad export <file> -o output.stl    Export model to STL
-  cadlad eval <task.yaml> [--model <provider://model>] [--pass-threshold <number>]
+  cadlad eval <task.yaml> [--model <provider://model|http://host/model>] [--pass-threshold <number>]
                                        Run one eval task end-to-end
   cadlad studio                         Launch browser studio
 `);

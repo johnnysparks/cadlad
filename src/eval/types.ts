@@ -95,6 +95,7 @@ export interface ModelConfig {
   model: string;
   endpoint?: string;
   apiKeyEnvVar?: string;
+  requiresApiKey?: boolean;
   temperature?: number;
   maxTokens?: number;
 }
