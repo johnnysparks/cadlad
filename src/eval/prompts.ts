@@ -87,3 +87,39 @@ function formatValue(value: unknown): string {
   }
   return String(value);
 }
+
+
+export function buildRetryPrompt(args: {
+  task: TaskSpec;
+  previousCode: string;
+  errors: string[];
+  score: { total: number; geometry: number; constraints: number; api: number; visual: number; feedback: string[] };
+  iteration: number;
+}): string {
+  const errorLines = args.errors.length > 0
+    ? args.errors.map((err) => `- ${err}`).join("\n")
+    : "- (none)";
+  const feedbackLines = args.score.feedback.length > 0
+    ? args.score.feedback.map((item) => `- ${item}`).join("\n")
+    : "- (none)";
+
+  return [
+    `Retry iteration ${args.iteration} for task ${args.task.id}.`,
+    "Fix the generated model based on evaluation feedback.",
+    "",
+    `Current score: ${args.score.total.toFixed(2)} (geometry=${args.score.geometry.toFixed(2)}, constraints=${args.score.constraints.toFixed(2)}, api=${args.score.api.toFixed(2)}, visual=${args.score.visual.toFixed(2)}).`,
+    "",
+    "Errors:",
+    errorLines,
+    "",
+    "Scoring feedback:",
+    feedbackLines,
+    "",
+    "Previous code:",
+    "```typescript",
+    args.previousCode.trim(),
+    "```",
+    "",
+    "Return ONLY updated .forge.ts code in a ```typescript fence.",
+  ].join("\n");
+}

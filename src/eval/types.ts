@@ -66,6 +66,7 @@ export interface TaskSpec {
   api_surface: PrimitiveName[];
   reference_images?: string[];
   max_iterations?: number;
+  pass_threshold?: number;
 }
 
 export interface EvalResult {
@@ -146,4 +147,89 @@ export interface RunLog {
   model: string;
   events: EvalEvent[];
   summary?: RunSummary;
+}
+
+
+export function parseTaskSpec(raw: string): TaskSpec {
+  const parsed = parseSimpleYaml(raw);
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Task spec must parse to an object.");
+  }
+
+  const record = parsed as Record<string, unknown>;
+  if (typeof record.id !== "string" || !record.id.trim()) throw new Error("Task spec missing id");
+  if (typeof record.difficulty !== "number") throw new Error("Task spec missing difficulty");
+  if (typeof record.description !== "string") throw new Error("Task spec missing description");
+  if (!record.acceptance || typeof record.acceptance !== "object") throw new Error("Task spec missing acceptance");
+  if (!Array.isArray(record.api_surface)) throw new Error("Task spec missing api_surface");
+
+  return {
+    id: record.id,
+    difficulty: record.difficulty,
+    description: record.description,
+    acceptance: record.acceptance as TaskAcceptanceCriteria,
+    api_surface: record.api_surface as PrimitiveName[],
+    reference_images: Array.isArray(record.reference_images) ? (record.reference_images as string[]) : undefined,
+    max_iterations: typeof record.max_iterations === "number" ? record.max_iterations : undefined,
+    pass_threshold: typeof record.pass_threshold === "number" ? record.pass_threshold : undefined,
+  };
+}
+
+function parseSimpleYaml(input: string): Record<string, unknown> {
+  const root: Record<string, unknown> = {};
+  let currentSection: string | undefined;
+  let currentIndent = 0;
+
+  for (const rawLine of input.split(/\r?\n/)) {
+    const commentTrimmed = rawLine.replace(/\s+#.*$/, "");
+    if (!commentTrimmed.trim()) continue;
+
+    const indent = rawLine.length - rawLine.trimStart().length;
+    const line = commentTrimmed.trim();
+
+    const sectionMatch = line.match(/^([A-Za-z0-9_]+):\s*$/);
+    if (sectionMatch) {
+      currentSection = sectionMatch[1];
+      currentIndent = indent;
+      root[currentSection] = {};
+      continue;
+    }
+
+    const entryMatch = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
+    if (!entryMatch) throw new Error(`Unsupported YAML line: ${rawLine}`);
+    const [, key, rawValue] = entryMatch;
+    const value = parseYamlScalar(rawValue);
+
+    if (currentSection && indent > currentIndent) {
+      (root[currentSection] as Record<string, unknown>)[key] = value;
+    } else {
+      currentSection = undefined;
+      root[key] = value;
+    }
+  }
+
+  return root;
+}
+
+function parseYamlScalar(value: string): unknown {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    const inside = trimmed.slice(1, -1).trim();
+    if (!inside) return [];
+    return inside.split(",").map((item) => parseYamlScalar(item.trim()));
+  }
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    const inside = trimmed.slice(1, -1).trim();
+    const out: Record<string, unknown> = {};
+    if (!inside) return out;
+    for (const pair of inside.split(",")) {
+      const [k, v] = pair.split(":");
+      out[k.trim()] = parseYamlScalar((v ?? "").trim());
+    }
+    return out;
+  }
+  if (trimmed === "true") return true;
+  if (trimmed === "false") return false;
+  if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  return trimmed;
 }
