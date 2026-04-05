@@ -4,10 +4,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { initManifold } from "../engine/manifold-backend.js";
 import { evaluateModel } from "../api/runtime.js";
-import { scoreEvaluation } from "./scorer.js";
+import { scoreEval } from "./scorer.js";
 import { buildSystemPrompt, buildUserPrompt } from "./prompts.js";
 import { generateCode, parseModelConfig } from "./model-adapter.js";
-import type { EvalEvent, EvalResult, PrimitiveName, RunSummary, TaskAcceptanceCriteria, TaskSpec } from "./types.js";
+import type { EvalEvent, PrimitiveName, RunSummary, ScoreBreakdown, TaskAcceptanceCriteria, TaskSpec } from "./types.js";
 
 export interface EvalRunnerOptions {
   taskPath: string;
@@ -19,7 +19,7 @@ export interface EvalRunResult {
   runId: string;
   task: TaskSpec;
   pass: boolean;
-  score: EvalResult;
+  score: ScoreBreakdown;
   sourcePath: string;
   logPath: string;
   screenshotPaths: string[];
@@ -139,11 +139,7 @@ export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult
     });
   }
 
-  const score = scoreEvaluation({
-    task,
-    bundle: modelResult.evaluation,
-    source,
-  });
+  const score = scoreEval(task, modelResult.evaluation, source);
 
   appendEvent(logPath, {
     ts: Date.now(),
@@ -151,17 +147,17 @@ export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult
     task_id: task.id,
     event: "score.computed",
     data: {
-      total: score.score,
+      total: score.total,
       geometry: score.geometry,
       constraints: score.constraints,
-      visual: score.visual,
+      visual: score.judge,
       api: score.api,
-      feedback: score.feedback,
+      weights: score.weights,
     },
   });
 
   const passThreshold = options.passThreshold ?? 70;
-  const pass = score.pass && score.score >= passThreshold;
+  const pass = score.pass && score.total >= passThreshold;
 
   appendEvent(logPath, {
     ts: Date.now(),
@@ -180,7 +176,7 @@ export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult
     task_id: task.id,
     event: "run.completed",
     data: {
-      final_score: score.score,
+      final_score: score.total,
       iterations: 1,
       total_tokens: totalTokens,
       duration_ms: Date.now() - runStart,
@@ -196,12 +192,12 @@ export async function runEval(options: EvalRunnerOptions): Promise<EvalRunResult
     data: {
       model: options.modelRef,
       pass,
-      score: score.score,
+      score: score.total,
       iterations: 1,
       total_tokens: totalTokens,
       total_duration_ms: Date.now() - runStart,
       eval_bundle: modelResult.evaluation,
-      failure_reason: pass ? undefined : score.feedback[0] ?? "Score below threshold",
+      failure_reason: pass ? undefined : "Score below threshold",
     },
   };
 
