@@ -388,10 +388,674 @@ Run `npm run typecheck` (just to make sure nothing's broken). Commit. Push.
 
 ---
 
-## Next Steps (not written yet)
+## Step 6: Eval Report Aggregation
 
-- Step 6: Eval Report aggregation (`cadlad eval-report`)
-- Step 7: LLM-as-Judge (`src/eval/judge.ts`)
-- Step 8: Multi-model batch + parallel runs
-- Step 9: Ad-hoc tasks (`cadlad eval --task "..."`)
-- Step 10: CI integration (`scripts/ci-eval.sh`)
+```
+You are working on the CadLad project (code-first parametric 3D CAD in TypeScript).
+Branch: claude/agent-evaluation-loop-GXddC
+
+Pull latest from origin first.
+
+Read these files:
+- src/eval/types.ts (EvalResult, EvalEvent, ScoreBreakdown, TaskSpec)
+- src/eval/runner.ts (understand NDJSON log format — where files are written,
+  the event types logged, and the "run.completed" / "run.started" event shapes)
+- src/cli/index.ts (existing CLI switch — you'll add "eval-report" command)
+- docs/agent-eval-loop.md section 3 "Aggregation Reports" (summary/issues/deadweight specs)
+
+TASK A: Create `src/eval/report.ts` (~180 LOC)
+
+This module reads NDJSON log files from eval-logs/ and produces three report types.
+
+1. Export `aggregateLogs(logDir: string): AggregatedReport`
+
+   AggregatedReport type (define in this file or add to types.ts):
+   ```typescript
+   interface TaskSummary {
+     task_id: string;
+     runs: number;
+     pass_rate: number;          // 0.0 - 1.0
+     avg_score: number;
+     avg_iterations: number;
+     avg_tokens: number;
+     avg_duration_ms: number;
+     by_model: Record<string, {  // keyed by model URL
+       runs: number;
+       pass_rate: number;
+       avg_score: number;
+       avg_iterations: number;
+       avg_tokens: number;
+     }>;
+   }
+
+   interface AggregatedReport {
+     generated_at: string;       // ISO timestamp
+     total_runs: number;
+     overall_pass_rate: number;
+     tasks: TaskSummary[];
+     models: string[];           // unique model URLs seen
+   }
+   ```
+
+   Implementation:
+   - Recursively glob eval-logs/**/*.ndjson
+   - For each file, read lines, parse JSON, find the "run.completed" event
+   - The "run.completed" event data has: { model, pass, final_score, iterations,
+     total_tokens, duration_ms, task_id }
+   - Also read "run.started" for the model field if run.completed doesn't have it
+   - Group by task_id, then by model within each task
+   - Compute averages and pass rates
+
+2. Export `generateIssuesReport(report: AggregatedReport): IssueReport`
+
+   ```typescript
+   interface EvalIssue {
+     task_id: string;
+     severity: "critical" | "warning";
+     issue: string;
+     detail: string;
+   }
+   interface IssueReport {
+     issues: EvalIssue[];
+   }
+   ```
+
+   Flag these patterns:
+   - "critical": task pass_rate === 0 across all models (task may be impossible or prompt is bad)
+   - "critical": task pass_rate === 0 for a specific model that passes other tasks (model-specific gap)
+   - "warning": task avg_iterations === max_iterations (tasks are timing out, prompt may need work)
+   - "warning": task avg_score < 50 even when passing (barely passing — fragile)
+
+3. Export `generateDeadweightReport(logDir: string, tasksDir: string): DeadweightReport`
+
+   ```typescript
+   interface DeadweightEntry {
+     api_method: string;
+     referenced_in_tasks: string[];   // task IDs that list it in api_surface
+     success_rate: number;            // how often code using this method passes
+     issue: string;
+   }
+   interface DeadweightReport {
+     entries: DeadweightEntry[];
+   }
+   ```
+
+   Implementation:
+   - Load all task YAML files from tasksDir to get api_surface lists
+   - For each NDJSON log, find "build.code_generated" events (which have source_hash
+     and the code is in eval-scratch/) and "run.completed" events
+   - For each api_surface method, check if it appears in the generated code (read
+     from eval-scratch if available, or just check "score.computed" events which
+     should include the api_surface score breakdown)
+   - Flag methods with < 30% success rate as deadweight
+   - Flag methods that appear in api_surface but are never found in generated code
+
+TASK B: Add `eval-report` command to `src/cli/index.ts`
+
+Add a new case in the switch:
+```
+case "eval-report":
+  await cmdEvalReport(args);
+  break;
+```
+
+The cmdEvalReport function parses these flags:
+- No flags: print summary table to stdout
+- `--task <task-id>`: filter to one task's history
+- `--compare`: print model-vs-model comparison table
+- `--issues`: print issues report
+- `--deadweight`: print deadweight report
+- `--json`: output as JSON instead of formatted text
+
+Default summary output format (markdown table to stdout):
+```
+## Eval Summary (42 runs, 2025-04-05)
+
+| Task              | Runs | Pass Rate | Avg Score | Avg Iters | Avg Tokens |
+|-------------------|------|-----------|-----------|-----------|------------|
+| box-with-hole     |   12 |    83%    |    78.2   |    1.8    |    1,204   |
+| parametric-bracket|    8 |    62%    |    65.1   |    3.2    |    2,847   |
+| dice              |   10 |    40%    |    52.3   |    4.1    |    3,102   |
+| phone-stand       |    6 |    17%    |    38.7   |    6.8    |    5,420   |
+| battery-cover     |    6 |     0%    |    22.1   |   10.0    |    8,905   |
+```
+
+--compare format:
+```
+## Model Comparison
+
+| Task              | ollama://llama3.2 | ollama://qwen3:8b | anthropic://claude-sonnet-4-6 |
+|-------------------|----|----|----|
+| box-with-hole     | 75% (1.9 iter)    | 83% (1.5 iter)    | 100% (1.0 iter)               |
+| parametric-bracket| 50% (3.5 iter)    | 62% (2.8 iter)    | 88% (1.2 iter)                |
+```
+
+--issues format: bullet list with severity emoji (X for critical, ! for warning)
+--deadweight format: simple table of method | tasks | success rate | issue
+
+Update printUsage() to include eval-report and its flags.
+
+Run `npm run typecheck`. Commit. Push.
+```
+
+---
+
+## Step 7: LLM-as-Judge (Visual Evaluation)
+
+```
+You are working on the CadLad project (code-first parametric 3D CAD in TypeScript).
+Branch: claude/agent-evaluation-loop-GXddC
+
+Pull latest from origin first.
+
+Read these files:
+- src/eval/types.ts (TaskSpec, ScoreBreakdown, EvalEvent, ModelConfig)
+- src/eval/model-adapter.ts (createModelAdapter, GenerateRequest — the judge uses
+  the same adapter interface to call a vision model)
+- src/eval/scorer.ts (scoreEval — see how judge score is currently hardcoded to 0
+  and weight gets redistributed; you'll make it real)
+- src/eval/runner.ts (the main loop — you'll integrate the judge call after screenshots)
+- docs/agent-eval-loop.md Appendix B (scoring formula with judge weight)
+
+TASK A: Create `src/eval/judge.ts` (~80 LOC)
+
+The judge sends screenshots + task description to a vision-capable LLM and gets
+back a structured assessment. This is OPTIONAL — it's skipped when --no-judge is
+passed or when the judge model doesn't support vision.
+
+Export:
+```typescript
+interface JudgeVerdict {
+  score: number;        // 1-5 scale
+  pass: boolean;        // score >= 3
+  feedback: string;     // 1-2 sentence explanation
+  normalized: number;   // mapped to 0-100 (1→0, 2→25, 3→50, 4→75, 5→100)
+}
+
+async function judgeModel(opts: {
+  task: TaskSpec;
+  screenshotPaths: string[];   // absolute paths to PNG files from vibe-snap
+  model: ModelAdapter;         // the vision model to use as judge
+  source?: string;             // optional: the .forge.ts code for context
+}): Promise<JudgeVerdict>
+```
+
+Implementation:
+
+1. Read each screenshot file as a Buffer (readFileSync).
+   Cap at 4 images max — if more, pick: iso, front, right, top (in that priority).
+
+2. Build the judge prompt. It should be terse (~150 tokens) to minimize cost:
+
+   ```
+   You are evaluating a 3D CAD model. Score it 1-5.
+
+   TASK: {task.description}
+
+   CRITERIA:
+   5 = Clearly matches the description. Correct shape, proportions, and features.
+   4 = Mostly correct. Minor issues (slightly wrong proportions, missing small detail).
+   3 = Recognizable attempt. Right general shape but notable problems.
+   2 = Partially relevant. Some elements present but major issues.
+   1 = Wrong or broken. Does not resemble the description.
+
+   Look at the screenshot(s) from multiple angles. Respond in EXACTLY this format:
+   SCORE: <1-5>
+   PASS: <yes/no>
+   FEEDBACK: <one sentence>
+   ```
+
+3. Call model.generate() with the prompt and screenshot Buffers as images.
+
+4. Parse the response:
+   - Extract SCORE line with regex: /SCORE:\s*(\d)/
+   - Extract PASS line: /PASS:\s*(yes|no)/i
+   - Extract FEEDBACK line: /FEEDBACK:\s*(.+)/
+   - If parsing fails, default to score=2, pass=false, feedback="Judge response unparseable"
+
+5. Return JudgeVerdict with normalized = (score - 1) * 25.
+
+TASK B: Update `src/eval/scorer.ts`
+
+Add a new export that incorporates the judge score:
+
+```typescript
+function applyJudgeScore(base: ScoreBreakdown, judgeScore: number): ScoreBreakdown
+```
+
+This takes the existing ScoreBreakdown (where judge=0 and total used redistributed
+weights) and recalculates with the real judge score:
+- total = geometry * 0.4 + constraints * 0.3 + api_surface * 0.2 + judgeScore * 0.1
+- Update the judge and total fields, return new object.
+
+TASK C: Update `src/eval/runner.ts`
+
+Integrate the judge into the eval loop. Changes needed:
+
+1. Add optional judgeModel parameter to runEval:
+   ```typescript
+   async function runEval(task: TaskSpec, config: ModelConfig, opts?: {
+     judgeConfig?: ModelConfig;  // separate model for judging (e.g. anthropic://claude-sonnet-4-6)
+   }): Promise<EvalResult>
+   ```
+
+2. After screenshots succeed (you already have screenshot paths), if judgeConfig
+   is provided:
+   - Create a judge adapter via createModelAdapter(judgeConfig)
+   - Call judgeModel({ task, screenshotPaths, model: judgeAdapter, source: currentCode })
+   - Log "judge.prompt_sent" event: { prompt_tokens, image_count }
+   - Log "judge.verdict" event: { score, pass, feedback, normalized }
+   - Call applyJudgeScore() to update the score breakdown
+
+3. If judgeConfig is not provided, skip judge entirely (current behavior — score
+   stays with redistributed weights).
+
+TASK D: Update `src/cli/index.ts` cmdEval
+
+Add two new flags:
+- `--judge <model-url>`: model to use as visual judge (e.g. `--judge anthropic://claude-sonnet-4-6`)
+- `--no-judge`: explicitly skip judge even if a default is configured
+
+Pass judgeConfig through to runEval. If neither flag given, no judge (backward compatible).
+
+Update the summary line to show judge info when used:
+```
+[eval] box-with-hole  PASS  score=82 (judge:75)  iterations=2  tokens=2,104  time=5.1s
+```
+
+Update printUsage() with the new flags.
+
+Run `npm run typecheck`. Commit. Push.
+```
+
+---
+
+## Step 8: Multi-Model Batch + Parallel Runs
+
+```
+You are working on the CadLad project (code-first parametric 3D CAD in TypeScript).
+Branch: claude/agent-evaluation-loop-GXddC
+
+Pull latest from origin first.
+
+Read these files:
+- src/eval/runner.ts (runEval — the single-task single-model loop you'll wrap)
+- src/eval/types.ts (TaskSpec, EvalResult, ModelConfig)
+- src/eval/report.ts (aggregateLogs — called automatically after a batch finishes)
+- src/cli/index.ts (cmdEval — the CLI entry point you'll modify)
+
+CONTEXT: Right now `cadlad eval` runs one task with one model sequentially.
+We need it to handle:
+  cadlad eval tasks/benchmark/ --model ollama://llama3.2 --model ollama://qwen3:8b
+This runs every YAML task against every model, with smart parallelism.
+
+TASK A: Create `src/eval/batch.ts` (~120 LOC)
+
+```typescript
+interface BatchConfig {
+  tasks: TaskSpec[];
+  models: ModelConfig[];
+  judgeConfig?: ModelConfig;
+  concurrency: number;         // max parallel eval runs (default 2)
+  onResult?: (result: EvalResult) => void;  // stream results as they complete
+}
+
+interface BatchReport {
+  started_at: string;          // ISO timestamp
+  completed_at: string;
+  results: EvalResult[];       // all results, grouped by task then model
+  summary: {
+    total_runs: number;
+    total_pass: number;
+    total_fail: number;
+    total_tokens: number;
+    total_duration_ms: number;
+  };
+}
+
+async function runBatch(config: BatchConfig): Promise<BatchReport>
+```
+
+Implementation:
+
+1. Build a work queue: every (task, model) pair is one unit of work.
+   For 5 tasks x 3 models = 15 work items.
+
+2. Run work items with bounded concurrency. Use a simple semaphore pattern:
+   - Maintain a Set of running promises, capped at config.concurrency
+   - When a slot opens, start the next work item
+   - DO NOT use any external concurrency library — just Promise + async/await
+
+3. Concurrency rules (important for local models):
+   - Ollama can only run one inference at a time. If multiple models are ollama://,
+     they share a single concurrency slot.
+   - API-based models (anthropic://, openai://) can run in parallel.
+   - So the effective strategy: group by backend type, serialize within ollama,
+     parallelize across API backends.
+   - Implementation: maintain a per-backend lock. Before starting a work item,
+     acquire the lock for its backend. Ollama gets concurrency=1. API backends
+     get concurrency=config.concurrency.
+   - Backend detection: just check the URL prefix (ollama:// vs everything else).
+
+4. For each completed work item, call onResult if provided (for live CLI output).
+
+5. After all work items complete:
+   - Record completed_at
+   - Compute summary totals
+   - Return BatchReport
+
+Also export a helper for the CLI:
+
+```typescript
+function formatBatchSummaryTable(report: BatchReport): string
+```
+
+This produces the model-vs-model comparison table:
+```
+| Task              | ollama://llama3.2 | ollama://qwen3:8b | anthropic://claude-sonnet-4-6 |
+|-------------------|-------------------|-------------------|-------------------------------|
+| box-with-hole     | PASS 82 (1 iter)  | PASS 88 (1 iter)  | PASS 95 (1 iter)              |
+| parametric-bracket| FAIL 45 (3 iter)  | PASS 71 (2 iter)  | PASS 90 (1 iter)              |
+| Overall           | 40% pass          | 80% pass          | 100% pass                     |
+```
+
+TASK B: Update `src/cli/index.ts` cmdEval
+
+The --model flag should accept multiple values. Change arg parsing so that each
+`--model <url>` encountered pushes to an array. If no --model given, default to
+["ollama://llama3.2"].
+
+Add new flags:
+- `--concurrency <n>`: max parallel runs (default 2)
+- `--repeat <n>`: run each (task, model) pair N times for statistical significance
+  (default 1). When repeat > 1, the same work item is queued N times.
+
+Updated flow in cmdEval:
+1. Parse task path(s) — single YAML or directory of YAMLs
+2. Parse model list
+3. If single task + single model + repeat=1: call runEval directly (existing fast path)
+4. Otherwise: call runBatch, stream results with onResult callback that prints
+   each result as it completes:
+   ```
+   [eval] box-with-hole (ollama://llama3.2)  PASS  score=82  iterations=1  tokens=1,204  time=3.1s
+   [eval] box-with-hole (ollama://qwen3:8b)  PASS  score=88  iterations=1  tokens=1,102  time=2.8s
+   ```
+5. After batch completes: print the comparison table via formatBatchSummaryTable
+6. Auto-run aggregateLogs and print a one-liner pointing to the report:
+   ```
+   [eval] Batch complete: 10 runs, 8 pass, 2 fail. See eval-logs/reports/ for details.
+   ```
+
+Update printUsage() with the new flags.
+
+Run `npm run typecheck`. Commit. Push.
+```
+
+---
+
+## Step 9: Ad-Hoc Tasks (`cadlad eval --task "..."`)
+
+```
+You are working on the CadLad project (code-first parametric 3D CAD in TypeScript).
+Branch: claude/agent-evaluation-loop-GXddC
+
+Pull latest from origin first.
+
+Read these files:
+- src/eval/types.ts (TaskSpec, AcceptanceCriteria)
+- src/eval/runner.ts (runEval, loadTaskFile)
+- src/eval/prompts.ts (buildSystemPrompt — see what the prompt expects from a TaskSpec)
+- src/cli/index.ts (cmdEval — the arg parsing you'll extend)
+
+CONTEXT: Currently `cadlad eval` requires a YAML file. For quick experiments you
+want to just type a description and go:
+  cadlad eval --task "A coffee mug with handle" --model ollama://qwen3:8b
+This synthesizes a TaskSpec on the fly with sensible defaults.
+
+TASK A: Create `src/eval/adhoc.ts` (~70 LOC)
+
+Export:
+```typescript
+function buildAdhocTask(description: string, opts?: {
+  difficulty?: number;
+  max_iterations?: number;
+  pass_threshold?: number;
+}): TaskSpec
+```
+
+Implementation:
+
+1. Generate an id from the description: lowercase, replace non-alphanumeric with
+   hyphens, truncate to 40 chars, strip trailing hyphens.
+   e.g. "A Coffee Mug with Handle" → "a-coffee-mug-with-handle"
+
+2. Infer api_surface from the description using simple keyword matching.
+   Scan the description (case-insensitive) for these patterns:
+   - "hole" | "cut" | "through" → ["subtract", "cylinder"]
+   - "round" | "fillet" | "smooth" → ["fillet"]
+   - "hollow" | "shell" | "thin wall" → ["shell"]
+   - "handle" | "arm" | "bracket" → ["sketch", "extrude"]
+   - "taper" | "draft" → ["draft"]
+   - "assem" | "parts" | "multi" → ["assembly"]
+   - "slot" | "channel" | "groove" → ["sketch", "subtract"]
+   - "param" | "adjustable" | "variable" → ["param"]
+   Always include: ["box", "cylinder", "translate"] as baseline.
+   Deduplicate the final list.
+
+3. Build AcceptanceCriteria with loose defaults:
+   - body_count: 1 (unless assembly keywords detected → body_count_min: 2)
+   - validation_errors: 0
+   - volume_min: 100 (basically "not empty")
+   - No volume_max, no bbox constraints (we can't guess dimensions from free text)
+
+4. Return a TaskSpec with:
+   - id from step 1
+   - difficulty: opts?.difficulty ?? 2
+   - description: the raw input string
+   - acceptance from step 3
+   - api_surface from step 2
+   - max_iterations: opts?.max_iterations ?? 5
+   - pass_threshold: opts?.pass_threshold ?? 60 (lower than benchmarks — ad-hoc is exploratory)
+
+TASK B: Update `src/cli/index.ts` cmdEval
+
+Modify arg parsing to detect `--task <description>`. The description is the next
+argument (a quoted string). When --task is used, no positional file/dir argument
+is needed.
+
+Updated flow:
+1. If `--task` flag present: call buildAdhocTask(description) → get TaskSpec, run it
+2. If positional arg is a .yaml file: existing path (loadTaskFile)
+3. If positional arg is a directory: existing path (glob YAMLs, batch)
+4. If neither: print usage and exit
+
+The --task flag works with all other flags (--model, --judge, --concurrency, etc).
+
+When --task is used, print the synthesized task info before running:
+```
+[eval] Ad-hoc task: a-coffee-mug-with-handle
+[eval] Inferred API surface: box, cylinder, translate, sketch, extrude
+[eval] Acceptance: body_count=1, validation_errors=0, volume_min=100
+[eval] Running with ollama://qwen3:8b (max 5 iterations, pass threshold 60)...
+```
+
+Also support `--task-difficulty <n>` and `--task-max-iter <n>` to override adhoc defaults.
+
+Update printUsage() with examples:
+```
+  cadlad eval --task "A dice with rounded edges" --model ollama://qwen3:8b
+  cadlad eval --task "Phone stand with cable slot" --judge anthropic://claude-sonnet-4-6
+```
+
+Run `npm run typecheck`. Commit. Push.
+```
+
+---
+
+## Step 10: CI Integration (`scripts/ci-eval.sh`)
+
+```
+You are working on the CadLad project (code-first parametric 3D CAD in TypeScript).
+Branch: claude/agent-evaluation-loop-GXddC
+
+Pull latest from origin first.
+
+Read these files:
+- scripts/ci-check-bg.sh (existing CI pattern — follow its style: logging, notify(), lockfile)
+- src/eval/runner.ts (runEval — what the CLI calls)
+- src/eval/batch.ts (runBatch — for multi-task runs)
+- src/eval/report.ts (aggregateLogs, generateIssuesReport — for the regression check)
+- src/cli/index.ts (cmdEval — to understand the CLI flags the script will invoke)
+
+CONTEXT: We need a CI script that runs the eval benchmarks and fails if results
+regress. It should work in GitHub Actions (Linux, no GPU, no ollama) using only
+API-based models, and also locally with ollama. It stores a baseline and diffs
+against it.
+
+TASK A: Create `scripts/ci-eval.sh` (~90 lines)
+
+Follow the pattern from ci-check-bg.sh: shebang, REPO_ROOT detection, PATH setup,
+logging to /tmp, notify() function.
+
+```bash
+#!/usr/bin/env bash
+# ci-eval.sh — Run eval benchmarks and check for regressions
+#
+# Usage:
+#   ./scripts/ci-eval.sh                    # local: uses ollama://llama3.2
+#   ./scripts/ci-eval.sh --ci               # CI mode: uses anthropic://claude-haiku-4-5-20251001
+#   ./scripts/ci-eval.sh --model <url>      # explicit model
+#   ./scripts/ci-eval.sh --update-baseline  # capture current results as new baseline
+```
+
+Implementation:
+
+1. Parse args:
+   - `--ci`: sets MODEL to "anthropic://claude-haiku-4-5-20251001" (cheapest, good enough
+     for regression detection), sets CONCURRENCY=3
+   - `--model <url>`: override model
+   - `--update-baseline`: run benchmarks and save results as the new baseline
+   - Default (no flags): MODEL="ollama://llama3.2", CONCURRENCY=1
+
+2. Check prerequisites:
+   - If model starts with "ollama://": verify `curl -s localhost:11434/api/tags` succeeds,
+     else print "ollama not running" and exit 1
+   - If model starts with "anthropic://": verify ANTHROPIC_API_KEY is set
+   - If model starts with "openai://": verify OPENAI_API_KEY is set
+
+3. Run the eval:
+   ```bash
+   node --import tsx src/cli/index.ts eval tasks/benchmark/ \
+     --model "$MODEL" \
+     --concurrency "$CONCURRENCY" \
+     --no-judge \
+     2>&1 | tee "$LOGFILE"
+   ```
+   (--no-judge in CI to save tokens and avoid needing a vision model)
+
+4. Capture exit code. If non-zero, the eval itself had failures — report and exit 1.
+
+5. Regression check (if not --update-baseline):
+   - Baseline file: `eval-logs/baseline.json`
+   - If baseline exists: compare current pass rates against it
+   - Generate current summary via:
+     `node --import tsx -e "import {aggregateLogs} from './src/eval/report.js'; console.log(JSON.stringify(aggregateLogs('eval-logs')))"`
+   - For each task: if current pass_rate < baseline pass_rate - 0.1 (10% tolerance),
+     flag as regression
+   - If any regressions found: print them and exit 1
+   - If no regressions: print "No regressions detected" and exit 0
+
+6. If --update-baseline:
+   - Run benchmarks (step 3)
+   - Save aggregated summary to eval-logs/baseline.json
+   - Print "Baseline updated with N tasks"
+   - Exit 0
+
+Make the script executable (chmod +x).
+
+TASK B: Create `eval-logs/.gitkeep` and add to .gitignore
+
+- Create `eval-logs/.gitkeep` so the directory exists in the repo
+- Add to .gitignore (create if it doesn't exist, or append):
+  ```
+  # Eval logs (keep directory, ignore contents except baseline)
+  eval-logs/*
+  !eval-logs/.gitkeep
+  !eval-logs/baseline.json
+  ```
+  This tracks the baseline for regression detection but ignores run logs.
+
+- Also add `eval-scratch/` to .gitignore (the temp directory where generated
+  .forge.ts files are written during eval runs).
+
+TASK C: Add npm script
+
+Add to package.json scripts:
+```json
+"eval": "tsx src/cli/index.ts eval",
+"eval:ci": "./scripts/ci-eval.sh --ci",
+"eval:baseline": "./scripts/ci-eval.sh --update-baseline"
+```
+
+This lets you run:
+- `npm run eval -- tasks/benchmark/box-with-hole.yaml --model ollama://qwen3:8b`
+- `npm run eval:ci` (in GitHub Actions)
+- `npm run eval:baseline` (capture new baseline)
+
+TASK D: Create `.github/workflows/eval.yml` (~40 lines)
+
+A GitHub Actions workflow that runs on:
+- push to main (after merge)
+- manual dispatch (workflow_dispatch)
+- NOT on every PR (too expensive)
+
+```yaml
+name: Eval Benchmarks
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/eval/**'
+      - 'tasks/benchmark/**'
+      - 'src/engine/**'
+      - 'src/api/**'
+  workflow_dispatch:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: ./scripts/ci-eval.sh --ci
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-logs
+          path: eval-logs/
+          retention-days: 30
+```
+
+Run `npm run typecheck`. Commit. Push.
+```
+
+---
+
+## All Steps Complete
+
+```
+Step 1 (types + YAML) ──┐
+                         ├──▶ Step 3 (scorer) ──▶ Step 4 (runner + CLI) ──▶ Step 5 (benchmarks)
+Step 2 (model adapter) ──┘
+                                                                              │
+                         Step 6 (reports) ──▶ Step 7 (judge) ──▶ Step 8 (batch) ──▶ Step 9 (adhoc) ──▶ Step 10 (CI)
+```
+
+Steps 1-2 parallel. Everything else sequential. Each prompt is one Sonnet session.
