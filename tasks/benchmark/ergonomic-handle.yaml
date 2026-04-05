@@ -7,6 +7,8 @@ description: |
   3. Top section (Z=100): A rounded rectangle (35mm x 25mm) with 8mm corner radius.
   The handle should be a single smooth solid.
   Add a 5mm diameter through-hole near the top (Z=90) for a hanging cord, passing through the narrower dimension of the handle.
+reference_prompt: "A professional 3D CAD render of an ergonomic tool handle, lofted between rounded rectangular and circular cross-sections, 100mm total length. Features a small through-hole near the top for a hanging cord. Smooth organic surfacing, matte rubberized grip texture, studio lighting, side profile view."
+reference_images: ["tasks/benchmark/references/ergonomic-handle.png"]
 acceptance:
   body_count: 1
   volume_min: 60000

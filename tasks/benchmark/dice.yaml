@@ -4,6 +4,8 @@ description: |
   Model a standard six-sided die as a single 16 mm cube with recessed round pips and no separate parts.
   Place pips so opposite faces sum to 7 (1 opposite 6, 2 opposite 5, 3 opposite 4), using a symmetric quarter-offset grid from each face center.
   Each pip should be a rounded dimple created by subtracting a small sphere (or equivalent rounded cutter) from the face rather than adding raised dots.
+reference_prompt: "A professional 3D CAD render of a standard six-sided die, 16mm cube with recessed round pips on all faces. Opposite faces sum to 7. Polished plastic finish, clean rounded dimples, studio lighting, perspective view showing multiple faces."
+reference_images: ["tasks/benchmark/references/dice.png"]
 acceptance:
   body_count: 1
   volume_min: 3200

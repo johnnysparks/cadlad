@@ -7,6 +7,8 @@ description: |
   3. Create a 60mm x 40mm x 3mm flat lid to sit perfectly on top.
   4. Use assembly() to combine both parts. Give each part a different color.
   5. Add four small 3mm diameter screw pillars inside the corners of the base that rise to the top surface.
+reference_prompt: "A professional 3D CAD render of a two-part electronics enclosure assembly, consisting of a hollowed-out base box with four internal screw pillars and a matching flat lid. Contrasting colors for base and lid, technical assembly view, clean plastic surfaces, studio lighting."
+reference_images: ["tasks/benchmark/references/hollow-enclosure.png"]
 acceptance:
   body_count: 5 # 1 shell + 4 pillars
   assembly: true

@@ -326,6 +326,7 @@ async function cmdEval(args: string[]) {
   }
 
   const modelConfigs = parsed.modelRefs.map((modelRef) => parseModelConfig(modelRef));
+  const judgeConfig = parsed.judgeRef ? parseModelConfig(parsed.judgeRef) : undefined;
   const taskFiles = collectTaskFiles(parsed.taskPath);
   if (taskFiles.length === 0) {
     console.error(`[cadlad eval] No task files found at ${parsed.taskPath}`);
@@ -337,7 +338,7 @@ async function cmdEval(args: string[]) {
   if (tasks.length === 1 && modelConfigs.length === 1 && parsed.repeat === 1) {
     const task = tasks[0];
     const modelConfig = modelConfigs[0];
-    const result = await runEval(task, modelConfig);
+    const result = await runEval(task, modelConfig, { judgeConfig });
     const status = result.pass ? "PASS" : "FAIL";
     const seconds = (result.duration_ms / 1000).toFixed(1);
     const tokens = result.total_tokens.toLocaleString("en-US");
@@ -356,6 +357,7 @@ async function cmdEval(args: string[]) {
     const report = await runBatch({
       tasks,
       models: modelConfigs,
+      judgeConfig,
       concurrency: parsed.concurrency,
       repeat: parsed.repeat,
       onResult: (result) => {
@@ -915,10 +917,11 @@ function parseHistoryArgs(args: string[]): { file?: string; limit: number; offse
   return parsed;
 }
 
-function parseEvalArgs(args: string[]): { taskPath?: string; modelRefs: string[]; concurrency: number; repeat: number } {
+function parseEvalArgs(args: string[]): { taskPath?: string; modelRefs: string[]; judgeRef?: string; concurrency: number; repeat: number } {
   const parsed = {
     taskPath: undefined as string | undefined,
     modelRefs: [] as string[],
+    judgeRef: undefined as string | undefined,
     concurrency: 2,
     repeat: 1,
   };
@@ -930,6 +933,11 @@ function parseEvalArgs(args: string[]): { taskPath?: string; modelRefs: string[]
       if (next) {
         parsed.modelRefs.push(next);
       }
+      index += 1;
+      continue;
+    }
+    if (arg === "--judge") {
+      parsed.judgeRef = args[index + 1];
       index += 1;
       continue;
     }

@@ -1,0 +1,25 @@
+id: road-racing-bicycle
+difficulty: 10
+description: |
+  The Ultimate Master Assembly: A complete, mathematically accurate Road Racing Bicycle.
+  This model tests the engine's limits in handling complex 3D swept geometries, dense patterning, and deep hierarchies.
+
+  1. **Frame**: A diamond frame (Top Tube, Down Tube, Seat Tube, Head Tube, Chainstays, Seatstays) constructed by sweeping aerodynamically tapered sections along 3D paths. The head tube must angle back at 73 degrees, and the seat tube at 74 degrees.
+  2. **Fork & Cockpit**: A bladed suspension fork seamlessly merging into the head tube. Drop handlebars with brake levers/shifters attached to a 100mm stem.
+  3. **Wheels**: Front and rear 700c wheel assemblies (deep-section aero rim, 24 bladed spokes, tire, and hub with quick-release skewers).
+  4. **Drivetrain**: A fully modeled 2x11 speed drivetrain. A 50/34T double chainring crankset on an integrated bottom bracket, a 11-28T 11-speed rear cassette, front and rear derailleurs (with jockey wheels), and a continuous roller chain precisely mapped around the active gear combination.
+  5. **Brakes**: Front and rear hydraulic disc brake calipers clamping onto 160mm slotted rotors.
+  6. **Seating**: An aerodynamic seatpost and a curved racing saddle with a central pressure-relief cutout.
+  
+  All subsystems must be grouped into their own distinct assemblies (`assembly("FrontWheel")`, `assembly("Drivetrain")`, etc.), and combined into one final master `assembly("RoadBike")`. Assign logical distinct colors to different materials (e.g., dark gray/carbon for the frame, silver for metal parts, black for rubber tires).
+reference_prompt: "A professional 3D CAD render of a high-end road racing bicycle master assembly. Includes a tapered diamond frame, bladed forks, drop handlebars, 700c aero wheels, a full 2x11 drivetrain with chain and derailleurs, and a racing saddle. Carbon fiber and metallic textures, complex engineering assembly, studio lighting, full side view."
+reference_images: ["tasks/benchmark/references/road-racing-bicycle.png"]
+acceptance:
+  body_count_min: 500 # Wheels + Drivetrain + Frame + Brakes
+  body_count_max: 3000
+  assembly: true
+  validation_errors: 0
+  has_subtraction: true
+api_surface: [assembly, sweep, loft, sketch, extrude, box, cylinder, sphere, circularPatternAssembly, linearPatternAssembly, subtract, union, translate, rotate, color]
+max_iterations: 15
+pass_threshold: 90

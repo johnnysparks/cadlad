@@ -1,0 +1,20 @@
+id: roller-chain-sprocket
+difficulty: 7
+description: |
+  Model a high-performance bicycle drivetrain segment consisting of a front chainring (50 teeth), a rear cog (15 teeth), and a roller chain connecting them.
+  1. **Chainring**: A large disc, outer diameter roughly 200mm, with 50 evenly spaced chamfered teeth. Subtract a 5-arm spider pattern for weight reduction.
+  2. **Rear Cog**: A smaller disc (60mm OD) with 15 teeth, positioned roughly 410mm behind the chainring.
+  3. **Roller Chain**: A multi-link assembly forming a closed loop around the two gears.
+  The chain must feature distinct inner plates, outer plates, and cylindrical pins (rollers). 
+  Calculate the tangent lines between the two gears to place the chain links along the straight segments, and use circular patterning to wrap the links around the teeth of both gears. 
+reference_prompt: "A professional 3D CAD render of a bicycle drivetrain segment featuring a 50-tooth front chainring, a 15-tooth rear cog, and a detailed roller chain with inner/outer plates and pins. Precise mechanical assembly, metallic finishes, technical detail, studio lighting, perspective view."
+reference_images: ["tasks/benchmark/references/roller-chain-sprocket.png"]
+acceptance:
+  body_count_min: 200 # Minimum of ~100 chain links (each link 2-3 bodies minimum) + gears
+  body_count_max: 2000
+  assembly: true
+  validation_errors: 0
+  has_subtraction: true
+api_surface: [assembly, circularPatternAssembly, linearPatternAssembly, cylinder, box, sketch, extrude, subtract, union, translate, rotate]
+max_iterations: 10
+pass_threshold: 85
