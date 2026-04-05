@@ -33,6 +33,25 @@ export function scoreEval(task: TaskSpec, bundle: EvaluationBundle, source: stri
   };
 }
 
+
+export function applyJudgeScore(base: ScoreBreakdown, judgeScore: number): ScoreBreakdown {
+  const clampedJudge = clamp(judgeScore);
+  const total = clamp(
+    base.geometry * BASE_WEIGHTS.geometry
+      + base.constraints * BASE_WEIGHTS.constraints
+      + base.api * BASE_WEIGHTS.api
+      + clampedJudge * BASE_WEIGHTS.judge,
+  );
+
+  return {
+    ...base,
+    judge: clampedJudge,
+    total,
+    pass: total >= 70,
+    weights: { ...BASE_WEIGHTS },
+  };
+}
+
 function scoreGeometry(task: TaskSpec, stats: GeometryStats | undefined): number {
   const acceptance = task.acceptance;
 

@@ -4,9 +4,10 @@ import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { evaluateModel } from "../api/runtime.js";
 import { initManifold } from "../engine/manifold-backend.js";
-import { scoreEval } from "./scorer.js";
+import { applyJudgeScore, scoreEval } from "./scorer.js";
 import { buildSystemPrompt, buildUserPrompt, buildRetryPrompt } from "./prompts.js";
 import { createModelAdapter, extractCode } from "./model-adapter.js";
+import { judgeModel } from "./judge.js";
 import { parseTaskSpec, type EvalEvent, type ModelConfig, type TaskSpec } from "./types.js";
 
 export interface EvalRunResult {
@@ -16,6 +17,7 @@ export interface EvalRunResult {
   total_tokens: number;
   duration_ms: number;
   reason?: string;
+  judge?: number;
   task: TaskSpec;
   run_id: string;
   log_path: string;
@@ -27,7 +29,9 @@ export function loadTaskFile(path: string): TaskSpec {
   return parseTaskSpec(raw);
 }
 
-export async function runEval(task: TaskSpec, config: ModelConfig): Promise<EvalRunResult> {
+export async function runEval(task: TaskSpec, config: ModelConfig, opts?: {
+  judgeConfig?: ModelConfig;
+}): Promise<EvalRunResult> {
   const run_id = randomUUID();
   const startedAt = Date.now();
   const ts = new Date(startedAt).toISOString().replace(/[:.]/g, "-");
@@ -40,6 +44,8 @@ export async function runEval(task: TaskSpec, config: ModelConfig): Promise<Eval
   let code = "";
   let finalScore = 0;
   let finalReason: string | undefined;
+  let screenshotPaths: string[] = [];
+  let finalJudge: number | undefined;
 
   logEvent(log_path, { ts: Date.now(), run_id, task_id: task.id, event: "run.started", data: { model: config.model } });
 
@@ -93,6 +99,7 @@ export async function runEval(task: TaskSpec, config: ModelConfig): Promise<Eval
           stdio: ["ignore", "pipe", "pipe"],
         });
         const paths = snapOut.split(/\r?\n/).map((line: string) => line.trim()).filter((line: string) => line.endsWith(".png"));
+        screenshotPaths = paths;
         if (paths.length > 0) {
           logEvent(log_path, {
             ts: Date.now(),
@@ -107,7 +114,40 @@ export async function runEval(task: TaskSpec, config: ModelConfig): Promise<Eval
       }
     }
 
-    const score = scoreEval(task, result.evaluation, code);
+    let score = scoreEval(task, result.evaluation, code);
+
+    if (opts?.judgeConfig && screenshotPaths.length > 0) {
+      const judgeAdapter = createModelAdapter(opts.judgeConfig);
+      if (judgeAdapter.supportsVision) {
+        const verdict = await judgeModel({
+          task,
+          screenshotPaths,
+          model: judgeAdapter,
+          source: code,
+        });
+
+        const promptTokens = Math.ceil(task.description.length / 4);
+        logEvent(log_path, {
+          ts: Date.now(),
+          run_id,
+          task_id: task.id,
+          event: "judge.prompt_sent",
+          data: { iteration, prompt_tokens: promptTokens, image_count: Math.min(screenshotPaths.length, 4) },
+        });
+
+        logEvent(log_path, {
+          ts: Date.now(),
+          run_id,
+          task_id: task.id,
+          event: "judge.verdict",
+          data: { iteration, ...verdict },
+        });
+
+        score = applyJudgeScore(score, verdict.normalized);
+        finalJudge = verdict.normalized;
+      }
+    }
+
     finalScore = score.total;
 
     logEvent(log_path, {
@@ -140,6 +180,7 @@ export async function runEval(task: TaskSpec, config: ModelConfig): Promise<Eval
         run_id,
         log_path,
         source_path,
+        judge: finalJudge,
       };
     }
 
@@ -183,6 +224,7 @@ export async function runEval(task: TaskSpec, config: ModelConfig): Promise<Eval
       run_id,
       log_path,
       source_path,
+      judge: finalJudge,
     };
   }
 }
