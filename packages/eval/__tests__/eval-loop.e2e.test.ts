@@ -3,10 +3,8 @@ import { runEval } from "../runner.js";
 import type { TaskSpec, ModelConfig } from "../types.js";
 import * as modelAdapter from "../model-adapter.js";
 import * as runtime from "@cadlad/api/runtime.js";
-import { RenderSession } from "../renderer.js";
 import * as imageSimilarity from "../image-similarity.js";
 import * as manifoldBackend from "@cadlad/kernel/manifold-backend.js";
-import * as fs from "node:fs";
 
 // Mock the external dependencies
 vi.mock("../model-adapter.js");
