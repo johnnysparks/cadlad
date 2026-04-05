@@ -4,7 +4,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { createLighting, createGrid, buildBodyGroup } from "../rendering/scene-builder.js";
+import { createLighting, createGrid, buildBodyGroup, type RenderStyle } from "../rendering/scene-builder.js";
 import type { Body } from "../engine/types.js";
 import type { CameraView, CrossSectionAxis } from "./automation-types.js";
 
@@ -17,9 +17,11 @@ export class Viewport {
   private meshGroup: THREE.Group;
   private animId = 0;
   private crossSectionPlane: THREE.Plane | null = null;
+  private style: RenderStyle;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, style: RenderStyle = "default") {
     this.container = container;
+    this.style = style;
 
     // preserveDrawingBuffer required for captureFrame() / canvas.toDataURL()
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true });
@@ -39,8 +41,8 @@ export class Viewport {
     this.controls.dampingFactor = 0.08;
 
     // Lighting and grid from shared module
-    for (const light of createLighting("default")) this.scene.add(light);
-    this.scene.add(createGrid("default"));
+    for (const light of createLighting(this.style)) this.scene.add(light);
+    this.scene.add(createGrid(this.style));
 
     this.meshGroup = new THREE.Group();
     this.scene.add(this.meshGroup);
@@ -80,7 +82,7 @@ export class Viewport {
 
     // Build body group with Z-up → Y-up conversion (Manifold → Three.js)
     // The returned group has rotation.x = -PI/2 applied, so add it as a whole
-    const group = buildBodyGroup(bodies, { zUpToYUp: true });
+    const group = buildBodyGroup(bodies, { zUpToYUp: true, style: this.style });
     this.meshGroup.add(group);
 
     this.fitCamera();

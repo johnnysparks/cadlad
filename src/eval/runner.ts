@@ -1,5 +1,4 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { execSync } from "node:child_process";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { evaluateModel } from "../api/runtime.js";
@@ -9,6 +8,8 @@ import { buildSystemPrompt, buildUserPrompt, buildRetryPrompt } from "./prompts.
 import { createModelAdapter, extractCode } from "./model-adapter.js";
 import { judgeModel } from "./judge.js";
 import { parseTaskSpec, type EvalEvent, type ModelConfig, type TaskSpec } from "./types.js";
+import { RenderSession, DEFAULT_VIEWS } from "./renderer.js";
+import { scoreImageSimilarity } from "./image-similarity.js";
 
 export interface EvalRunResult {
   pass: boolean;
@@ -31,6 +32,7 @@ export function loadTaskFile(path: string): TaskSpec {
 
 export async function runEval(task: TaskSpec, config: ModelConfig, opts?: {
   judgeConfig?: ModelConfig;
+  renderSession?: RenderSession;
 }): Promise<EvalRunResult> {
   const run_id = randomUUID();
   const startedAt = Date.now();
@@ -92,16 +94,12 @@ export async function runEval(task: TaskSpec, config: ModelConfig, opts?: {
       },
     });
 
-    if (result.errors.length === 0) {
+    if (result.errors.length === 0 && opts?.renderSession) {
       try {
-        console.log(`[eval] Capturing screenshots for iteration ${iteration}...`);
-        const snapOut = execSync(`node scripts/vibe-snap.mjs ${JSON.stringify(source_path)} --angles 4 --quiet`, {
-          encoding: "utf-8",
-          stdio: ["ignore", "pipe", "pipe"],
-          timeout: 10000, // 10s timeout
-        });
-        console.log(`[eval] Screenshots captured.`);
-        const paths = snapOut.split(/\r?\n/).map((line: string) => line.trim()).filter((line: string) => line.endsWith(".png"));
+        console.log(`[eval] Rendering screenshots for iteration ${iteration}...`);
+        const snapDir = resolve("eval-scratch", task.id, run_id);
+        const paths = await opts.renderSession.renderCode(code, snapDir, task.id, DEFAULT_VIEWS);
+        console.log(`[eval] Screenshots rendered (${paths.length}).`);
         screenshotPaths = paths;
         if (paths.length > 0) {
           logEvent(log_path, {
@@ -112,12 +110,30 @@ export async function runEval(task: TaskSpec, config: ModelConfig, opts?: {
             data: { iteration, paths },
           });
         }
-      } catch {
-        // Optional screenshots.
+      } catch (err) {
+        // Screenshots are optional — log but don't fail the eval.
+        console.warn(`[eval] Screenshot render failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
     let score = scoreEval(task, result.evaluation, code);
+
+    // Fast perceptual similarity against reference images (SSIM, no LLM needed)
+    if (screenshotPaths.length > 0 && task.reference_images && task.reference_images.length > 0) {
+      try {
+        const refPaths = task.reference_images.map((p) => resolve(p));
+        const similarity = await scoreImageSimilarity(refPaths, screenshotPaths);
+        logEvent(log_path, {
+          ts: Date.now(),
+          run_id,
+          task_id: task.id,
+          event: "eval.image_similarity",
+          data: { iteration, score: similarity.score, pairs: similarity.pairs.length },
+        });
+      } catch {
+        // Non-blocking: SSIM failure doesn't affect overall eval
+      }
+    }
 
     if (opts?.judgeConfig && screenshotPaths.length > 0) {
       const judgeAdapter = createModelAdapter(opts.judgeConfig);
