@@ -82,6 +82,23 @@ describe("parseModelConfig", () => {
     });
   });
 
+  it("accepts spaced current context loop aliases", () => {
+    process.env.OPENAI_MODEL = "gpt-5";
+    process.env.OPENAI_BASE_URL = "https://gateway.example.com";
+
+    expect(parseModelConfig("current context loop")).toMatchObject({
+      provider: "openai",
+      model: "gpt-5",
+      endpoint: "https://gateway.example.com",
+    });
+
+    expect(parseModelConfig("openai://current context loop")).toMatchObject({
+      provider: "openai",
+      model: "gpt-5",
+      endpoint: "https://gateway.example.com",
+    });
+  });
+
   it("parses provider-scoped context-loop aliases for claude code style environments", () => {
     process.env.ANTHROPIC_MODEL = "claude-sonnet-4-6";
     process.env.ANTHROPIC_BASE_URL = "https://claude-gateway.example.com";
