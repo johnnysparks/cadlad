@@ -58,12 +58,18 @@ export async function generateCode(config: ModelConfig, request: GenerateCodeReq
       return generateViaOpenAI(config, request);
     case "anthropic":
       return generateViaAnthropic(config, request);
+    case "manual":
+      return generateViaManual(config, request);
     default:
       throw new Error(`Unsupported model provider: ${String(config.provider)}`);
   }
 }
 
 export function parseModelConfig(modelRef: string): ModelConfig {
+  if (modelRef === "manual") {
+    return { provider: "manual", model: "human-in-the-loop" };
+  }
+
   const contextLoopConfig = parseContextLoopRef(modelRef);
   if (contextLoopConfig) {
     return contextLoopConfig;
@@ -112,6 +118,48 @@ export function parseModelConfig(modelRef: string): ModelConfig {
   }
 
   return { provider: "ollama", model, endpoint: DEFAULT_OLLAMA_ENDPOINT };
+}
+
+async function generateViaManual(config: ModelConfig, request: GenerateCodeRequest): Promise<GenerateCodeResponse> {
+  const prompt = flattenPrompt(request.messages);
+  const imageCount = request.images?.length ?? 0;
+
+  console.log("\n--- [AGENTS: GENERATE CADLAD CODE] ---");
+  console.log("PROMPT:");
+  console.log(prompt);
+  if (imageCount > 0) {
+    console.log(`\n(Task includes ${imageCount} reference images)`);
+  }
+  console.log("\n------------------------------------");
+  console.log("WAITING FOR YOUR CODE (Provide ```typescript ... ``` or raw code)");
+  console.log("Type 'DONE' on a new line when finished.");
+
+  const text = await readManualInput();
+
+  return {
+    text,
+    usage: {
+      prompt_tokens: Math.ceil(prompt.length / 4),
+      completion_tokens: Math.ceil(text.length / 4),
+      total_tokens: Math.ceil((prompt.length + text.length) / 4),
+    },
+    raw: { manual: true },
+  };
+}
+
+async function readManualInput(): Promise<string> {
+  const { readFileSync } = await import("node:fs");
+  const buffer = readFileSync(0); // read from stdin
+  const content = buffer.toString();
+  const lines = content.split(/\r?\n/);
+  const result: string[] = [];
+
+  for (const line of lines) {
+    if (line.trim() === "DONE") break;
+    result.push(line);
+  }
+
+  return result.join("\n");
 }
 
 async function generateViaOllama(config: ModelConfig, request: GenerateCodeRequest): Promise<GenerateCodeResponse> {

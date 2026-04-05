@@ -1,0 +1,18 @@
+id: ergonomic-handle
+difficulty: 4
+description: |
+  Create an ergonomic handle for a tool using a loft between three cross-sections.
+  1. Base section (Z=0): A rounded rectangle (40mm x 30mm) with 5mm corner radius.
+  2. Middle section (Z=50): A circle with 25mm diameter.
+  3. Top section (Z=100): A rounded rectangle (35mm x 25mm) with 8mm corner radius.
+  The handle should be a single smooth solid.
+  Add a 5mm diameter through-hole near the top (Z=90) for a hanging cord, passing through the narrower dimension of the handle.
+acceptance:
+  body_count: 1
+  volume_min: 60000
+  volume_max: 95000
+  has_subtraction: true
+  validation_errors: 0
+api_surface: [loft, roundedRect, circle, cylinder, subtract, translate]
+max_iterations: 5
+pass_threshold: 80

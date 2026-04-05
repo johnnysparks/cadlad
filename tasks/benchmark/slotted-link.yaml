@@ -1,0 +1,19 @@
+id: slotted-link
+difficulty: 3
+description: |
+  Create a flat mechanical link with two rounded ends and a central slot.
+  1. Use Sketch to define a profile that is 100mm long and 30mm wide.
+  2. The ends should be fully circular with a 15mm radius.
+  3. Extrude the profile by a thickness of 6mm.
+  4. Add a central slot (using Sketch.slot or manual subtraction) that is 60mm long and 10mm wide.
+  5. Add a 10mm diameter circular hole at the center of each rounded end.
+  6. Apply a 2mm fillet to all top edges.
+acceptance:
+  body_count: 1
+  volume_min: 10000
+  volume_max: 20000
+  validation_errors: 0
+  has_subtraction: true
+api_surface: [sketch, extrude, slot, circle, fillet, subtract, translate]
+max_iterations: 5
+pass_threshold: 75

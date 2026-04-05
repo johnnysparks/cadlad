@@ -958,7 +958,7 @@ function parseEvalArgs(args: string[]): { taskPath?: string; modelRefs: string[]
   }
 
   if (parsed.modelRefs.length === 0) {
-    parsed.modelRefs = ["ollama://llama3.2"];
+    parsed.modelRefs = ["manual"];
   }
 
   return parsed;
