@@ -225,6 +225,71 @@ ANTHROPIC_API_KEY=...                 # Anthropic models
 
 No other dependencies. The model adapter uses `fetch()` directly — no SDK imports.
 
+### CI + OpenAI Codex Cloud Validation Path (practical target)
+
+To make this loop actually usable in CI and in OpenAI Codex cloud code-generation sessions, we should treat execution profiles as a first-class part of `cadlad eval`:
+
+- **local-interactive**: current behavior (`npm run dev` running, full screenshot path).
+- **ci-headless**: deterministic checks only, no requirement for a long-lived local dev server.
+- **codex-cloud**: same as `ci-headless`, with model selection wired to OpenAI env defaults.
+
+#### Proposed flags
+
+```bash
+cadlad eval tasks/benchmark/ --profile local-interactive
+cadlad eval tasks/benchmark/ --profile ci-headless
+cadlad eval tasks/benchmark/ --profile codex-cloud
+```
+
+Profile behavior:
+
+- `local-interactive`
+  - Runs deterministic scoring + screenshot capture.
+  - Uses existing `scripts/vibe-snap.mjs`.
+- `ci-headless`
+  - Runs deterministic scoring only by default.
+  - Optional screenshots behind explicit opt-in (`--with-screenshots`) so CI failures are not dominated by browser/runtime setup.
+- `codex-cloud`
+  - Mirrors `ci-headless` defaults.
+  - Resolves model from OpenAI-centric env with zero local setup.
+  - Designed for "generate code in Codex session, then immediately evaluate" workflows.
+
+#### Baseline acceptance for cloud/CI
+
+For `ci-headless` and `codex-cloud`, a run is valid when:
+
+1. Task YAML parses.
+2. Model returns extractable `.forge.ts`.
+3. `cadlad run --json` succeeds.
+4. Deterministic scorer emits a numeric score and pass/fail.
+5. NDJSON log + batch report files are written.
+
+This gives us a stable, non-visual gate that can run in GitHub Actions and ephemeral cloud coding environments.
+
+#### Example CI command
+
+```bash
+# Deterministic benchmark gate (no browser dependency)
+cadlad eval tasks/benchmark/ \
+  --profile ci-headless \
+  --model openai://gpt-4o-mini \
+  --max-iterations 2 \
+  --no-judge
+```
+
+#### Example Codex cloud command
+
+```bash
+# Use OpenAI context-loop resolution + deterministic scoring
+cadlad eval tasks/benchmark/ \
+  --profile codex-cloud \
+  --model openai://context-loop \
+  --max-iterations 2 \
+  --no-judge
+```
+
+This is the fastest path to "works in local dev, CI, and OpenAI-hosted codegen sessions" without adding new infra.
+
 ---
 
 ## 5. Two-Week Implementation Plan
@@ -275,9 +340,10 @@ No other dependencies. The model adapter uses `fetch()` directly — no SDK impo
 - [ ] Run tasks in parallel per model (respect ollama's single-inference limit)
 - [ ] Auto-generate comparison report after batch completes
 
-**Day 10: Ad-hoc tasks + CI integration**
+**Day 10: Ad-hoc tasks + CI/Codex integration**
 - [ ] `cadlad eval --task "description"` generates a TaskSpec on the fly
-- [ ] `scripts/ci-eval.sh` — run benchmarks in CI, fail on regression
+- [ ] `scripts/ci-eval.sh` — run `--profile ci-headless`, fail on regression
+- [ ] `scripts/codex-eval.sh` — run `--profile codex-cloud` with `openai://context-loop`
 - [ ] Write reference images for all 5 benchmarks
 
 ---
