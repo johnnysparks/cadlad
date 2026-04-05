@@ -19,6 +19,7 @@ import { buildRunJsonOutput, buildRunReport, formatRunReportText } from "./run-o
 import { formatValidationDiagnostic } from "../validation/layered-validation.js";
 import { LocalHistoryStore } from "./local-history-store.js";
 import { RevisionBranchError } from "../core/revision-branch.js";
+import { runEval } from "../eval/runner.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -45,6 +46,9 @@ async function main() {
     case "studio":
       console.log("Launch the studio with: npm run dev");
       console.log("Then open http://localhost:5173 in your browser.");
+      break;
+    case "eval":
+      await cmdEval(args);
       break;
     default:
       printUsage();
@@ -295,6 +299,34 @@ async function cmdExport(args: string[]) {
   console.log(`Exported: ${outputPath} (${(stl.byteLength / 1024).toFixed(1)} KB)`);
 }
 
+async function cmdEval(args: string[]) {
+  const parsed = parseEvalArgs(args);
+  if (!parsed.taskPath) {
+    console.error("Usage: cadlad eval <task.yaml> [--model <provider://model>] [--pass-threshold <number>]");
+    process.exit(1);
+  }
+
+  try {
+    const result = await runEval({
+      taskPath: parsed.taskPath,
+      modelRef: parsed.modelRef,
+      passThreshold: parsed.passThreshold,
+    });
+
+    const icon = result.pass ? "PASS" : "FAIL";
+    console.log(`[cadlad eval] ${icon} task=${result.task.id} score=${result.score.score.toFixed(2)} run=${result.runId}`);
+    console.log(`[cadlad eval] source=${result.sourcePath}`);
+    console.log(`[cadlad eval] log=${result.logPath}`);
+    if (result.screenshotPaths.length > 0) {
+      console.log(`[cadlad eval] screenshots=${result.screenshotPaths.length}`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[cadlad eval] ${message}`);
+    process.exit(1);
+  }
+}
+
 function meshToSTLBuffer(mesh: { positions: Float32Array; indices: Uint32Array }): ArrayBuffer {
   const numTris = mesh.indices.length / 3;
   const buf = new ArrayBuffer(80 + 4 + numTris * 50);
@@ -354,6 +386,8 @@ Usage:
   cadlad history --file <file.forge.ts> [--limit N] [--offset N] [--json]
                                        Show local revision history
   cadlad export <file> -o output.stl    Export model to STL
+  cadlad eval <task.yaml> [--model <provider://model>] [--pass-threshold <number>]
+                                       Run one eval task end-to-end
   cadlad studio                         Launch browser studio
 `);
 }
@@ -500,6 +534,36 @@ function parseHistoryArgs(args: string[]): { file?: string; limit: number; offse
       parsed.offset = Number(args[index + 1]);
       index += 1;
       continue;
+    }
+  }
+
+  return parsed;
+}
+
+function parseEvalArgs(args: string[]): { taskPath?: string; modelRef: string; passThreshold?: number } {
+  const parsed = {
+    taskPath: undefined as string | undefined,
+    modelRef: "ollama://llama3.2",
+    passThreshold: undefined as number | undefined,
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--model") {
+      parsed.modelRef = args[index + 1] ?? parsed.modelRef;
+      index += 1;
+      continue;
+    }
+    if (arg === "--pass-threshold") {
+      parsed.passThreshold = Number(args[index + 1]);
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      continue;
+    }
+    if (!parsed.taskPath) {
+      parsed.taskPath = arg;
     }
   }
 
