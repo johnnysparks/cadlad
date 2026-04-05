@@ -4,26 +4,26 @@
  * Groups multiple Solids with relative positioning.
  */
 
-import { Solid } from "../engine/solid.js";
 import type { Body } from "../engine/types.js";
+import { Solid } from "../engine/solid.js";
 
 export interface AssemblyPart {
   name: string;
-  solid: Solid;
+  item: Solid | Assembly;
   position: [number, number, number];
 }
 
 export class Assembly {
-  private _parts: AssemblyPart[] = [];
   private _name: string;
+  private _parts: AssemblyPart[] = [];
 
   constructor(name: string) {
     this._name = name;
   }
 
-  /** Add a part at the given position. */
-  add(name: string, solid: Solid, position: [number, number, number] = [0, 0, 0]): this {
-    this._parts.push({ name, solid, position });
+  /** Add a part or sub-assembly at the given position. */
+  add(name: string, item: Solid | Assembly, position: [number, number, number] = [0, 0, 0]): this {
+    this._parts.push({ name, item, position });
     return this;
   }
 
@@ -32,12 +32,35 @@ export class Assembly {
     return [...this._parts];
   }
 
-  /** Convert all parts to bodies for rendering. */
+  /** Convert all parts to bodies for rendering, flattening the hierarchy. */
   toBodies(): Body[] {
-    return this._parts.map((p) => {
-      const translated = p.solid.translate(p.position[0], p.position[1], p.position[2]);
-      return translated.named(`${this._name}/${p.name}`).toBody();
-    });
+    const allBodies: Body[] = [];
+    for (const p of this._parts) {
+      if (p.item instanceof Solid) {
+        const translated = p.item.translate(p.position[0], p.position[1], p.position[2]);
+        allBodies.push(translated.named(`${this._name}/${p.name}`).toBody());
+      } else {
+        // Nested assembly
+        const subBodies = p.item.toBodies();
+        for (const b of subBodies) {
+          // Wrap the sub-body mesh in a temporary solid to translate it
+          // This is a bit heavy but correct for current architecture
+          const tempSolid = new Solid((b as any)._manifold); // Hack to get manifold
+          // Actually, better: if item is Assembly, we should probably have a translate method on Assembly too
+          // For now, let's just flatten and translate the sub-bodies
+          const translated = b.mesh.positions.map((v, i) => v + p.position[i % 3]);
+          allBodies.push({
+            ...b,
+            name: `${this._name}/${p.name}/${b.name}`,
+            mesh: {
+              ...b.mesh,
+              positions: new Float32Array(translated),
+            },
+          });
+        }
+      }
+    }
+    return allBodies;
   }
 
   /** Merge all parts into a single solid (union). */
@@ -45,19 +68,24 @@ export class Assembly {
     if (this._parts.length === 0) {
       throw new Error("Assembly is empty");
     }
-    let result = this._parts[0].solid.translate(
-      this._parts[0].position[0],
-      this._parts[0].position[1],
-      this._parts[0].position[2],
-    );
-    for (let i = 1; i < this._parts.length; i++) {
-      const p = this._parts[i];
-      const part = p.solid.translate(p.position[0], p.position[1], p.position[2]);
-      result = result.union(part);
+
+    let result: Solid | undefined;
+
+    for (const p of this._parts) {
+      const itemSolid = p.item instanceof Solid ? p.item : p.item.toSolid();
+      const positioned = itemSolid.translate(p.position[0], p.position[1], p.position[2]);
+
+      if (!result) {
+        result = positioned;
+      } else {
+        result = result.union(positioned);
+      }
     }
-    return result.named(this._name);
+
+    return result!.named(this._name);
   }
 }
+
 
 /** Create a new named assembly. */
 export function assembly(name: string): Assembly {
