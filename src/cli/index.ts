@@ -308,7 +308,7 @@ async function cmdExport(args: string[]) {
 async function cmdEval(args: string[]) {
   const parsed = parseEvalArgs(args);
   if (!parsed.taskPath) {
-    console.error("Usage: cadlad eval <task.yaml|task-dir> [--model <provider://model|http://host/model>] [--concurrency <n>] [--repeat <n>]");
+    console.error("Usage: cadlad eval <task.yaml|task-dir> [--model <provider://model|context-loop|http://host/model>] [--concurrency <n>] [--repeat <n>]");
     process.exit(1);
   }
 
@@ -497,7 +497,7 @@ Usage:
   cadlad history --file <file.forge.ts> [--limit N] [--offset N] [--json]
                                        Show local revision history
   cadlad export <file> -o output.stl    Export model to STL
-  cadlad eval <task.yaml|dir> [--model <provider://model|http://host/model>] [--concurrency <n>] [--repeat <n>]
+  cadlad eval <task.yaml|dir> [--model <provider://model|context-loop|http://host/model>] [--concurrency <n>] [--repeat <n>]
                                        Run one or many eval tasks across one or many models
   cadlad eval-report [--task <task-id>] [--compare] [--issues] [--deadweight] [--json]
                                        Aggregate eval logs into summary/comparison/issue reports

@@ -64,6 +64,11 @@ export async function generateCode(config: ModelConfig, request: GenerateCodeReq
 }
 
 export function parseModelConfig(modelRef: string): ModelConfig {
+  const contextLoopConfig = parseContextLoopRef(modelRef);
+  if (contextLoopConfig) {
+    return contextLoopConfig;
+  }
+
   const httpConfig = parseOpenAiCompatibleHttpRef(modelRef);
   if (httpConfig) {
     return httpConfig;
@@ -72,7 +77,7 @@ export function parseModelConfig(modelRef: string): ModelConfig {
   const match = modelRef.match(/^(ollama|openai|anthropic|lmstudio):\/\/(.+)$/);
   if (!match) {
     throw new Error(
-      `Invalid model reference "${modelRef}". Expected format: <provider>://<model> (ollama/openai/anthropic/lmstudio) or http(s)://<host>/<model>, e.g. ollama://llama3.2`,
+      `Invalid model reference "${modelRef}". Expected format: <provider>://<model> (ollama/openai/anthropic/lmstudio), context-loop/current-context-loop aliases, or http(s)://<host>/<model>, e.g. ollama://llama3.2`,
     );
   }
 
@@ -162,7 +167,7 @@ async function generateViaOllama(config: ModelConfig, request: GenerateCodeReque
 
 async function generateViaOpenAI(config: ModelConfig, request: GenerateCodeRequest): Promise<GenerateCodeResponse> {
   const endpoint = config.endpoint ?? DEFAULT_OPENAI_ENDPOINT;
-  const apiKey = config.requiresApiKey === false ? undefined : resolveApiKey(config, "OPENAI_API_KEY");
+  const apiKey = resolveApiKey(config, "OPENAI_API_KEY");
 
   const response = await fetch(`${trimTrailingSlash(endpoint)}/v1/chat/completions`, {
     method: "POST",
@@ -240,6 +245,56 @@ function parseOpenAiCompatibleHttpRef(modelRef: string): ModelConfig | null {
     }
     throw error;
   }
+}
+
+function parseContextLoopRef(modelRef: string): ModelConfig | null {
+  const normalized = modelRef.trim().toLowerCase();
+  if (normalized === "context-loop" || normalized === "current-context-loop" || normalized === "current") {
+    const provider = inferContextLoopProvider();
+    if (!provider) {
+      throw new Error(
+        "Could not infer context-loop provider. Set OPENAI_MODEL/OPENAI_BASE_URL (Codex-style) or ANTHROPIC_MODEL/ANTHROPIC_BASE_URL (Claude-style), or pass an explicit model ref like openai://gpt-4o-mini.",
+      );
+    }
+    return buildContextLoopConfig(provider);
+  }
+
+  const scopedMatch = normalized.match(/^(openai|anthropic):\/\/(context-loop|current-context-loop|current)$/);
+  if (!scopedMatch) {
+    return null;
+  }
+
+  return buildContextLoopConfig(scopedMatch[1] as "openai" | "anthropic");
+}
+
+function inferContextLoopProvider(): "openai" | "anthropic" | null {
+  if (process.env.OPENAI_MODEL || process.env.OPENAI_BASE_URL || process.env.OPENAI_API_BASE || process.env.OPENAI_ENDPOINT) {
+    return "openai";
+  }
+  if (process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL || process.env.ANTHROPIC_BASE_URL || process.env.ANTHROPIC_API_URL) {
+    return "anthropic";
+  }
+  return null;
+}
+
+function buildContextLoopConfig(provider: "openai" | "anthropic"): ModelConfig {
+  if (provider === "openai") {
+    return {
+      provider,
+      model: process.env.OPENAI_MODEL ?? process.env.OPENAI_DEFAULT_MODEL ?? process.env.CODEX_MODEL ?? "context-loop",
+      endpoint: process.env.OPENAI_BASE_URL ?? process.env.OPENAI_API_BASE ?? process.env.OPENAI_ENDPOINT ?? DEFAULT_OPENAI_ENDPOINT,
+      requiresApiKey: false,
+      apiKeyEnvVar: "OPENAI_API_KEY",
+    };
+  }
+
+  return {
+    provider,
+    model: process.env.ANTHROPIC_MODEL ?? process.env.CLAUDE_MODEL ?? "context-loop",
+    endpoint: process.env.ANTHROPIC_BASE_URL ?? process.env.ANTHROPIC_API_URL ?? DEFAULT_ANTHROPIC_ENDPOINT,
+    requiresApiKey: false,
+    apiKeyEnvVar: "ANTHROPIC_API_KEY",
+  };
 }
 
 async function generateViaAnthropic(config: ModelConfig, request: GenerateCodeRequest): Promise<GenerateCodeResponse> {
@@ -373,6 +428,9 @@ function extractSystemPrompt(messages: ModelMessage[]): string {
 function resolveApiKey(config: ModelConfig, defaultEnv: string): string {
   const variable = config.apiKeyEnvVar ?? defaultEnv;
   const value = process.env[variable];
+  if (!value && config.requiresApiKey === false) {
+    return "";
+  }
   if (!value) {
     throw new Error(`Missing API key environment variable: ${variable}`);
   }
