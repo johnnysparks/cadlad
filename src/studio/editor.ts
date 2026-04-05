@@ -196,14 +196,27 @@ declare class Solid {
   scale(x: number, y?: number, z?: number): Solid;
   mirror(normal: [number, number, number]): Solid;
   mirrorUnion(normal: [number, number, number]): Solid;
+  mirrorAssembly(normal: [number, number, number], namePrefix?: string): Assembly;
   quarterUnion(normal1: [number, number, number], normal2: [number, number, number]): Solid;
   linearPattern(count: number, stepX?: number, stepY?: number, stepZ?: number): Solid;
+  linearPatternAssembly(
+    count: number,
+    step?: [number, number, number],
+    namePrefix?: string
+  ): Assembly;
   circularPattern(
     count: number,
     axis?: "x" | "y" | "z",
     totalAngleDeg?: number,
     center?: [number, number, number]
   ): Solid;
+  circularPatternAssembly(
+    count: number,
+    axis?: "x" | "y" | "z",
+    totalAngleDeg?: number,
+    center?: [number, number, number],
+    namePrefix?: string
+  ): Assembly;
   color(c: string | [number, number, number, number]): Solid;
   named(name: string): Solid;
   smooth(subdivisions?: number, minSharpAngle?: number): Solid;

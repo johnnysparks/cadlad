@@ -8,6 +8,7 @@
 import { getManifold } from "./manifold-backend.js";
 import type { Color, TriMesh, Vec3, Body, BBox } from "./types.js";
 import type { Manifold } from "manifold-3d";
+import { assembly, type Assembly } from "../api/assembly.js";
 
 type ManifoldInstance = Manifold;
 
@@ -161,6 +162,16 @@ export class Solid {
   }
 
   /**
+   * Create an assembly containing this solid and its mirrored counterpart.
+   * Preserves per-part identity and color metadata.
+   */
+  mirrorAssembly(normal: Vec3, namePrefix = "part"): Assembly {
+    return assembly("mirror-pattern")
+      .add(`${namePrefix}-0`, this)
+      .add(`${namePrefix}-1`, this.mirror(normal));
+  }
+
+  /**
    * Model one quadrant, then mirror-union across two planes.
    * Equivalent to: mirrorUnion(normal1).mirrorUnion(normal2)
    */
@@ -187,6 +198,32 @@ export class Solid {
       );
     }
     return this._withManifold(patterned);
+  }
+
+  /**
+   * Pattern this solid linearly and return an assembly of separate parts.
+   *
+   * @param count Number of total instances, including the original.
+   * @param step Step vector between consecutive instances.
+   * @param namePrefix Prefix for generated part names.
+   */
+  linearPatternAssembly(
+    count: number,
+    step: Vec3 = [0, 0, 0],
+    namePrefix = "part",
+  ): Assembly {
+    if (!Number.isInteger(count) || count < 1) {
+      throw new Error("linearPatternAssembly count must be an integer >= 1");
+    }
+    const pattern = assembly("linear-pattern");
+    for (let i = 0; i < count; i += 1) {
+      pattern.add(
+        `${namePrefix}-${i}`,
+        this,
+        [step[0] * i, step[1] * i, step[2] * i],
+      );
+    }
+    return pattern;
   }
 
   /**
@@ -224,6 +261,47 @@ export class Solid {
       patterned = patterned.add(rotated);
     }
     return this._withManifold(patterned);
+  }
+
+  /**
+   * Pattern this solid around a principal axis and return an assembly.
+   *
+   * @param count Number of total instances, including the original.
+   * @param axis Rotation axis: "x", "y", or "z". Default "z".
+   * @param totalAngleDeg Total sweep angle in degrees. Default 360.
+   * @param center Pivot point for the pattern.
+   * @param namePrefix Prefix for generated part names.
+   */
+  circularPatternAssembly(
+    count: number,
+    axis: "x" | "y" | "z" = "z",
+    totalAngleDeg = 360,
+    center: Vec3 = [0, 0, 0],
+    namePrefix = "part",
+  ): Assembly {
+    if (!Number.isInteger(count) || count < 1) {
+      throw new Error("circularPatternAssembly count must be an integer >= 1");
+    }
+    if (!Number.isFinite(totalAngleDeg)) {
+      throw new Error("circularPatternAssembly totalAngleDeg must be finite");
+    }
+
+    const stepDeg = totalAngleDeg / count;
+    const pattern = assembly("circular-pattern");
+    for (let i = 0; i < count; i += 1) {
+      pattern.add(
+        `${namePrefix}-${i}`,
+        this
+          .translate(-center[0], -center[1], -center[2])
+          .rotate(
+            axis === "x" ? stepDeg * i : 0,
+            axis === "y" ? stepDeg * i : 0,
+            axis === "z" ? stepDeg * i : 0,
+          )
+          .translate(center[0], center[1], center[2]),
+      );
+    }
+    return pattern;
   }
 
   // ── Smoothing & Edge Treatment ────────────────────────────
