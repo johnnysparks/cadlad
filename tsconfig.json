@@ -13,11 +13,9 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "outDir": "dist",
-    "rootDir": "src",
     "jsx": "preserve",
     "types": ["vite/client"]
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "examples", "src/cli"]
+  "include": ["apps/**/*", "packages/**/*", "infra/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

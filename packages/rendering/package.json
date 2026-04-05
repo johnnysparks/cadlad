@@ -1,0 +1,10 @@
+{
+  "name": "@cadlad/rendering",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./scene-builder.js",
+  "dependencies": {
+    "three": "^0.170.0",
+    "@cadlad/kernel": "workspace:*"
+  }
+}

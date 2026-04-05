@@ -16,9 +16,9 @@ if (tsModule) {
     ...tseslint.configs.recommended,
     {
       files: [
-        'src/**/*.{ts,tsx,mts,cts}',
-        'worker/**/*.{ts,tsx,mts,cts}',
-        'mcp/**/*.{ts,tsx,mts,cts}',
+        'apps/**/*.{ts,tsx,mts,cts}',
+        'packages/**/*.{ts,tsx,mts,cts}',
+        'infra/**/*.{ts,tsx,mts,cts}',
       ],
       rules: {
         // Keep lint lightweight across varied environments.
@@ -33,14 +33,14 @@ if (tsModule) {
   config = [
     ignores,
     jsModule.default.configs.recommended,
-    { files: ['src/**/*.{js,mjs,cjs}', 'worker/**/*.{js,mjs,cjs}', 'mcp/**/*.{js,mjs,cjs}'] },
+    { files: ['apps/**/*.{js,mjs,cjs}', 'packages/**/*.{js,mjs,cjs}', 'content/**/*.{js,mjs,cjs}'] },
   ];
 } else {
   // Bare minimum: no plugins available. Lint JS-only files with basic built-in rules.
   config = [
     ignores,
     {
-      files: ['src/**/*.{js,mjs,cjs}', 'worker/**/*.{js,mjs,cjs}', 'mcp/**/*.{js,mjs,cjs}'],
+      files: ['apps/**/*.{js,mjs,cjs}', 'packages/**/*.{js,mjs,cjs}', 'content/**/*.{js,mjs,cjs}'],
       rules: { 'no-unused-vars': 'warn' },
     },
   ];

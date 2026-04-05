@@ -24,7 +24,7 @@ console.log(`[agent-loop] Starting eval for ${taskFile}`);
 console.log(`[agent-loop] I will write prompts to ${PROMPT_FILE}`);
 console.log(`[agent-loop] I will wait for code in ${CODE_FILE}`);
 
-const evalProcess = spawn("npx", ["tsx", "src/cli/index.ts", "eval", taskFile], {
+const evalProcess = spawn("npx", ["tsx", "apps/cli/index.ts", "eval", taskFile], {
   stdio: ["pipe", "pipe", "inherit"],
 });
 

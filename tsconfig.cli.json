@@ -1,9 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "types": ["node"],
-    "lib": ["ES2022"],
-    "outDir": "dist/cli"
-  },
-  "include": ["src/engine/**/*", "src/api/**/*", "src/cli/**/*"]
-}

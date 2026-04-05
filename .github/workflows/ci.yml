@@ -42,49 +42,49 @@ jobs:
             check: lint
             install_root: true
             install_scope: false
-            command: node ./node_modules/eslint/bin/eslint.js src/cli
+            command: eslint apps/cli
           - scope: cli
             check: typecheck
             install_root: true
             install_scope: false
-            command: ./node_modules/.bin/tsc -p tsconfig.cli.json --noEmit
+            command: ./node_modules/.bin/tsc -p apps/cli/tsconfig.json --noEmit
           - scope: cli
             check: test
             install_root: true
             install_scope: false
-            command: ./node_modules/.bin/vitest run src/cli
+            command: ./node_modules/.bin/vitest run apps/cli
 
           - scope: worker
             check: lint
             install_root: true
             install_scope: false
-            command: npm --prefix worker run lint
+            command: npm --prefix apps/worker run lint
           - scope: worker
             check: typecheck
             install_root: false
             install_scope: true
-            command: npm --prefix worker run typecheck
+            command: npm --prefix apps/worker run typecheck
           - scope: worker
             check: test
             install_root: false
             install_scope: true
-            command: npm --prefix worker run test
+            command: npm --prefix apps/worker run test
 
           - scope: mcp
             check: lint
             install_root: true
             install_scope: false
-            command: npm --prefix mcp run lint
+            command: npm --prefix apps/mcp-gateway run lint
           - scope: mcp
             check: typecheck
             install_root: false
             install_scope: true
-            command: npm --prefix mcp run typecheck
+            command: npm --prefix apps/mcp-gateway run typecheck
           - scope: mcp
             check: test
             install_root: false
             install_scope: true
-            command: npm --prefix mcp run test
+            command: npm --prefix apps/mcp-gateway run test
 
     steps:
       - uses: actions/checkout@v5
@@ -95,8 +95,8 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            worker/package-lock.json
-            mcp/package-lock.json
+            apps/worker/package-lock.json
+            apps/mcp-gateway/package-lock.json
 
       - name: Install root dependencies
         if: matrix.install_root

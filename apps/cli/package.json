@@ -1,0 +1,16 @@
+{
+  "name": "@cadlad/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "cadlad": "./index.js"
+  },
+  "dependencies": {
+    "@cadlad/api": "workspace:*",
+    "@cadlad/kernel": "workspace:*",
+    "@cadlad/validation": "workspace:*",
+    "@cadlad/session-core": "workspace:*",
+    "@cadlad/eval": "workspace:*",
+    "tsx": "^4.20.6"
+  }
+}
