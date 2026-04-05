@@ -1,0 +1,16 @@
+id: hollow-enclosure
+difficulty: 4
+description: |
+  Model a small electronics enclosure as an assembly of two parts: a base box and a flat lid.
+  1. Create a 60mm x 40mm x 25mm box for the base.
+  2. Use the shell() method to hollow it out with a 2mm wall thickness (leaving the top open).
+  3. Create a 60mm x 40mm x 3mm flat lid to sit perfectly on top.
+  4. Use assembly() to combine both parts. Give each part a different color.
+  5. Add four small 3mm diameter screw pillars inside the corners of the base that rise to the top surface.
+acceptance:
+  body_count: 5 # 1 shell + 4 pillars
+  assembly: true
+  validation_errors: 0
+api_surface: [box, shell, assembly, union, translate, color]
+max_iterations: 8
+pass_threshold: 80

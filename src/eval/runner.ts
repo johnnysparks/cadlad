@@ -94,10 +94,13 @@ export async function runEval(task: TaskSpec, config: ModelConfig, opts?: {
 
     if (result.errors.length === 0) {
       try {
+        console.log(`[eval] Capturing screenshots for iteration ${iteration}...`);
         const snapOut = execSync(`node scripts/vibe-snap.mjs ${JSON.stringify(source_path)} --angles 4 --quiet`, {
           encoding: "utf-8",
           stdio: ["ignore", "pipe", "pipe"],
+          timeout: 10000, // 10s timeout
         });
+        console.log(`[eval] Screenshots captured.`);
         const paths = snapOut.split(/\r?\n/).map((line: string) => line.trim()).filter((line: string) => line.endsWith(".png"));
         screenshotPaths = paths;
         if (paths.length > 0) {

@@ -72,8 +72,9 @@ function validateParams(params: ParamDef[]): ValidationDiagnostic[] {
   const diagnostics: ValidationDiagnostic[] = [];
 
   for (const param of params) {
-    const featureId = `param:${param.name || "unnamed"}`;
-    if (!param.name || param.name.trim().length === 0) {
+    const nameStr = String(param.name || "");
+    const featureId = `param:${nameStr || "unnamed"}`;
+    if (!nameStr || nameStr.trim().length === 0) {
       diagnostics.push({
         stage: "types/schema",
         severity: "error",
@@ -86,7 +87,7 @@ function validateParams(params: ParamDef[]): ValidationDiagnostic[] {
       diagnostics.push({
         stage: "types/schema",
         severity: "error",
-        message: `Parameter ${param.name || "(unnamed)"} must be a finite number.`,
+        message: `Parameter ${nameStr || "(unnamed)"} must be a finite number.`,
         featureId,
       });
     }
@@ -134,7 +135,8 @@ function validateGeometry(
 
   for (let i = 0; i < bodies.length; i += 1) {
     const body = bodies[i];
-    const featureId = body.name?.trim() ? `body:${body.name.trim()}` : `body:${i + 1}`;
+    const nameStr = String(body.name || "");
+    const featureId = nameStr.trim() ? `body:${nameStr.trim()}` : `body:${i + 1}`;
 
     if (body.mesh.positions.length === 0 || body.mesh.indices.length === 0) {
       diagnostics.push({

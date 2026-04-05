@@ -109,7 +109,7 @@ export interface ScoringRubric {
   };
 }
 
-export type ModelProvider = "ollama" | "openai" | "anthropic";
+export type ModelProvider = "ollama" | "openai" | "anthropic" | "manual";
 
 export interface ModelConfig {
   provider: ModelProvider;
