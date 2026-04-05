@@ -88,11 +88,15 @@ export interface ScoreBreakdown {
 export interface EvalResult {
   pass: boolean;
   score: number;
-  geometry: number;
-  constraints: number;
-  api: number;
-  visual: number;
-  feedback: string[];
+  iterations: number;
+  total_tokens: number;
+  duration_ms: number;
+  reason?: string;
+  task: TaskSpec;
+  run_id: string;
+  log_path: string;
+  source_path: string;
+  model: string;
 }
 
 export interface ScoringRubric {

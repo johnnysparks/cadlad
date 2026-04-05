@@ -21,6 +21,8 @@ import { LocalHistoryStore } from "./local-history-store.js";
 import { RevisionBranchError } from "../core/revision-branch.js";
 import { loadTaskFile, runEval } from "../eval/runner.js";
 import { parseModelConfig } from "../eval/model-adapter.js";
+import { formatBatchSummaryTable, runBatch } from "../eval/batch.js";
+import { aggregateLogs } from "../eval/report.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -303,39 +305,68 @@ async function cmdExport(args: string[]) {
 async function cmdEval(args: string[]) {
   const parsed = parseEvalArgs(args);
   if (!parsed.taskPath) {
-    console.error("Usage: cadlad eval <task.yaml|task-dir> [--model <provider://model|http://host/model>]");
+    console.error("Usage: cadlad eval <task.yaml|task-dir> [--model <provider://model|http://host/model>] [--concurrency <n>] [--repeat <n>]");
     process.exit(1);
   }
 
-  const modelConfig = parseModelConfig(parsed.modelRef);
+  const modelConfigs = parsed.modelRefs.map((modelRef) => parseModelConfig(modelRef));
   const taskFiles = collectTaskFiles(parsed.taskPath);
   if (taskFiles.length === 0) {
     console.error(`[cadlad eval] No task files found at ${parsed.taskPath}`);
     process.exit(1);
   }
 
-  let allPass = true;
+  const tasks = taskFiles.map((taskFile) => loadTaskFile(taskFile));
 
-  for (const taskFile of taskFiles) {
-    try {
-      const task = loadTaskFile(taskFile);
-      const result = await runEval(task, modelConfig);
-      if (!result.pass) {
-        allPass = false;
-      }
-
-      const status = result.pass ? "PASS" : "FAIL";
-      const seconds = (result.duration_ms / 1000).toFixed(1);
-      const tokens = result.total_tokens.toLocaleString("en-US");
-      const reasonSuffix = result.pass ? "" : `  reason: ${result.reason ?? "score below threshold"}`;
-      console.log(
-        `[eval] ${task.id.padEnd(14)} ${status.padEnd(4)}  score=${Math.round(result.score)}  iterations=${result.iterations}  tokens=${tokens}  time=${seconds}s${reasonSuffix}`,
-      );
-    } catch (error) {
-      allPass = false;
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`[eval] ${taskFile} FAIL  reason: ${message}`);
+  if (tasks.length === 1 && modelConfigs.length === 1 && parsed.repeat === 1) {
+    const task = tasks[0];
+    const modelConfig = modelConfigs[0];
+    const result = await runEval(task, modelConfig);
+    const status = result.pass ? "PASS" : "FAIL";
+    const seconds = (result.duration_ms / 1000).toFixed(1);
+    const tokens = result.total_tokens.toLocaleString("en-US");
+    const reasonSuffix = result.pass ? "" : `  reason: ${result.reason ?? "score below threshold"}`;
+    console.log(
+      `[eval] ${task.id.padEnd(14)} (${parsed.modelRefs[0]})  ${status.padEnd(4)}  score=${Math.round(result.score)}  iterations=${result.iterations}  tokens=${tokens}  time=${seconds}s${reasonSuffix}`,
+    );
+    if (!result.pass) {
+      process.exit(1);
     }
+    return;
+  }
+
+  let allPass = true;
+  try {
+    const report = await runBatch({
+      tasks,
+      models: modelConfigs,
+      concurrency: parsed.concurrency,
+      repeat: parsed.repeat,
+      onResult: (result) => {
+        if (!result.pass) {
+          allPass = false;
+        }
+        const status = result.pass ? "PASS" : "FAIL";
+        const seconds = (result.duration_ms / 1000).toFixed(1);
+        const tokens = result.total_tokens.toLocaleString("en-US");
+        const reasonSuffix = result.pass ? "" : `  reason: ${result.reason ?? "score below threshold"}`;
+        console.log(
+          `[eval] ${result.task.id} (${result.model})  ${status}  score=${Math.round(result.score)}  iterations=${result.iterations}  tokens=${tokens}  time=${seconds}s${reasonSuffix}`,
+        );
+      },
+    });
+
+    console.log("");
+    console.log(formatBatchSummaryTable(report));
+    console.log("");
+    aggregateLogs();
+    console.log(
+      `[eval] Batch complete: ${report.summary.total_runs} runs, ${report.summary.total_pass} pass, ${report.summary.total_fail} fail. See eval-logs/reports/ for details.`,
+    );
+  } catch (error) {
+    allPass = false;
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[eval] Batch failed: ${message}`);
   }
 
   if (!allPass) {
@@ -419,8 +450,8 @@ Usage:
   cadlad history --file <file.forge.ts> [--limit N] [--offset N] [--json]
                                        Show local revision history
   cadlad export <file> -o output.stl    Export model to STL
-  cadlad eval <task.yaml|dir> [--model <provider://model|http://host/model>]
-                                       Run one or many eval tasks
+  cadlad eval <task.yaml|dir> [--model <provider://model|http://host/model>] [--concurrency <n>] [--repeat <n>]
+                                       Run one or many eval tasks across one or many models
   cadlad studio                         Launch browser studio
 `);
 }
@@ -573,16 +604,37 @@ function parseHistoryArgs(args: string[]): { file?: string; limit: number; offse
   return parsed;
 }
 
-function parseEvalArgs(args: string[]): { taskPath?: string; modelRef: string } {
+function parseEvalArgs(args: string[]): { taskPath?: string; modelRefs: string[]; concurrency: number; repeat: number } {
   const parsed = {
     taskPath: undefined as string | undefined,
-    modelRef: "ollama://llama3.2",
+    modelRefs: [] as string[],
+    concurrency: 2,
+    repeat: 1,
   };
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--model") {
-      parsed.modelRef = args[index + 1] ?? parsed.modelRef;
+      const next = args[index + 1];
+      if (next) {
+        parsed.modelRefs.push(next);
+      }
+      index += 1;
+      continue;
+    }
+    if (arg === "--concurrency") {
+      const next = Number(args[index + 1]);
+      if (Number.isFinite(next) && next > 0) {
+        parsed.concurrency = Math.floor(next);
+      }
+      index += 1;
+      continue;
+    }
+    if (arg === "--repeat") {
+      const next = Number(args[index + 1]);
+      if (Number.isFinite(next) && next > 0) {
+        parsed.repeat = Math.floor(next);
+      }
       index += 1;
       continue;
     }
@@ -592,6 +644,10 @@ function parseEvalArgs(args: string[]): { taskPath?: string; modelRef: string } 
     if (!parsed.taskPath) {
       parsed.taskPath = arg;
     }
+  }
+
+  if (parsed.modelRefs.length === 0) {
+    parsed.modelRefs = ["ollama://llama3.2"];
   }
 
   return parsed;
