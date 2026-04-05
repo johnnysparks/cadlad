@@ -20,7 +20,10 @@
     "typecheck": "node scripts/typecheck.mjs",
     "worker:dev": "npm --prefix worker run dev",
     "worker:deploy": "npm --prefix worker run deploy",
-    "worker:deploy:dry": "npm --prefix worker run deploy:dry"
+    "worker:deploy:dry": "npm --prefix worker run deploy:dry",
+    "eval": "tsx src/cli/index.ts eval",
+    "eval:ci": "./scripts/ci-eval.sh --ci",
+    "eval:baseline": "./scripts/ci-eval.sh --update-baseline"
   },
   "keywords": [
     "cad",

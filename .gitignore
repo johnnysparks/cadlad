@@ -20,3 +20,11 @@ Thumbs.db
 # Env
 .env
 .env.local
+
+# Eval logs (keep directory, ignore contents except baseline)
+eval-logs/*
+!eval-logs/.gitkeep
+!eval-logs/baseline.json
+
+# Eval scratch artifacts
+eval-scratch/
