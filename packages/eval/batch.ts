@@ -7,6 +7,7 @@ export interface BatchConfig {
   judgeConfig?: ModelConfig;
   concurrency: number;
   repeat?: number;
+  renderSession?: any;
   onResult?: (result: EvalResult) => void;
 }
 
@@ -98,7 +99,10 @@ export async function runBatch(config: BatchConfig): Promise<BatchReport> {
     const lock = getLock(work.model);
     await acquireLock(lock);
     try {
-      const outcome = await runEval(work.task, work.model, { judgeConfig: config.judgeConfig });
+      const outcome = await runEval(work.task, work.model, { 
+        judgeConfig: config.judgeConfig,
+        renderSession: config.renderSession
+      });
       const result: EvalResult = { ...outcome, model: `${work.model.provider}://${work.model.model}` };
       completed.push({ result, work });
       config.onResult?.(result);
