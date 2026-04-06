@@ -321,7 +321,7 @@ async function cmdExport(args: string[]) {
 async function cmdEval(args: string[]) {
   const parsed = parseEvalArgs(args);
   if (!parsed.taskPath) {
-    console.error("Usage: cadlad eval <task.yaml|task-dir> [--model <provider://model|context-loop|http://host/model>] [--concurrency <n>] [--repeat <n>]");
+    console.error("Usage: cadlad eval <task.yaml|task-dir> [--model <provider://model|context-loop|http://host/model>] [--concurrency <n>] [--repeat <n>] [--render]");
     process.exit(1);
   }
 
@@ -335,31 +335,39 @@ async function cmdEval(args: string[]) {
 
   const tasks = taskFiles.map((taskFile) => loadTaskFile(taskFile));
 
-  if (tasks.length === 1 && modelConfigs.length === 1 && parsed.repeat === 1) {
-    const task = tasks[0];
-    const modelConfig = modelConfigs[0];
-    const result = await runEval(task, modelConfig, { judgeConfig });
-    const status = result.pass ? "PASS" : "FAIL";
-    const seconds = (result.duration_ms / 1000).toFixed(1);
-    const tokens = result.total_tokens.toLocaleString("en-US");
-    const reasonSuffix = result.pass ? "" : `  reason: ${result.reason ?? "score below threshold"}`;
-    console.log(
-      `[eval] ${task.id.padEnd(14)} (${parsed.modelRefs[0]})  ${status.padEnd(4)}  score=${Math.round(result.score)}  iterations=${result.iterations}  tokens=${tokens}  time=${seconds}s${reasonSuffix}`,
-    );
-    if (!result.pass) {
-      process.exit(1);
-    }
-    return;
+  let renderSession: any | undefined;
+  if (parsed.render) {
+    const { RenderSession } = await import("../../packages/eval/renderer.js");
+    renderSession = await RenderSession.start();
   }
 
-  let allPass = true;
   try {
+    if (tasks.length === 1 && modelConfigs.length === 1 && parsed.repeat === 1) {
+      const task = tasks[0];
+      const modelConfig = modelConfigs[0];
+      const result = await runEval(task, modelConfig, { judgeConfig, renderSession });
+      const status = result.pass ? "PASS" : "FAIL";
+      const seconds = (result.duration_ms / 1000).toFixed(1);
+      const tokens = result.total_tokens.toLocaleString("en-US");
+      const reasonSuffix = result.pass ? "" : `  reason: ${result.reason ?? "score below threshold"}`;
+      console.log(
+        `[eval] ${task.id.padEnd(14)} (${parsed.modelRefs[0]})  ${status.padEnd(4)}  score=${Math.round(result.score)}  iterations=${result.iterations}  tokens=${tokens}  time=${seconds}s${reasonSuffix}`,
+      );
+      if (renderSession) await renderSession.close();
+      if (!result.pass) {
+        process.exit(1);
+      }
+      return;
+    }
+
+    let allPass = true;
     const report = await runBatch({
       tasks,
       models: modelConfigs,
       judgeConfig,
       concurrency: parsed.concurrency,
       repeat: parsed.repeat,
+      renderSession,
       onResult: (result) => {
         if (!result.pass) {
           allPass = false;
@@ -374,6 +382,8 @@ async function cmdEval(args: string[]) {
       },
     });
 
+    if (renderSession) await renderSession.close();
+
     console.log("");
     console.log(formatBatchSummaryTable(report));
     console.log("");
@@ -381,13 +391,13 @@ async function cmdEval(args: string[]) {
     console.log(
       `[eval] Batch complete: ${report.summary.total_runs} runs, ${report.summary.total_pass} pass, ${report.summary.total_fail} fail. See eval-logs/reports/ for details.`,
     );
+
+    if (!allPass) {
+      process.exit(1);
+    }
   } catch (error) {
-    allPass = false;
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[eval] Batch failed: ${message}`);
-  }
-
-  if (!allPass) {
     process.exit(1);
   }
 }
@@ -918,13 +928,14 @@ function parseHistoryArgs(args: string[]): { file?: string; limit: number; offse
   return parsed;
 }
 
-function parseEvalArgs(args: string[]): { taskPath?: string; modelRefs: string[]; judgeRef?: string; concurrency: number; repeat: number } {
+function parseEvalArgs(args: string[]): { taskPath?: string; modelRefs: string[]; judgeRef?: string; concurrency: number; repeat: number; render: boolean } {
   const parsed = {
     taskPath: undefined as string | undefined,
     modelRefs: [] as string[],
     judgeRef: undefined as string | undefined,
     concurrency: 2,
     repeat: 1,
+    render: false,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -956,6 +967,10 @@ function parseEvalArgs(args: string[]): { taskPath?: string; modelRefs: string[]
         parsed.repeat = Math.floor(next);
       }
       index += 1;
+      continue;
+    }
+    if (arg === "--render") {
+      parsed.render = true;
       continue;
     }
     if (arg.startsWith("-")) {

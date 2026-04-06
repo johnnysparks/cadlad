@@ -8,7 +8,7 @@ description: |
   The chain must feature distinct inner plates, outer plates, and cylindrical pins (rollers). 
   Calculate the tangent lines between the two gears to place the chain links along the straight segments, and use circular patterning to wrap the links around the teeth of both gears. 
 reference_prompt: "A professional 3D CAD render of a bicycle drivetrain segment featuring a 50-tooth front chainring, a 15-tooth rear cog, and a detailed roller chain with inner/outer plates and pins. Precise mechanical assembly, metallic finishes, technical detail, studio lighting, perspective view."
-reference_images: ["tasks/benchmark/references/roller-chain-sprocket.png"]
+reference_images: ["content/benchmarks/references/roller-chain-sprocket.png"]
 acceptance:
   body_count_min: 200 # Minimum of ~100 chain links (each link 2-3 bodies minimum) + gears
   body_count_max: 2000

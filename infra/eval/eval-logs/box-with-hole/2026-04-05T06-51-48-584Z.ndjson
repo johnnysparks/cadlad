@@ -1,6 +1,0 @@
-{"ts":1775371908585,"run_id":"5d81d881-14f2-4d75-b3dd-e16d85c9d703","task_id":"box-with-hole","event":"run.started","data":{"model":"human-in-the-loop"}}
-{"ts":1775371908586,"run_id":"5d81d881-14f2-4d75-b3dd-e16d85c9d703","task_id":"box-with-hole","event":"build.code_generated","data":{"iteration":1,"chars":217,"tokens":586}}
-{"ts":1775371908609,"run_id":"5d81d881-14f2-4d75-b3dd-e16d85c9d703","task_id":"box-with-hole","event":"eval.completed","data":{"iteration":1,"success":true,"error_count":0,"warning_count":0}}
-{"ts":1775371911058,"run_id":"5d81d881-14f2-4d75-b3dd-e16d85c9d703","task_id":"box-with-hole","event":"score.computed","data":{"iteration":1,"total":94.44444444444446,"pass":true,"geometry":100,"constraints":100,"api":75,"judge":0,"weights":{"geometry":0.44444444444444453,"constraints":0.33333333333333337,"api":0.22222222222222227,"judge":0}}}
-{"ts":1775371911058,"run_id":"5d81d881-14f2-4d75-b3dd-e16d85c9d703","task_id":"box-with-hole","event":"decide.action","data":{"iteration":1,"action":"pass"}}
-{"ts":1775371911058,"run_id":"5d81d881-14f2-4d75-b3dd-e16d85c9d703","task_id":"box-with-hole","event":"run.completed","data":{"pass":true,"iterations":1,"total_tokens":586,"duration_ms":2474,"score":94.44444444444446}}

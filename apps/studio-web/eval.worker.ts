@@ -17,10 +17,13 @@ import { initManifold } from "@cadlad/kernel/manifold-backend.js";
 import { evaluateModel } from "@cadlad/api/runtime.js";
 import type { Color } from "@cadlad/kernel/types.js";
 
+console.log("[worker] Starting worker script...");
 await initManifold();
+console.log("[worker] Manifold initialized.");
 
 // Signal ready (main thread can start sending work)
 self.postMessage({ type: "ready" });
+console.log("[worker] Sent READY message.");
 
 self.onmessage = async (e: MessageEvent) => {
   const { id, code, paramValues } = e.data as {
@@ -28,6 +31,7 @@ self.onmessage = async (e: MessageEvent) => {
     code: string;
     paramValues?: [string, number][];
   };
+  console.log("[worker] Received work request:", id);
 
   try {
     const result = await evaluateModel(

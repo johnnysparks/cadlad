@@ -5,7 +5,7 @@ description: |
   Use overall arm length 50 mm, arm width 30 mm, and a parametric wall thickness defaulting to 4 mm; place the vertical arm flush at one end of the base so they form a right-angle corner.
   Subtract one 6 mm diameter mounting hole through the base arm (normal to Z) and one 6 mm diameter mounting hole through the vertical arm (normal to Y), each centered on its respective arm and offset roughly one-quarter arm length from the corner.
 reference_prompt: "A professional 3D CAD render of an L-shaped mounting bracket with two arms at a right angle. Features centered 6mm mounting holes on both the horizontal and vertical arms. Sturdy industrial design, galvanized steel material, clean fillets, studio lighting, isometric view."
-reference_images: ["tasks/benchmark/references/parametric-bracket.png"]
+reference_images: ["content/benchmarks/references/parametric-bracket.png"]
 acceptance:
   body_count: 1
   volume_min: 9000

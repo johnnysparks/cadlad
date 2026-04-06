@@ -31,10 +31,12 @@ export class EvalWorkerClient {
   private readyPromise: Promise<void>;
 
   constructor() {
+    console.log("[eval-worker-client] Initializing worker...");
     this.worker = new EvalWorker();
     this.readyPromise = new Promise((resolve) => {
       const onReady = (e: MessageEvent) => {
         if (e.data?.type === "ready") {
+          console.log("[eval-worker-client] Worker signalled READY.");
           this.worker.removeEventListener("message", onReady);
           resolve();
         }
@@ -43,6 +45,7 @@ export class EvalWorkerClient {
     });
 
     this.worker.onmessage = (e: MessageEvent) => {
+      console.log("[eval-worker-client] Received message from worker:", e.data.id, e.data.ok);
       const { id, ok, bodies, toolBodies, errors, params, evaluation, hints, camera } = e.data;
       const entry = this.pending.get(id);
       if (!entry) return; // superseded run — ignore

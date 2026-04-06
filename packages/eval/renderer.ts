@@ -71,10 +71,21 @@ export class RenderSession {
     page.setDefaultTimeout(timeout);
     await page.setViewportSize({ width: 1200, height: 900 });
 
+    page.on("console", (msg) => {
+      console.log(`[browser] ${msg.type().toUpperCase()}: ${msg.text()}`);
+    });
+
+    page.on("requestfailed", (request) => {
+      console.log(`[browser] REQUEST_FAILED: ${request.url()} - ${request.failure()?.errorText}`);
+    });
+
+    console.log(`[renderer] Navigating to ${baseUrl}/viewer.html ...`);
     await page.goto(`${baseUrl}/viewer.html`, { waitUntil: "load", timeout });
+    console.log(`[renderer] Page loaded. Waiting for __cadlad API...`);
     await page.waitForFunction(() => !!(window as Window & { __cadlad?: unknown }).__cadlad, {
       timeout,
     });
+    console.log(`[renderer] __cadlad API ready.`);
 
     return new RenderSession(browser, page, baseUrl);
   }
@@ -89,16 +100,21 @@ export class RenderSession {
     modelName: string,
     views: ViewAngle[] = DEFAULT_VIEWS,
   ): Promise<string[]> {
+    console.log(`[renderer] Rendering code for ${modelName}...`);
     await mkdir(outputDir, { recursive: true });
 
     // Inject code and run — run() awaits the actual render completion
     await this.page.evaluate((src: string) => {
+      console.log("[browser] setCode called");
       (window as Window & { __cadlad?: { setCode(c: string): void } }).__cadlad!.setCode(src);
     }, code);
 
+    console.log(`[renderer] Code injected. Calling run()...`);
     const result = await this.page.evaluate(async () => {
+      console.log("[browser] api.run() starting");
       const api = (window as Window & { __cadlad?: { run(): Promise<{ errors: string[] }> } }).__cadlad!;
       const r = await api.run();
+      console.log("[browser] api.run() finished", r?.errors);
       return { errors: r?.errors ?? [] };
     });
 

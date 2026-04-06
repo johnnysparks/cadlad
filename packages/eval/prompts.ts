@@ -1,35 +1,79 @@
 import type { ScoreBreakdown, TaskSpec } from "./types.js";
 
 const API_ONE_LINERS: Record<string, string> = {
+  // Primitives
   box: "box(width, depth, height) -> constructor: returns centered box",
   cylinder: "cylinder(height, radius) -> constructor: returns Z-aligned cylinder",
   sphere: "sphere(radius, segments?) -> constructor: returns centered sphere",
   roundedBox: "roundedBox(w, d, h, radius, segments?) -> constructor: returns all edges rounded",
-  subtract: "solid.subtract(other) -> method: returns a new solid (oversize cutters by 1-2mm)",
-  union: "solid.union(other) -> method: returns a new solid",
-  translate: "solid.translate(x, y, z) -> method: returns a new moved solid",
-  rotate: "solid.rotate(x, y, z) -> method: returns a new rotated solid",
-  color: "solid.color(\"#hex\") -> method: returns a new colored solid",
+  roundedRect: "roundedRect(w, d, radius) -> sketch: returns 2D rounded rectangle",
+  sweep: "sweep(sketch, path) -> constructor: returns swept solid",
+  loft: "loft(sketch1, sketch2, ...) -> constructor: returns lofted solid",
+
+  // Booleans
+  subtract: "solid.subtract(other) -> method: returns new solid (oversize cutters by 1-2mm)",
+  union: "solid.union(other) -> method: returns new solid",
+  intersect: "solid.intersect(other) -> method: returns new solid",
+  unionAll: "solid.unionAll(...parts) -> method: returns new solid",
+  subtractAll: "solid.subtractAll(...tools) -> method: returns new solid",
+  intersectAll: "solid.intersectAll(...parts) -> method: returns new solid",
+
+  // Transforms
+  translate: "solid.translate(x, y, z) -> method: returns new moved solid",
+  translateTo: "solid.translateTo(plane, offsets?) -> method: moves bbox center to plane",
+  rotate: "solid.rotate(x, y, z) -> method: returns new rotated solid (degrees)",
+  scale: "solid.scale(x, y?, z?) -> method: returns new scaled solid",
+  mirror: "solid.mirror(normal) -> method: returns new mirrored solid",
+  mirrorUnion: "solid.mirrorUnion(normal) -> method: returns union of solid and its mirror",
+  quarterUnion: "solid.quarterUnion(n1, n2) -> method: mirrorUnion across two planes",
+
+  // Patterns
+  linearPattern: "solid.linearPattern(count, stepX, stepY, stepZ) -> method: returns unified solid",
+  linearPatternAssembly: "solid.linearPatternAssembly(count, step, namePrefix?) -> method: returns Assembly",
+  circularPattern: "solid.circularPattern(count, axis, totalAngleDeg, center?) -> method: returns unified solid",
+  circularPatternAssembly: "solid.circularPatternAssembly(count, axis, totalAngleDeg, center?, namePrefix?) -> method: returns Assembly",
+
+  // Ref Geometry
+  plane: "plane(origin, normal) -> returns PlaneLike",
+  axis: "axis(origin, direction) -> returns Axis",
+  datum: "datum(point) -> returns point-based reference",
+
+  // Edge Treatment & Finishing
+  shell: "solid.shell(thickness) -> method: returns new hollowed solid",
+  draft: "solid.draft(angleDeg) -> method: returns new tapered solid ( mold release )",
+  fillet: "solid.fillet(subdivisions?) -> method: rounds all edges",
+  chamfer: "solid.chamfer(subdivisions?) -> method: bevels all edges",
+  smooth: "solid.smooth(subdivisions?, minSharpAngle?) -> method: smooths geometry",
+  color: "solid.color(\"#hex\") -> method: returns new colored solid",
+  named: "solid.named(\"partName\") -> method: sets metadata name",
+
+  // Parameters & Helpers
   param: "param(\"name\", default, min, max) -> slider parameter",
-  sketch: "Sketch.begin().moveTo(x,y)...close() -> 2D profile",
-  extrude: "sketch.extrude(height) -> returns a new solid",
-  extrudeAlong: "sketch.extrudeAlong([x,y,z], height) -> returns a new solid",
-  lShape: "lShape(...) -> sketch helper",
-  slot: "slot(...) -> sketch helper",
-  channel: "channel(...) -> sketch helper",
-  tShape: "tShape(...) -> sketch helper",
-  assembly: "assembly(\"name\").add(\"part\", solid, [x,y,z])",
-  shell: "solid.shell(thickness) -> method: returns a new hollowed solid",
-  draft: "solid.draft(angleDeg) -> method: returns a new tapered solid",
-  fillet: "solid.fillet(subdivisions) -> method: returns a new rounded solid",
-  constraint: "constraint(\"type\", config)",
+  mm: "mm(value) -> helper for explicit units (optional)",
+  toolBody: "toolBody(solid) -> returns construction geometry (wont be exported to STL)",
+
+  // Sketching
+  sketch: "Sketch.begin().moveTo(x,y).lineTo(x,y).close() -> 2D profile",
+  rect: "rect(w, d) -> sketch: returns centered rectangle",
+  circle: "circle(radius) -> sketch: returns centered circle",
+  slot: "slot(length, radius) -> sketch: returns slot",
+  lShape: "lShape(w, d, thickness) -> sketch: returns L-profile",
+  channel: "channel(w, d, wall) -> sketch: returns U-profile",
+  tShape: "tShape(w, d, thickness) -> sketch: returns T-profile",
+  extrude: "sketch.extrude(height) -> returns new solid",
+  extrudeAlong: "sketch.extrudeAlong(vector, height) -> returns new solid",
+
+  // Assemblies
+  assembly: "assembly(\"name\").add(\"part\", solid, [x,y,z]?) -> multi-part container",
 };
 
 
 export function buildSystemPrompt(task: TaskSpec): string {
-  const apiLines = task.api_surface
-    .map((entry) => `- ${entry}: ${API_ONE_LINERS[entry] ?? `${entry}(...) → use CadLad API`}`)
+  // Include ALL API surface by default for full context
+  const apiLines = Object.entries(API_ONE_LINERS)
+    .map(([name, desc]) => `- ${name}: ${desc}`)
     .join("\n");
+    
   const acceptance = acceptanceBullets(task);
 
   return [
@@ -38,18 +82,22 @@ export function buildSystemPrompt(task: TaskSpec): string {
     "Return contract: return a Solid, Assembly, or { model, camera }.",
     "",
     "Rules:",
+    "- Start your response with the code block. Minimal preamble.",
+    "- Output the .forge.ts code inside a ```typescript fence.",
+    "- You MUST end the script with a `return` statement (e.g., `return model;`).",
+    "- Skip internal reasoning or step-by-step planning.",
     "- Do NOT import anything. The API is already in the global scope.",
     "- Do NOT redefine API symbols (box, cylinder, etc).",
     "- Use param() for dimensions.",
     "- Oversize boolean cutters by 1-2mm.",
     "- Use assembly() for multi-color models.",
-    "- Return the model.",
     "",
     "Common Pitfalls (CRITICAL):",
     "- WRONG: translate(x, y, z, solid) or subtract(a, b).",
-    "- RIGHT: solid.translate(x, y, z) and a.subtract(b). Booleans/transforms are METHODS on a Solid, not standalone functions.",
+    "- RIGHT: solid.translate(x, y, z) and a.subtract(b). Booleans/transforms are METHODS on a Solid.",
+    "- TRANSFORMS: translate, rotate, and scale take separate numbers, NOT an array. (e.g. `solid.translate(10, 0, 0)` is RIGHT, `solid.translate([10, 0, 0])` is WRONG).",
     "",
-    "API reference subset (injected globals):",
+    "Full API Reference (injected globals):",
     apiLines,
     "",
     "Task description:",
