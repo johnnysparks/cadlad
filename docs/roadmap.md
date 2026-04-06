@@ -1,207 +1,108 @@
-# CadLad Roadmap
+# Roadmap
 
-> Derived from the [north star vision](./cadlad_north_star.md), grounded in a full codebase audit as of April 2026.
->
-> **Key assumption: agents are the primary users.** Humans use the studio for review, visualization, and final approval. Agents do the modeling. Every priority decision flows from this.
+What's left to build. For what already exists, see the [wiki index](./index.md).
 
 ---
 
-## Phase docs
+## Evaluation & Feedback
 
-Each phase has its own detailed doc with implementation status, file references, and next actions:
-
-| Phase | Doc | Status | Focus |
+| Item | Effort | Priority | Notes |
 |---|---|---|---|
-| **1** | [roadmap-phase-1.md](./roadmap-phase-1.md) | ~90% done | Machine-readable feedback & semantic MCP surface |
-| **2** | [roadmap-phase-2.md](./roadmap-phase-2.md) | ~90% done | Agent memory: events, revisions, branches |
-| **3** | [roadmap-phase-3.md](./roadmap-phase-3.md) | ~60% done | Agent learning & self-improvement |
-| **4** | [roadmap-phase-4.md](./roadmap-phase-4.md) | ~70% done | Design intent, constraints & manufacturing |
-| **5** | [roadmap-phase-5.md](./roadmap-phase-5.md) | not started | Export, ecosystem & human UX |
+| Structural wall thickness (ray-cast) | M | low | Replace bbox-min-extent proxy with ray-based measurement |
+| Structural overhang analysis | S | low | Reuse per-triangle normal logic from `max_overhang` constraint |
+| Structural draft/undercut detection | M | low | Per-face angle relative to pull direction |
+
+The heuristic domain analysis tools work for gross problems. Structural upgrades can wait until agents report false negatives via `agent.capability_gap` events.
 
 ---
 
-## Where we are today (April 2026 audit)
+## Sessions & History
 
-CadLad is a working code-first parametric 3D CAD system. The core loop — write `.forge.ts` -> evaluate -> render -> iterate — works end-to-end.
+| Item | Effort | Priority | Notes |
+|---|---|---|---|
+| Local SQLite event store | M | high | Extract `SqliteEventStore` from Durable Object coupling to work with `better-sqlite3` or `sql.js` |
+| Wire local store into MCP server | S | medium | Use local store when no live session is available |
 
-### What's real and working
-
-**Engine** (~560 LOC `src/engine/solid.ts`):
-- Manifold WASM kernel with 11 primitives, full booleans (including batch: `unionAll`, `subtractAll`, `intersectAll`, `quarterUnion`), transforms, patterns, edge treatments, shell, draft
-- ~30 methods on `Solid`, all tested
-
-**API** (~2,000 LOC across `src/api/`):
-- `param()` with slider-driven parameters
-- `Sketch` with constraint solver (5 constraint types, iterative resolution, driving dimensions)
-- `assembly()` for multi-part grouping
-- `defineScene()` with 5-stage layered validation (types -> semantic -> geometry -> stats -> tests)
-- Reference geometry: `plane`, `axis`, `datum`, `translateTo()`
-- Declarative constraints: `wall_thickness`, `symmetry`, `clearance`, `max_overhang`
-- Common sketch profiles: `slot`, `lShape`, `channel`, `tShape`
-
-**Evaluation pipeline** (`src/validation/layered-validation.ts`):
-- Structured `EvaluationBundle` with all 5 stages + stats + tests
-- Built-in geometry validators (empty body, degenerate bbox, disconnected components)
-- Declarative constraint enforcement (wall thickness, symmetry, clearance, overhang)
-- Render is optional — agents get full structured feedback without pixels
-
-**MCP tools** (`mcp/src/server.ts`, `worker/src/mcp-handler.ts`):
-- Read tools: `evaluate`, `get_stats`, `get_validation`, `compare`
-- Domain analysis: `check_printability`, `check_moldability`, `suggest_improvements` (heuristic, not structural)
-- Agent telemetry: `submit_capability_gap`, `record_workaround`, `get_api_improvements`
-- Session management: `create_branch`, `checkout_branch`, `compare_branches`, revision history
-
-**Worker/backend** (~4,400 LOC `worker/`):
-- Cloudflare Durable Objects with event store (InMemory + SQLite backends)
-- Revisions with source hashing, branches with comparison, session cursor
-- Agent telemetry: intent, capability gaps, workaround recording
-- Capability gap aggregation with promotion-threshold logic
-- OAuth 2.1 for live sessions
-
-**Studio** (`src/studio/`):
-- Monaco + Three.js + parameter sliders + live evaluation
-- Patch history, branch UI, inline diagnostics
-- 3-point lighting, edge strokes, auto-color, high-contrast mode
-
-**Gallery**: Auto-discovers 25 projects, interactive viewers
-
-**CLI**: `run`, `validate` (with `--watch`), `export` (STL), `studio` launcher
-
-**Tests**: 17 test suites, ~2,000 lines, covering engine/api/validation/worker
-
-### What's genuinely NOT done (marked [ ] in phase docs)
-
-**Phase 1 gaps:**
-- Domain analysis is heuristic-only (bbox proxies), not structural (ray-cast, per-face)
-
-**Phase 2 gaps:**
-- All memory features (events, revisions, branches) are **worker-only** — local CLI agents can't use them
-- No local SQLite event store parity with the worker-backed event model
-
-**Phase 3 gaps:**
-- Model quality corpus (training examples from approved/failed models) — not implemented
-- Capability gap dashboard/reporting beyond raw aggregation — not implemented
-
-**Phase 4 gaps:**
-- Manufacturing profiles (`profile("fdm_printing", ...)`) — not implemented
-- Constraint-aware fix suggestions — not implemented
-- Design intent hints need precision/recall refinement (baseline heuristics are implemented)
-- Full constrained sketch API (beyond current 5 constraint types) — partial
-
-**Phase 5 (export, human UX, ecosystem):**
-- Export formats (3MF, glTF, STEP) — not implemented
-- Studio as review tool (revision timeline, branch comparison, approval workflow) — not implemented
-- Plugin/extension model, package registry — not implemented
-
-### Infrastructure debt
-
-These aren't roadmap features but affect every agent working on the codebase:
-
-- **vitest not installed locally** — `npm run test` exits 0 without running tests. Tests only run in CI or with manual vitest install.
-- **eslint not installed locally** — `npm run lint` exits 0 without linting.
-- **typecheck suppresses 17 files** with missing package deps (Manifold WASM, Three.js, Monaco, vitest). No genuine type errors, but the suppression masks potential issues.
+The revision/branch logic is already shared (`packages/session-core/revision-branch.ts`) and the CLI has basic history commands. The remaining gap is a proper local event store backend.
 
 ---
 
-## The agent bottleneck (updated)
+## Agent Learning
 
-Today an agent modeling in CadLad hits these walls, in order of pain:
-
-1. **No semantic write operations.** Agents still write raw `.forge.ts`; higher-level intent transforms are not available yet.
-
-2. **Design intent is advisory, not enforced.** The constraint system checks `wall_thickness` and `symmetry` post-hoc; hints exist, but they are guidance rather than automatic remediation.
-
-3. **Domain knowledge is still in CLAUDE.md.** The printability/moldability tools are heuristic proxies. Real DFM analysis (minimum wall by ray-cast, undercut detection) would let agents skip the domain knowledge entirely.
-
-4. **No local agent memory parity.** Event store, revisions, and branches are stronger in worker sessions than local CLI workflows.
-
----
-
-## Sequencing principles
-
-1. **Feedback speed is everything.** Structured stats in 200ms beat a 5s screenshot. Keep this loop fast and stable for agents.
-
-2. **Semantic operations over raw code.** Every MCP tool that lets an agent express intent instead of writing implementation reduces error rate. Feature-level edit tools are the biggest missing piece.
-
-3. **Design intent reduces iteration.** An agent that mirrors, uses datums, and batch-subtracts with tool bodies produces models that survive parameter changes on the first try. Phase 4 teaches pro patterns through API affordances and advisory hints.
-
-4. **Memory enables learning.** Revision history and branching let agents explore design space. Phase 2 is done in the worker; local parity is the gap.
-
-5. **The system should encode domain knowledge.** Manufacturing constraints, printability rules, and structural checks belong in the platform. Phase 4 moves knowledge from CLAUDE.md into the runtime.
-
-6. **Human UX is the review layer.** The studio's job shifts from "where you model" to "where you approve." Design the human experience around reviewing agent work.
-
-7. **Don't break the 25 projects.** They're the test suite, the gallery, and the training corpus. Every change must keep them working.
+| Item | Effort | Priority | Notes |
+|---|---|---|---|
+| `get_known_workarounds` MCP tool | S | **high** | Prevents redundant agent pain; leverages existing aggregation |
+| `model.approved` / `model.rejected` events | M | medium | Foundation for model quality corpus |
+| Corpus storage + retrieval | L | medium | Approved models as few-shot examples; start with attribute matching |
+| `get_similar_examples` MCP tool | M | medium | Retrieve relevant approved models for context |
+| Threshold alerts for gaps | S | low | Auto-flag when a gap hits N occurrences |
+| Candidate-to-issue pipeline | S | low | Promoted candidates auto-generate draft GitHub issues |
 
 ---
 
-## For agents implementing roadmap items
+## Design Intent & Constraints
 
-### Before you start
+| Item | Effort | Priority | Notes |
+|---|---|---|---|
+| FDM manufacturing profile | M | medium | First concrete profile; exercises constraint infrastructure |
+| Injection molding profile | M | medium | Draft, wall uniformity, no undercuts |
+| CNC milling profile | M | medium | Min internal radius, depth-to-width ratio |
+| Constraint-aware fix suggestions | S per constraint | medium | Convert violations into actionable `suggestedFix` data |
+| Hint precision/recall refinement | M | medium | Reduce false positives for magic-number and symmetry nudges |
+| Enhanced sketch validation diagnostics | M | medium | Explain *why* a sketch fails, not just that it did |
+| Additional sketch constraints (horizontal, vertical, midpoint, symmetric, concentric, parallel, angle) | S each | low | Additive to existing solver; ~30 lines each |
 
-1. **Read the relevant phase doc** — it has exact file paths, line numbers, and implementation notes.
-2. **`npm run typecheck` works.** Use it. It's the one reliable local check.
-3. **`npm run test` and `npm run lint` require dependencies that aren't installed locally.** They exit 0 silently. Don't trust a green exit — if you need to run tests, install vitest first (`npm install -D vitest`), or validate by reading test output carefully.
-4. **Read the code before changing it.** Many "not implemented" items have partial infrastructure already in place (types, interfaces, plumbing). Build on what exists.
+---
 
-### Task dependency graph
+## Export & Human UX (Phase 5)
 
-Some items must be done in order. Others can be parallelized.
+Not started. Agents iterate on geometry; humans export after approval. Start here only after the above gaps are addressed.
+
+| Item | Effort | Priority | Notes |
+|---|---|---|---|
+| 3MF export | M | high (when needed) | Color/material metadata, assembly structure |
+| glTF/GLB export | M | high (when needed) | Web-native, preserves color |
+| Revision timeline UI | M | medium | Scrub through modeling history in studio |
+| Branch comparison view | M | medium | Side-by-side 3D views of alternatives |
+| Validation dashboard UI | M | medium | All diagnostics at a glance (data exists) |
+| Approval workflow | M | medium | Depends on `model.approved` events |
+| Plugin/extension model | L | low | Wait for API stability |
+| Package registry | L | low | Wait for community content |
+
+---
+
+## Dependency Graph
 
 ```
-Tool bodies (Phase 4.1)              ← done
-CLI --json output (Phase 1)          ← done
-Design intent hints (Phase 4.2)      ← needs expanded HintContext first
-  └── HintContext expansion          ← wire source/features/stats into hints.ts
-  └── Individual hint detectors      ← can parallelize after HintContext
-Assembly-preserving patterns (Phase 4.3)  ← done
-paramSweepTest (Phase 4.4)           ← done
-Manufacturing profiles (Phase 4.5)   ← depends on constraint infrastructure (done)
-Constraint fix suggestions (Phase 4.6)   ← depends on constraint infrastructure (done)
-Feature edit MCP tools (Phase 1.2)   ← hard; needs code generation layer
-  └── add_feature                    ← do first, proves the pattern
-  └── modify_feature / remove_feature ← depend on add_feature pattern
-Local event store (Phase 2)          ← extract from worker, medium-large
-Cross-session workaround sharing (Phase 3.5) ← depends on gap aggregation (done)
-Model quality corpus (Phase 3.4)     ← needs approval event type first
+Local SQLite event store
+  └── Wire local store into MCP server
+
+get_known_workarounds MCP tool  (independent, high value)
+
+model.approved/rejected events
+  └── Corpus storage + retrieval
+      └── get_similar_examples MCP tool
+
+FDM manufacturing profile  (independent)
+Constraint-aware fix suggestions  (independent)
+Hint precision/recall refinement  (independent)
+
+3MF export  (independent, when needed)
+glTF export  (independent, when needed)
+Revision timeline UI  (depends on local event store for full value)
 ```
 
-**Best parallelization opportunities** (independent, can run simultaneously):
-- Manufacturing profiles + constraint suggestions + local parity event store
-- Individual hint detector refinement (precision/recall tuning)
-- Phase 3 learning-loop items (workaround sharing + corpus work)
-
-### Implementation conventions
-
-- **New API files** go in `src/api/` (e.g., `src/api/toolbody.ts`)
-- **New engine methods** go on `Solid` in `src/engine/solid.ts` using `_derive()` pattern
-- **New constraint types** add a case to `src/api/constraints.ts` and enforcement in `src/validation/layered-validation.ts:validateDeclarativeConstraints()`
-- **New MCP tools** add to both `mcp/src/server.ts` (tool definition + handler) and the worker endpoint if needed
-- **Tests** go in `src/api/__tests__/` or `src/engine/__tests__/` — co-located with the module
-- **Runtime sandbox** — if you add a new standalone function agents should use in `.forge.ts`, expose it in `src/api/runtime.ts`'s sandbox object
-- **Don't break the 25 projects** — they're the implicit test suite. Run `npm run typecheck` after any API change.
-
-### Anti-patterns
-
-- **Don't add event types speculatively.** Only add a new event type when a tool or reducer actually emits/consumes it.
-- **Don't build MCP write tools that generate raw source code inline.** The code generation for `add_feature` should be a separate, testable module — not string concatenation inside the MCP handler.
-- **Don't add heavyweight dependencies.** The constrained sketch solver is deliberately simple (iterative, no symbolic math library). Manufacturing profiles should be lookup tables + constraint config, not simulation engines.
-- **Don't optimize for edge cases before the common case works.** The hints system should detect the 3 most common anti-patterns before worrying about false positive rates.
+**Best parallelization opportunities:**
+- `get_known_workarounds` + FDM profile + constraint suggestions (all independent)
+- Local event store + hint refinement (independent)
 
 ---
 
-## What the north star gets right
+## Principles
 
-1. **The big separation** (transport / persistence / source / artifacts / evaluation) is the correct decomposition.
-2. **Event-sourced, revision-checkpointed, source-materialized** is the right data model for agent-primary workflows.
-3. **Agent learning events are gold.** CadLad treats agents as participants whose struggles drive the roadmap.
-4. **Evaluation bundles with render as optional/late.** This is implemented and working.
-5. **Git as projection, not substrate.** Agents produce events at high frequency. Git can't keep up as a runtime store.
-
-## Where the north star needs grounding
-
-1. **Event taxonomy before usage is risky.** Start with the 6 event types we have and expand only when tools emit new types.
-2. **Semantic merge is years away.** Source-level merge (text diff) first. It's honest and debuggable.
-3. **The collaboration model should be agent-human review loops**, not multi-user real-time editing.
-4. **Performance matters.** Complex assemblies with many booleans will slow down. Geometry caching by source hash and incremental evaluation are practical concerns.
-5. **Local parity matters more than cloud features.** If agents are the primary users, a local SQLite backend isn't "nice for offline" — it's necessary for fast, cheap iteration.
+1. **Feedback speed is everything.** Structured stats in 200ms beat a 5s screenshot.
+2. **Semantic operations over raw code.** Every MCP tool that lets an agent express intent reduces error rate.
+3. **The system should encode domain knowledge.** Manufacturing constraints belong in the platform, not in prompts.
+4. **Don't break the 24 projects.** They're the test suite, gallery, and training corpus.
+5. **Don't add event types speculatively.** Only when a tool or reducer actually emits/consumes them.
+6. **Don't add heavyweight dependencies.** Lookup tables and constraint config, not simulation engines.

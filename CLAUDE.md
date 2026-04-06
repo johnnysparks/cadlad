@@ -38,13 +38,20 @@ npm run eval         # CLI eval tool
   /benchmarks       Evaluation tasks/benchmarks
   /snapshots        Visual baseline snapshots
 /infra              Cloudflare configuration, health functions
-/docs               Roadmap and architecture docs
+/docs               Wiki — system reference, architecture vision, roadmap
 /scripts            Maintenance and CI helper scripts
 ```
 
-## Roadmap
+## Docs
 
-The roadmap is split into per-phase docs in `docs/`. Read [docs/roadmap.md](docs/roadmap.md) for the index, audit summary, and implementation guide for agents. Phase docs have exact file paths, line numbers, and next actions.
+The [docs wiki](docs/index.md) is the system reference. Key pages:
+
+- [Evaluation Pipeline](docs/evaluation-pipeline.md) — geometry stats, validation, MCP tools, domain analysis
+- [Sessions & History](docs/sessions-and-history.md) — event store, revisions, branches
+- [Agent Telemetry](docs/agent-telemetry.md) — capability gaps, workarounds, improvement candidates
+- [Design Intent & Constraints](docs/design-intent-and-constraints.md) — constraint system, sketch solver, tool bodies, hints
+- [Scene Layer](docs/forge-ts-scene-layer.md) — `defineScene()` envelope
+- [Roadmap](docs/roadmap.md) — what's left to build
 
 ## Model files (.forge.ts)
 

@@ -177,10 +177,17 @@ npm run worker:dev   # live-session backend at http://localhost:8787
 
 See `docs/live-session-deploy.md` for deployment details.
 
-### North Star Planning Docs
+### Documentation
 
-The long-form north star vision lives in `docs/cadlad_north_star_technical_vision.docx`.
-For implementation planning, use the composable purpose files in `docs/north-star/README.md`.
+The [docs wiki](docs/index.md) covers the full system:
+
+- [Evaluation Pipeline](docs/evaluation-pipeline.md) — geometry stats, validation, MCP tools
+- [Sessions & History](docs/sessions-and-history.md) — events, revisions, branches
+- [Agent Telemetry](docs/agent-telemetry.md) — capability gaps, workarounds, improvement candidates
+- [Design Intent & Constraints](docs/design-intent-and-constraints.md) — constraint system, sketch solver, tool bodies
+- [Scene Layer](docs/forge-ts-scene-layer.md) — `defineScene()` envelope and validation
+- [Deployment](docs/live-session-deploy.md) — Cloudflare Pages + Worker
+- [Roadmap](docs/roadmap.md) — what's left to build
 
 ### Writing a Model
 

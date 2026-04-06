@@ -1,8 +1,6 @@
-# forge.ts strict scene layer
+# Scene Layer (`defineScene`)
 
-> Last updated: April 2026. Reflects current implementation including declarative constraints, reference geometry integration, and the full 5-stage validation pipeline.
-
-The `defineScene(...)` envelope makes `.forge.ts` models machine-operable while preserving CadLad's code-first style.
+The `defineScene(...)` envelope makes `.forge.ts` models machine-operable while preserving CadLad's code-first style. See also: [Evaluation Pipeline](./evaluation-pipeline.md), [Design Intent & Constraints](./design-intent-and-constraints.md).
 
 ## What a scene declares
 
@@ -144,13 +142,13 @@ Render is optional and late. Agents get full structured feedback without renderi
 - `model` can be a direct `Solid`/`Assembly` value or a factory function
 - `.forge.js` and `.forge.ts` files without `defineScene()` evaluate normally
 
-## Key files
+## Key Files
 
 | File | Role |
 |---|---|
-| `src/api/scene-contract.ts` | `defineScene()` normalization + validation (stages 1-3, 5) |
-| `src/validation/layered-validation.ts` | Stats/relations + constraint enforcement (stage 4) |
-| `src/api/constraints.ts` | Constraint types + `constraint()` factory |
-| `src/api/reference.ts` | Reference geometry types + factories |
-| `src/engine/types.ts` | `EvaluationBundle`, `GeometryStats`, `Hint` types |
-| `src/api/runtime.ts` | `evaluateModel()` orchestration |
+| `packages/cad-api/scene-contract.ts` | `defineScene()` normalization + validation (stages 1-3, 5) |
+| `packages/validation/layered-validation.ts` | Stats/relations + constraint enforcement (stage 4) |
+| `packages/cad-api/constraints.ts` | Constraint types + `constraint()` factory |
+| `packages/cad-api/reference.ts` | Reference geometry types + factories |
+| `packages/cad-kernel/types.ts` | `EvaluationBundle`, `GeometryStats`, `Hint` types |
+| `packages/cad-api/runtime.ts` | `evaluateModel()` orchestration |
