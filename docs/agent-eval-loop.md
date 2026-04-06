@@ -173,8 +173,11 @@ eval-logs/
 ## 4. One-Command CLI Flow
 
 ```bash
-# Run one task with default model (ollama://llama3.2)
+# Run one task with default model (manual human-in-the-loop)
 cadlad eval tasks/benchmark/box-with-hole.yaml
+
+# Manual local loop (no API calls): paste code, then type DONE
+cadlad eval tasks/benchmark/box-with-hole.yaml --model manual
 
 # Run one task with a specific model
 cadlad eval tasks/benchmark/box-with-hole.yaml --model ollama://qwen3:8b
