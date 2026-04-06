@@ -152,15 +152,37 @@ async function generateViaManual(config: ModelConfig, request: GenerateCodeReque
 }
 
 async function readManualInput(): Promise<string> {
-  const { readFileSync } = await import("node:fs");
-  const buffer = readFileSync(0); // read from stdin
-  const content = buffer.toString();
-  const lines = content.split(/\r?\n/);
-  const result: string[] = [];
+  if (!process.stdin.isTTY) {
+    const { readFileSync } = await import("node:fs");
+    const buffer = readFileSync(0); // read from stdin in non-interactive mode
+    const content = buffer.toString();
+    const lines = content.split(/\r?\n/);
+    const result: string[] = [];
 
-  for (const line of lines) {
-    if (line.trim() === "DONE") break;
-    result.push(line);
+    for (const line of lines) {
+      if (line.trim() === "DONE") break;
+      result.push(line);
+    }
+
+    return result.join("\n");
+  }
+
+  const { createInterface } = await import("node:readline/promises");
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: true,
+  });
+
+  const result: string[] = [];
+  try {
+    while (true) {
+      const line = await rl.question("");
+      if (line.trim() === "DONE") break;
+      result.push(line);
+    }
+  } finally {
+    rl.close();
   }
 
   return result.join("\n");
