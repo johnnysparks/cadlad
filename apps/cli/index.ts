@@ -23,6 +23,8 @@ import { loadTaskFile, runEval } from "@cadlad/eval/runner.js";
 import { parseModelConfig } from "@cadlad/eval/model-adapter.js";
 import { formatBatchSummaryTable, runBatch } from "@cadlad/eval/batch.js";
 import { aggregateLogs, generateDeadweightReport, generateIssuesReport } from "@cadlad/eval/report.js";
+import { buildSystemPrompt, buildUserPrompt } from "@cadlad/eval/prompts.js";
+import { scoreEval } from "@cadlad/eval/scorer.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -52,6 +54,12 @@ async function main() {
       break;
     case "eval":
       await cmdEval(args);
+      break;
+    case "eval-prompt":
+      await cmdEvalPrompt(args);
+      break;
+    case "eval-score":
+      await cmdEvalScore(args);
       break;
     case "eval-report":
       await cmdEvalReport(args);
@@ -398,6 +406,88 @@ async function cmdEval(args: string[]) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[eval] Batch failed: ${message}`);
+    process.exit(1);
+  }
+}
+
+async function cmdEvalPrompt(args: string[]) {
+  const taskPath = args.find((a) => !a.startsWith("-"));
+  const json = args.includes("--json");
+  if (!taskPath) {
+    console.error("Usage: cadlad eval-prompt <task.yaml> [--json]");
+    process.exit(1);
+  }
+
+  const task = loadTaskFile(taskPath);
+  const systemPrompt = buildSystemPrompt(task);
+  const userPrompt = buildUserPrompt(task);
+
+  if (json) {
+    console.log(JSON.stringify({
+      task_id: task.id,
+      difficulty: task.difficulty,
+      system: systemPrompt,
+      user: userPrompt,
+      acceptance: task.acceptance,
+      api_surface: task.api_surface,
+      reference_images: task.reference_images ?? [],
+      max_iterations: task.max_iterations ?? 1,
+      pass_threshold: task.pass_threshold ?? 70,
+    }, null, 2));
+  } else {
+    console.log(systemPrompt);
+    console.log("\n---\n");
+    console.log(userPrompt);
+  }
+}
+
+async function cmdEvalScore(args: string[]) {
+  const positional: string[] = [];
+  let json = false;
+  for (const arg of args) {
+    if (arg === "--json") { json = true; continue; }
+    if (!arg.startsWith("-")) positional.push(arg);
+  }
+
+  const [taskPath, codePath] = positional;
+  if (!taskPath || !codePath) {
+    console.error("Usage: cadlad eval-score <task.yaml> <code.forge.ts> [--json]");
+    process.exit(1);
+  }
+
+  const task = loadTaskFile(taskPath);
+  const { readFileSync } = await import("node:fs");
+  const code = readFileSync(resolve(codePath), "utf-8");
+
+  await initManifold();
+  const result = await evaluateModel(code);
+
+  const score = scoreEval(task, result.evaluation, code);
+
+  if (json) {
+    console.log(JSON.stringify({
+      task_id: task.id,
+      pass: score.pass && result.errors.length === 0,
+      score: score.total,
+      breakdown: score,
+      errors: result.errors,
+      warnings: result.evaluation.summary.warningCount,
+      body_count: result.evaluation.stats.data?.bodies ?? 0,
+      volume: result.evaluation.stats.data?.volume ?? 0,
+    }, null, 2));
+  } else {
+    const status = score.pass && result.errors.length === 0 ? "PASS" : "FAIL";
+    console.log(`[eval-score] ${task.id}  ${status}  score=${Math.round(score.total)}`);
+    console.log(`  geometry:    ${Math.round(score.geometry)} (weight ${(score.weights.geometry * 100).toFixed(0)}%)`);
+    console.log(`  constraints: ${Math.round(score.constraints)} (weight ${(score.weights.constraints * 100).toFixed(0)}%)`);
+    console.log(`  api:         ${Math.round(score.api)} (weight ${(score.weights.api * 100).toFixed(0)}%)`);
+    if (result.errors.length > 0) {
+      console.log(`  errors:`);
+      result.errors.forEach((e) => console.log(`    - ${e}`));
+    }
+  }
+
+  if (!score.pass || result.errors.length > 0) {
     process.exit(1);
   }
 }
@@ -772,6 +862,10 @@ Usage:
   cadlad export <file> -o output.stl    Export model to STL
   cadlad eval <task.yaml|dir> [--model <provider://model|context-loop|http://host/model>] [--concurrency <n>] [--repeat <n>]
                                        Run one or many eval tasks across one or many models
+  cadlad eval-prompt <task.yaml> [--json]
+                                       Emit the eval prompt for a task (agent reads this, generates code)
+  cadlad eval-score <task.yaml> <code.forge.ts> [--json]
+                                       Evaluate and score pre-written code against a task
   cadlad eval-report [--task <task-id>] [--compare] [--issues] [--deadweight] [--json]
                                        Aggregate eval logs into summary/comparison/issue reports
   cadlad models [--json] [--timeout-ms <ms>]

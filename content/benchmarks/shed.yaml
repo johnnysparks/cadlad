@@ -1,0 +1,20 @@
+id: shed
+difficulty: 3
+description: |
+  Model a modern studio shed / backyard office building. The shed should have:
+  1. A rectangular floor footprint roughly 3000mm wide (X), 2400mm deep (Y), 1800mm tall (Z) for the main walls.
+  2. Walls with a slight thickness (use shell or explicit box subtraction for ~50mm thick walls).
+  3. A flat roof that overhangs on all sides by ~100mm, slightly thicker than the walls (~80mm tall).
+  4. A pair of double doors on the front face (-Y side), each door roughly 700mm wide × 1600mm tall. Use subtract to cut door openings or model door panels as separate colored parts.
+  5. One small rectangular window on the left side (-X face), roughly 500mm wide × 400mm tall, centered vertically around Z=1000mm.
+  6. Use assembly() to combine the parts (walls, roof, doors, window) with distinct colors.
+  The result should look like a simple modern shed with clean lines, visible door and window openings or panels.
+reference_prompt: "A professional 3D CAD render of a modern backyard studio shed with flat overhanging roof, double front doors, and a small side window. Clean geometric forms, contrasting colors for roof, walls, and doors, isometric view, studio lighting."
+reference_images: ["content/benchmarks/references/shed.png"]
+acceptance:
+  body_count_min: 2
+  assembly: true
+  validation_errors: 0
+api_surface: [box, subtract, assembly, translate, color]
+max_iterations: 3
+pass_threshold: 60

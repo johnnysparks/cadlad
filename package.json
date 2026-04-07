@@ -27,6 +27,8 @@
     "worker:deploy": "npm --prefix apps/worker run deploy",
     "worker:deploy:dry": "npm --prefix apps/worker run deploy:dry",
     "eval": "tsx apps/cli/index.ts eval",
+    "eval-prompt": "tsx apps/cli/index.ts eval-prompt",
+    "eval-score": "tsx apps/cli/index.ts eval-score",
     "eval:ci": "./scripts/ci-eval.sh --ci",
     "eval:baseline": "./scripts/ci-eval.sh --update-baseline"
   },
@@ -48,7 +50,7 @@
     "playwright-core": "^1.59.1",
     "sharp": "^0.34.5",
     "three": "^0.183.2",
-    "tsx": "^4.20.6",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.0.0",
     "vite": "^6.0.0",
