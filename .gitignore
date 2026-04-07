@@ -25,6 +25,9 @@ Thumbs.db
 eval-logs/*
 !eval-logs/.gitkeep
 !eval-logs/baseline.json
+infra/eval/eval-logs/*
+!infra/eval/eval-logs/.gitkeep
 
 # Eval scratch artifacts
 eval-scratch/
+infra/eval/eval-scratch/
