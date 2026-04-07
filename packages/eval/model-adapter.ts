@@ -1,4 +1,13 @@
 import type { ModelConfig } from "./types.js";
+import { ProxyAgent, fetch as undiciFetch } from "undici";
+
+function proxyFetch(): typeof fetch {
+  const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
+  if (!proxyUrl) return fetch;
+  const dispatcher = new ProxyAgent(proxyUrl);
+  return (input: RequestInfo | URL, init?: RequestInit) =>
+    undiciFetch(input as string | URL, { ...init, dispatcher } as Parameters<typeof undiciFetch>[1]) as unknown as Promise<Response>;
+}
 
 export interface ModelMessage {
   role: "system" | "user";
@@ -192,7 +201,7 @@ async function generateViaOllama(config: ModelConfig, request: GenerateCodeReque
   const endpoint = config.endpoint ?? DEFAULT_OLLAMA_ENDPOINT;
   const prompt = flattenPrompt(request.messages);
 
-  const response = await fetch(`${trimTrailingSlash(endpoint)}/api/generate`, {
+  const response = await proxyFetch()(`${trimTrailingSlash(endpoint)}/api/generate`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -243,7 +252,7 @@ async function generateViaOpenAI(config: ModelConfig, request: GenerateCodeReque
   const endpoint = config.endpoint ?? DEFAULT_OPENAI_ENDPOINT;
   const apiKey = resolveApiKey(config, "OPENAI_API_KEY");
 
-  const response = await fetch(`${trimTrailingSlash(endpoint)}/v1/chat/completions`, {
+  const response = await proxyFetch()(`${trimTrailingSlash(endpoint)}/v1/chat/completions`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -383,18 +392,22 @@ function buildContextLoopConfig(provider: "openai" | "anthropic"): ModelConfig {
 async function generateViaAnthropic(config: ModelConfig, request: GenerateCodeRequest): Promise<GenerateCodeResponse> {
   const endpoint = config.endpoint ?? DEFAULT_ANTHROPIC_ENDPOINT;
   const apiKey = resolveApiKey(config, "ANTHROPIC_API_KEY");
+  // Session tokens (sk-ant-si-*) use Bearer auth; standard keys use x-api-key
+  const authHeaders: Record<string, string> = apiKey.startsWith("sk-ant-si-")
+    ? { authorization: `Bearer ${apiKey}` }
+    : { "x-api-key": apiKey };
 
-  const response = await fetch(`${trimTrailingSlash(endpoint)}/v1/messages`, {
+  const response = await proxyFetch()(`${trimTrailingSlash(endpoint)}/v1/messages`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": apiKey,
+      ...authHeaders,
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
       model: config.model,
       system: extractSystemPrompt(request.messages),
-      max_tokens: request.maxTokens ?? config.maxTokens ?? 1024,
+      max_tokens: request.maxTokens ?? config.maxTokens ?? 4096,
       temperature: request.temperature ?? config.temperature,
       messages: [
         {
@@ -471,11 +484,10 @@ function buildOpenAIMessages(request: GenerateCodeRequest): Array<Record<string,
 }
 
 function buildAnthropicContent(request: GenerateCodeRequest): Array<Record<string, unknown>> {
-  const userText = request.messages
-    .filter((message) => message.role === "user")
-    .map((message) => message.content)
-    .join("\n\n")
-    .trim();
+  // Fall back to all messages if no explicit user messages exist (runner sends everything as "system")
+  const userMessages = request.messages.filter((message) => message.role === "user");
+  const sourceMsgs = userMessages.length > 0 ? userMessages : request.messages;
+  const userText = sourceMsgs.map((message) => message.content).join("\n\n").trim() || "Please complete the task.";
 
   const content: Array<Record<string, unknown>> = [{ type: "text", text: userText }];
 

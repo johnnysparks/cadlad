@@ -1,0 +1,21 @@
+id: shed
+difficulty: 3
+description: |
+  Build a small parametric garden shed as an assembly.
+  The shed body has four walls made from a hollow rectangular shell (width 80 mm, depth 60 mm, wall height 50 mm, wall thickness 3 mm).
+  Cut a centered door opening in the front wall (-Y face): 20 mm wide and 35 mm tall, flush to the bottom.
+  Add a gabled pitched roof as two rectangular panels angled at roughly 30 degrees from horizontal,
+  each resting on top of the walls and meeting at a ridge along the center of the roof.
+  Return an assembly named "shed" with at least two named parts: "walls" and "roof".
+  Use param() for at least one dimension (e.g. width or wall_height).
+reference_prompt: "A professional 3D CAD render of a small parametric garden shed. Rectangular walls with a centered door opening on the front face. Gabled pitched roof with two angled panels meeting at a ridge. Clean minimal geometry, light gray walls, dark gray roof, studio lighting, isometric view."
+acceptance:
+  body_count_min: 2
+  volume_min: 15000
+  volume_max: 350000
+  validation_errors: 0
+  has_subtraction: true
+  assembly: true
+api_surface: [box, subtract, translate, rotate, assembly, param]
+max_iterations: 5
+pass_threshold: 70
