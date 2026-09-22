@@ -28,7 +28,7 @@ const ROOT = resolve(__dirname, "..");
 // --- Arg parsing ---
 
 const args = process.argv.slice(2);
-const isForgeFile = (s) => s.endsWith(".forge.ts") || s.endsWith(".forge.js");
+const isForgeFile = (s) => s.endsWith(".forge.ts");
 const forgeFile = args.find(isForgeFile);
 
 if (!forgeFile) {
@@ -75,7 +75,7 @@ const outputArg = args.find(
     a !== argVal("--url"),
 );
 
-const modelName = basename(forgePath).replace(/\.forge\.(ts|js)$/, "");
+const modelName = basename(forgePath).replace(/\.forge\.ts$/, "");
 const defaultOutputDir = forgePath.includes("content/projects")
   ? join(ROOT, "content/snapshots", modelName)
   : join(projectDir, "snapshots");
@@ -128,5 +128,5 @@ try {
 } finally {
   try {
     unlinkSync(tmpScript);
-  } catch {}
+  } catch { /* Try the next environment candidate. */ }
 }

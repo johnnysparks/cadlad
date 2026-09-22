@@ -33,6 +33,10 @@ jobs:
             check: test
             command: npm run test
 
+          - scope: global
+            check: build
+            command: npm run build
+
           # Targeted checks for standalone runtimes
           - scope: cli
             check: test

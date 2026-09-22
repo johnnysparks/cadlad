@@ -15,7 +15,7 @@ npm run lint         # Global eslint
 npm run eval         # CLI eval tool
 ```
 
-**Important:** `npm run typecheck` is the most reliable check. Run it after any major change.
+**Checks:** Run `npm ci` first. Typecheck, lint, and tests require the local pinned tools and fail if dependencies are missing. No global fallback or suppressed errors. Run `npm run typecheck:full` to include worker and MCP gateway.
 
 ## Architecture
 
@@ -223,7 +223,7 @@ The studio exposes `window.__cadlad` for automation:
 - **High-contrast mode**: gallery toggle — light gray surfaces, dark edge strokes, white background. Best for evaluating geometry.
 - **Color survives transforms**: `_derive()` carries `_color` and `_name` through all Solid operations (translate, rotate, scale, union, subtract, etc.)
 - **Z-up → Y-up**: gallery rotates mesh group -90° on X. Studio viewport uses Manifold's Z-up directly.
-- Gallery auto-reads all .forge.ts files from projects/*/ — add a folder and it appears
+- Gallery auto-reads `content/projects/*/*.forge.ts` — add a folder and it appears. `.forge.js` is unsupported. The test suite checks discovery and evaluates every retained model.
 - Models can return `{ model, camera: [x,y,z] }` to control their gallery viewing angle
 
 ## Git workflow

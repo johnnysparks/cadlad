@@ -101,6 +101,10 @@ return asm.toSolid();
 
 ## Examples
 
+The gallery and snapshot runner discover `content/projects/*/*.forge.ts`. Only `.forge.ts` is supported; flat files and `.forge.js` files are not discovered. `npm test` verifies the actual gallery glob and evaluates every retained model through CLI and gallery loading.
+
+Run `npm ci` before checks. Typecheck, lint, and tests fail on missing local tools or errors; they never fall back to global tools or silently skip. Use `npm run typecheck:full` for all runtimes.
+
 The `content/projects/` directory contains ready-to-run models:
 
 | File | Description |

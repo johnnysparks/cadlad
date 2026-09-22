@@ -133,13 +133,13 @@ const TOOLS = [
   {
     name: "replace_source",
     description:
-      "Replace the entire model source with new .forge.js code. This is the primary way to make geometry changes. Always include a clear summary, intent (why), and approach (how). The studio will rerender automatically after this call.",
+      "Replace the entire model source with new .forge.ts code. This is the primary way to make geometry changes. Always include a clear summary, intent (why), and approach (how). The studio will rerender automatically after this call.",
     inputSchema: {
       type: "object" as const,
       properties: {
         source: {
           type: "string",
-          description: "Complete new .forge.js model source code",
+          description: "Complete new .forge.ts model source code",
         },
         summary: {
           type: "string",
@@ -171,7 +171,7 @@ const TOOLS = [
         },
         source: {
           type: "string",
-          description: "Required when type=source_replace: complete new .forge.js source",
+          description: "Required when type=source_replace: complete new .forge.ts source",
         },
         params: {
           type: "object",

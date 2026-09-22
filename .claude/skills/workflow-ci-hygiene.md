@@ -5,15 +5,16 @@ You're making sure tests pass, types are clean, lint is happy, and snapshots are
 ## The commands
 
 ```bash
-npm run typecheck    # tsc --noEmit  ← ALWAYS reliable, use this first
-npm run lint         # eslint packages/   ← exits 0 if eslint not installed (silent no-op)
-npm run test         # vitest run    ← exits 0 if vitest not installed (silent no-op)
-npm run build        # production build (catches import/bundling issues)
+npm ci                  # install pinned workspace dependencies
+npm run typecheck:full  # root, worker, and MCP gateway
+npm run lint            # apps, packages, infra, and scripts
+npm test                # root tests, check-runner regressions, and model corpus
+npm run build           # production bundle (also checked in CI)
 ```
 
-> **Critical:** `npm run test` and `npm run lint` exit 0 without running if their tools aren't installed locally. `npm run typecheck` is the one reliable check. If you need real test/lint execution, install the tools first: `npm install -D vitest` / `npm install -D eslint`.
+Checks require local tools and exit nonzero when tools are missing, crash, or report errors. Typecheck does not suppress missing dependencies or other diagnostics. Root Vitest excludes the standalone worker and MCP gateway; worker tests use its own configuration.
 
-Run in this order: typecheck → lint → test → build. But verify that lint/test output is actually printed — a silent exit 0 means the tool isn't installed, NOT that checks passed.
+The gallery and snapshot runner discover `content/projects/*/*.forge.ts`. No `.forge.js` or flat-directory compatibility. Every retained model must pass the gallery/CLI corpus test; obsolete fixtures can be removed deliberately.
 
 ## Snapshot testing
 
@@ -30,8 +31,8 @@ node scripts/snapshot-test.mjs --url http://localhost:5173
 node scripts/snapshot-test.mjs --url http://localhost:5173 --update
 ```
 
-References: `snapshots/reference/`
-Current captures: `snapshots/current/`
+References: `content/snapshots/<model>/reference.png`
+Current captures: `/tmp/cadlad-snapshots/`
 
 For screenshot environment setup, read `.claude/skills/sniff_screenshot.md`.
 
@@ -63,7 +64,7 @@ Local `core.hooksPath` is set to `.git/hooks` (overrides global hooks).
 
 ### Test failures
 - Tests are in `packages/__tests__/` or co-located
-- Vitest config in `vite.config.ts`
+- Vitest config in `vitest.config.ts`
 - If a test fails on geometry, check that Manifold WASM initializes properly in the test environment
 
 ### Build failures

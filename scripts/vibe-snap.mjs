@@ -4,7 +4,7 @@
  *
  * Usage:
  *   node scripts/vibe-snap.mjs projects/foo/foo.forge.ts           # 4 angles → projects/foo/snapshots/
- *   node scripts/vibe-snap.mjs projects/foo/foo.forge.js /tmp/out  # custom output dir
+ *   node scripts/vibe-snap.mjs projects/foo/foo.forge.ts /tmp/out  # custom output dir
  *   node scripts/vibe-snap.mjs projects/foo/foo.forge.ts --angles 1   # just iso
  *   node scripts/vibe-snap.mjs projects/foo/foo.forge.ts --angles 7   # all 7 angles
  *   node scripts/vibe-snap.mjs projects/foo/foo.forge.ts --angle front # specific angle
@@ -25,16 +25,16 @@ const ROOT = resolve(__dirname, "..");
 // --- Puppeteer & Chrome discovery (shared with snapshot-test.mjs) ---
 
 async function loadPuppeteer() {
-  try { return await import("puppeteer"); } catch {}
-  try { return await import("/tmp/cadlad_sniff/node_modules/puppeteer/lib/esm/puppeteer/puppeteer.js"); } catch {}
+  try { return await import("puppeteer"); } catch { /* Try the next environment candidate. */ }
+  try { return await import("/tmp/cadlad_sniff/node_modules/puppeteer/lib/esm/puppeteer/puppeteer.js"); } catch { /* Try the next environment candidate. */ }
   try {
     const globalPath = execSync("node -e \"console.log(require.resolve('puppeteer'))\"", { encoding: "utf-8" }).trim();
     if (globalPath) return await import(globalPath);
-  } catch {}
+  } catch { /* Try the next environment candidate. */ }
   try {
     const npxPath = execSync("npx --no-install puppeteer --version 2>/dev/null && npx --no-install -p puppeteer node -e \"console.log(require.resolve('puppeteer'))\"", { encoding: "utf-8" }).trim();
     if (npxPath) return await import(npxPath);
-  } catch {}
+  } catch { /* Try the next environment candidate. */ }
 
   console.error(`ERROR: Puppeteer not found.
 Install it anywhere — this script searches project, global, and temp locations:
@@ -53,7 +53,7 @@ function findChromeBinary() {
         const p = join(pwBase, d, "chrome-linux", "chrome");
         if (existsSync(p)) return p;
       }
-    } catch {}
+    } catch { /* Try the next environment candidate. */ }
   }
   const ppBase = join(home, ".cache", "puppeteer", "chrome");
   if (existsSync(ppBase)) {
@@ -63,7 +63,7 @@ function findChromeBinary() {
         const p = join(ppBase, d, "chrome-linux64", "chrome");
         if (existsSync(p)) return p;
       }
-    } catch {}
+    } catch { /* Try the next environment candidate. */ }
   }
   return null;
 }
@@ -72,11 +72,11 @@ function findChromeBinary() {
 
 const args = process.argv.slice(2);
 const QUIET = args.includes("--quiet");
-const isForgeSource = (value) => value.endsWith(".forge.ts") || value.endsWith(".forge.js");
+const isForgeSource = (value) => value.endsWith(".forge.ts");
 const forgeFile = args.find((a) => isForgeSource(a));
 
 if (!forgeFile) {
-  console.error("Usage: node scripts/vibe-snap.mjs <path-to.forge.ts|.forge.js> [output-dir] [--angles 1|4|7] [--angle <view>] [--quiet]");
+  console.error("Usage: node scripts/vibe-snap.mjs <path-to.forge.ts> [output-dir] [--angles 1|4|7] [--angle <view>] [--quiet]");
   process.exit(1);
 }
 
@@ -140,7 +140,7 @@ Start it first:  npm run dev`);
   await mkdir(outputDir, { recursive: true });
 
   const code = await readFile(forgePath, "utf-8");
-  const modelName = basename(forgePath, ".forge.js");
+  const modelName = basename(forgePath, ".forge.ts");
 
   info(`Model: ${modelName}`);
   info(`Angles: ${views.join(", ")} (${views.length})`);

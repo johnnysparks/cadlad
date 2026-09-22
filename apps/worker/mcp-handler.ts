@@ -227,12 +227,12 @@ const TOOLS = [
   },
   {
     name: 'replace_source',
-    description: 'Use this to replace the entire .forge.js model source. The studio rerenders automatically. Always provide a clear summary and intent.',
+    description: 'Use this to replace the entire .forge.ts model source. The studio rerenders automatically. Always provide a clear summary and intent.',
     annotations: { readOnlyHint: false, destructiveHint: false },
     inputSchema: {
       type: 'object',
       properties: {
-        source: { type: 'string', description: 'Complete new .forge.js model source code' },
+        source: { type: 'string', description: 'Complete new .forge.ts model source code' },
         summary: { type: 'string', description: 'One-line description of what changed' },
         intent: { type: 'string', description: 'Why this change was made' },
         approach: { type: 'string', description: 'Technical approach used' },

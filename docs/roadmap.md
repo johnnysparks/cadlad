@@ -63,7 +63,7 @@ CadLad is a working code-first parametric 3D CAD system. The core loop — write
 - Patch history, branch UI, inline diagnostics
 - 3-point lighting, edge strokes, auto-color, high-contrast mode
 
-**Gallery**: Auto-discovers 25 projects, interactive viewers
+**Gallery**: Auto-discovers the retained `.forge.ts` corpus, interactive viewers
 
 **CLI**: `run`, `validate` (with `--watch`), `export` (STL), `studio` launcher
 
@@ -97,9 +97,8 @@ CadLad is a working code-first parametric 3D CAD system. The core loop — write
 
 These aren't roadmap features but affect every agent working on the codebase:
 
-- **vitest not installed locally** — `npm run test` exits 0 without running tests. Tests only run in CI or with manual vitest install.
-- **eslint not installed locally** — `npm run lint` exits 0 without linting.
-- **typecheck suppresses 17 files** with missing package deps (Manifold WASM, Three.js, Monaco, vitest). No genuine type errors, but the suppression masks potential issues.
+- Check tooling repaired: run `npm ci`, then `npm run typecheck:full`, `npm run lint`, `npm test`, and `npm run build`. Missing local tools and all diagnostics fail checks; no silent skips or error suppression.
+- Gallery and snapshots use `content/projects/*/*.forge.ts`. Legacy files are unsupported. The corpus test validates the actual Vite glob and CLI/gallery geometry parity for every retained model.
 
 ---
 
@@ -131,7 +130,7 @@ Today an agent modeling in CadLad hits these walls, in order of pain:
 
 6. **Human UX is the review layer.** The studio's job shifts from "where you model" to "where you approve." Design the human experience around reviewing agent work.
 
-7. **Don't break the 25 projects.** They're the test suite, the gallery, and the training corpus. Every change must keep them working.
+7. **Keep retained fixtures executable.** The corpus is tested; obsolete examples may be deliberately removed.
 
 ---
 
@@ -140,8 +139,8 @@ Today an agent modeling in CadLad hits these walls, in order of pain:
 ### Before you start
 
 1. **Read the relevant phase doc** — it has exact file paths, line numbers, and implementation notes.
-2. **`npm run typecheck` works.** Use it. It's the one reliable local check.
-3. **`npm run test` and `npm run lint` require dependencies that aren't installed locally.** They exit 0 silently. Don't trust a green exit — if you need to run tests, install vitest first (`npm install -D vitest`), or validate by reading test output carefully.
+2. **Run `npm ci` before checks.** Use `npm run typecheck:full` for all runtimes.
+3. **Run `npm test`, `npm run lint`, and `npm run build`.** All require local tools and fail on missing dependencies.
 4. **Read the code before changing it.** Many "not implemented" items have partial infrastructure already in place (types, interfaces, plumbing). Build on what exists.
 
 ### Task dependency graph
@@ -179,7 +178,7 @@ Model quality corpus (Phase 3.4)     ← needs approval event type first
 - **New MCP tools** add to both `mcp/src/server.ts` (tool definition + handler) and the worker endpoint if needed
 - **Tests** go in `src/api/__tests__/` or `src/engine/__tests__/` — co-located with the module
 - **Runtime sandbox** — if you add a new standalone function agents should use in `.forge.ts`, expose it in `src/api/runtime.ts`'s sandbox object
-- **Don't break the 25 projects** — they're the implicit test suite. Run `npm run typecheck` after any API change.
+- **Keep retained corpus tests passing.** Obsolete fixtures can be removed; there is no legacy model compatibility layer.
 
 ### Anti-patterns
 
