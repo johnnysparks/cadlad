@@ -33,6 +33,7 @@ export type BrowserEvaluationSummary = {
 export class RenderSession {
   private browser: any;
   private page: any;
+  private operation: Promise<void> = Promise.resolve();
   readonly baseUrl: string;
 
   private constructor(browser: unknown, page: unknown, baseUrl: string) {
@@ -102,6 +103,10 @@ export class RenderSession {
    * diagnostics/statistics used for parity checks.
    */
   async evaluateCode(code: string): Promise<BrowserEvaluationSummary> {
+    return this.enqueue(() => this.evaluateCodeUnsafe(code));
+  }
+
+  private async evaluateCodeUnsafe(code: string): Promise<BrowserEvaluationSummary> {
     await this.page.evaluate((src: string) => {
       console.log("[browser] setCode called");
       (window as Window & { __cadlad?: { setCode(c: string): void } }).__cadlad!.setCode(src);
@@ -145,38 +150,48 @@ export class RenderSession {
     modelName: string,
     views: ViewAngle[] = DEFAULT_VIEWS,
   ): Promise<string[]> {
-    console.log(`[renderer] Rendering code for ${modelName}...`);
-    await mkdir(outputDir, { recursive: true });
+    return this.enqueue(async () => {
+      console.log(`[renderer] Rendering code for ${modelName}...`);
+      await mkdir(outputDir, { recursive: true });
 
-    const result = await this.evaluateCode(code);
+      const result = await this.evaluateCodeUnsafe(code);
 
-    if (result.errors.length > 0) {
-      throw new Error(`Model errors: ${result.errors.join("; ")}`);
-    }
+      if (result.errors.length > 0) {
+        throw new Error(`Model errors: ${result.errors.join("; ")}`);
+      }
 
-    // captureFrame(view) sets the camera and returns a dataURL — no sleep needed
-    const outputPaths: string[] = [];
-    for (const view of views) {
-      const dataUrl: string = await this.page.evaluate((v: string) => {
-        const api = (window as Window & {
-          __cadlad?: { captureFrame(view: string): string };
-        }).__cadlad!;
-        return api.captureFrame(v as Parameters<typeof api.captureFrame>[0]);
-      }, view);
+      // captureFrame(view) sets the camera and returns a dataURL — no sleep needed
+      const outputPaths: string[] = [];
+      for (const view of views) {
+        const dataUrl: string = await this.page.evaluate((v: string) => {
+          const api = (window as Window & {
+            __cadlad?: { captureFrame(view: string): string };
+          }).__cadlad!;
+          return api.captureFrame(v as Parameters<typeof api.captureFrame>[0]);
+        }, view);
 
-      // dataURL → PNG file
-      const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
-      const buf = Buffer.from(base64, "base64");
-      const filePath = resolve(join(outputDir, `${modelName}-${view}.png`));
-      await writeFile(filePath, buf);
-      outputPaths.push(filePath);
-    }
+        // dataURL → PNG file
+        const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+        const buf = Buffer.from(base64, "base64");
+        const filePath = resolve(join(outputDir, `${modelName}-${view}.png`));
+        await writeFile(filePath, buf);
+        outputPaths.push(filePath);
+      }
 
-    return outputPaths;
+      return outputPaths;
+    });
   }
 
   async close(): Promise<void> {
-    await this.browser.close();
+    await this.enqueue(async () => {
+      await this.browser.close();
+    });
+  }
+
+  private enqueue<T>(work: () => Promise<T>): Promise<T> {
+    const next = this.operation.then(work, work);
+    this.operation = next.then(() => undefined, () => undefined);
+    return next;
   }
 }
 

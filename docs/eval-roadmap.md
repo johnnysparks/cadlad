@@ -13,7 +13,7 @@
 - ✅ Step 4 complete: runner + `cadlad eval` CLI wiring implemented.
 - ✅ Step 5 complete: all 5 benchmark YAML task files exist.
 - ✅ Step 6 complete: `src/eval/report.ts` + `cadlad eval-report` implemented.
-- 🟡 Step 7 partial: judge module + weighted scoring integration are implemented; CLI `--judge/--no-judge` UX remains to be finalized.
+- ✅ Step 7 complete: judge feedback, candidate render handoff, acceptance gating, and CLI `--judge/--no-judge` controls are implemented.
 - ✅ Step 8 complete: batch runner + multi-model/concurrency support implemented.
 - ❌ Step 9 not done: ad-hoc task generation (`cadlad eval --task`) not implemented yet.
 - 🟡 Step 10 mostly done: CI eval script/workflow exists; benchmark reference image pack is still open.
@@ -216,8 +216,10 @@ API surface score (0-100, weight 0.2):
 - For each method in task.api_surface, check if the string appears in source.
 - Score = (matches / total) * 100
 
-Judge score: always 0 for now (placeholder). When judge=0, redistribute its 0.1 weight
-proportionally to the other three (so effective weights become ~0.44, ~0.33, ~0.22).
+When no judge is configured, redistribute its 0.1 weight proportionally to the
+other three (so effective weights become ~0.44, ~0.33, ~0.22). A configured
+judge keeps the 0.1 weight, and a zero or `PASS: no` verdict fails the run even
+when deterministic checks score highly.
 
 TASK B: Create `src/eval/prompts.ts` (~80 LOC)
 
@@ -567,8 +569,7 @@ Read these files:
 - src/eval/types.ts (TaskSpec, ScoreBreakdown, EvalEvent, ModelConfig)
 - src/eval/model-adapter.ts (createModelAdapter, GenerateRequest — the judge uses
   the same adapter interface to call a vision model)
-- src/eval/scorer.ts (scoreEval — see how judge score is currently hardcoded to 0
-  and weight gets redistributed; you'll make it real)
+- src/eval/scorer.ts (deterministic scoring plus the configured-judge acceptance gate)
 - src/eval/runner.ts (the main loop — you'll integrate the judge call after screenshots)
 - docs/agent-eval-loop.md Appendix B (scoring formula with judge weight)
 
@@ -638,8 +639,8 @@ Add a new export that incorporates the judge score:
 function applyJudgeScore(base: ScoreBreakdown, judgeScore: number): ScoreBreakdown
 ```
 
-This takes the existing ScoreBreakdown (where judge=0 and total used redistributed
-weights) and recalculates with the real judge score:
+This takes the deterministic ScoreBreakdown and recalculates it with the real
+judge score while retaining the judge weight:
 - total = geometry * 0.4 + constraints * 0.3 + api_surface * 0.2 + judgeScore * 0.1
 - Update the judge and total fields, return new object.
 

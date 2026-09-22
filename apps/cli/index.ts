@@ -334,7 +334,7 @@ async function cmdEval(args: string[]) {
   }
 
   const modelConfigs = parsed.modelRefs.map((modelRef) => parseModelConfig(modelRef));
-  const judgeConfig = parsed.judgeRef ? parseModelConfig(parsed.judgeRef) : undefined;
+  const judgeConfig = !parsed.noJudge && parsed.judgeRef ? parseModelConfig(parsed.judgeRef) : undefined;
   const taskFiles = collectTaskFiles(parsed.taskPath);
   if (taskFiles.length === 0) {
     console.error(`[cadlad eval] No task files found at ${parsed.taskPath}`);
@@ -357,10 +357,12 @@ async function cmdEval(args: string[]) {
       const status = result.pass ? "PASS" : "FAIL";
       const seconds = (result.duration_ms / 1000).toFixed(1);
       const tokens = result.total_tokens.toLocaleString("en-US");
+      const judgeSuffix = result.judge === undefined ? "" : ` (judge:${Math.round(result.judge)})`;
       const reasonSuffix = result.pass ? "" : `  reason: ${result.reason ?? "score below threshold"}`;
       console.log(
-        `[eval] ${task.id.padEnd(14)} (${parsed.modelRefs[0]})  ${status.padEnd(4)}  score=${Math.round(result.score)}  iterations=${result.iterations}  tokens=${tokens}  time=${seconds}s${reasonSuffix}`,
+        `[eval] ${task.id.padEnd(14)} (${parsed.modelRefs[0]})  ${status.padEnd(4)}  score=${Math.round(result.score)}${judgeSuffix}  iterations=${result.iterations}  tokens=${tokens}  time=${seconds}s${reasonSuffix}`,
       );
+      if (result.feedback) console.log(`[eval] feedback: ${result.feedback}`);
       if (renderSession) await renderSession.close();
       if (!result.pass) {
         process.exit(1);
@@ -383,10 +385,12 @@ async function cmdEval(args: string[]) {
         const status = result.pass ? "PASS" : "FAIL";
         const seconds = (result.duration_ms / 1000).toFixed(1);
         const tokens = result.total_tokens.toLocaleString("en-US");
+        const judgeSuffix = result.judge === undefined ? "" : ` (judge:${Math.round(result.judge)})`;
         const reasonSuffix = result.pass ? "" : `  reason: ${result.reason ?? "score below threshold"}`;
         console.log(
-          `[eval] ${result.task.id} (${result.model})  ${status}  score=${Math.round(result.score)}  iterations=${result.iterations}  tokens=${tokens}  time=${seconds}s${reasonSuffix}`,
+          `[eval] ${result.task.id} (${result.model})  ${status}  score=${Math.round(result.score)}${judgeSuffix}  iterations=${result.iterations}  tokens=${tokens}  time=${seconds}s${reasonSuffix}`,
         );
+        if (result.feedback) console.log(`[eval] feedback: ${result.feedback}`);
       },
     });
 
@@ -860,7 +864,7 @@ Usage:
   cadlad history --file <file.forge.ts> [--limit N] [--offset N] [--json]
                                        Show local revision history
   cadlad export <file> -o output.stl    Export model to STL
-  cadlad eval <task.yaml|dir> [--model <provider://model|context-loop|http://host/model>] [--concurrency <n>] [--repeat <n>]
+  cadlad eval <task.yaml|dir> [--model <provider://model|context-loop|http://host/model>] [--judge <provider://model>] [--no-judge] [--render] [--concurrency <n>] [--repeat <n>]
                                        Run one or many eval tasks across one or many models
   cadlad eval-prompt <task.yaml> [--json]
                                        Emit the eval prompt for a task (agent reads this, generates code)
@@ -1022,11 +1026,12 @@ function parseHistoryArgs(args: string[]): { file?: string; limit: number; offse
   return parsed;
 }
 
-function parseEvalArgs(args: string[]): { taskPath?: string; modelRefs: string[]; judgeRef?: string; concurrency: number; repeat: number; render: boolean } {
+function parseEvalArgs(args: string[]): { taskPath?: string; modelRefs: string[]; judgeRef?: string; noJudge: boolean; concurrency: number; repeat: number; render: boolean } {
   const parsed = {
     taskPath: undefined as string | undefined,
     modelRefs: [] as string[],
     judgeRef: undefined as string | undefined,
+    noJudge: false,
     concurrency: 2,
     repeat: 1,
     render: false,
@@ -1045,6 +1050,11 @@ function parseEvalArgs(args: string[]): { taskPath?: string; modelRefs: string[]
     if (arg === "--judge") {
       parsed.judgeRef = args[index + 1];
       index += 1;
+      continue;
+    }
+    if (arg === "--no-judge") {
+      parsed.noJudge = true;
+      parsed.judgeRef = undefined;
       continue;
     }
     if (arg === "--concurrency") {
@@ -1077,6 +1087,12 @@ function parseEvalArgs(args: string[]): { taskPath?: string; modelRefs: string[]
 
   if (parsed.modelRefs.length === 0) {
     parsed.modelRefs = ["manual"];
+  }
+
+  // A requested judge needs fresh candidate renders. Make the safe path the
+  // default while retaining --no-judge for deterministic/fast runs.
+  if (parsed.judgeRef && !parsed.noJudge) {
+    parsed.render = true;
   }
 
   return parsed;

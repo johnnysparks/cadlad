@@ -18,7 +18,7 @@ vi.mock("node:fs", async (importOriginal) => {
     ...actual,
     readFileSync: vi.fn((path) => {
       const p = path.toString();
-      if (p.endsWith("ref.png") || p.endsWith("snap1.png")) return Buffer.from("fake-image");
+      if (p.endsWith(".png")) return Buffer.from("fake-image");
       return actual.readFileSync(path);
     }),
     writeFileSync: vi.fn(),
@@ -128,7 +128,12 @@ describe("Evaluation Loop E2E (Mocked)", () => {
     expect(result.score).toBeGreaterThanOrEqual(70);
     expect(result.judge).toBe(100); // SCORE 5 -> 100%
     expect(mockAdapter.generate).toHaveBeenCalledTimes(1);
-    expect(mockRenderSession.renderCode).toHaveBeenCalledWith(mockCode, expect.any(String), task.id, expect.any(Array));
+    expect(mockRenderSession.renderCode).toHaveBeenCalledWith(
+      mockCode,
+      expect.stringContaining(`/iteration-1-`),
+      expect.stringMatching(/^e2e-test-box-iteration-1-[a-f0-9]{12}$/),
+      expect.any(Array),
+    );
     expect(imageSimilarity.scoreImageSimilarity).toHaveBeenCalled();
   });
 
@@ -184,5 +189,123 @@ describe("Evaluation Loop E2E (Mocked)", () => {
     expect(result.pass).toBe(true);
     expect(result.iterations).toBe(2);
     expect(mockAdapter.generate).toHaveBeenCalledTimes(2);
+  });
+
+  it("fails a visually wrong but valid candidate and exposes render feedback on retry", async () => {
+    const firstCode = "return box(10, 10, 10);";
+    const secondCode = "return box(12, 10, 10);";
+    const mockAdapter = {
+      supportsVision: true,
+      generate: vi.fn()
+        .mockResolvedValueOnce({ text: firstCode, usage: { total_tokens: 10 } })
+        .mockResolvedValueOnce({ text: secondCode, usage: { total_tokens: 10 } }),
+    };
+    const mockJudgeAdapter = {
+      supportsVision: true,
+      generate: vi.fn()
+        .mockResolvedValueOnce({
+          text: "SCORE: 1\nPASS: no\nFEEDBACK: The candidate is too short and does not match the reference proportions.",
+          usage: { total_tokens: 5 },
+        })
+        .mockResolvedValueOnce({
+          text: "SCORE: 5\nPASS: yes\nFEEDBACK: The revised proportions match the target.",
+          usage: { total_tokens: 5 },
+        }),
+    };
+    vi.mocked(modelAdapter.createModelAdapter)
+      .mockReturnValueOnce(mockAdapter as any)
+      .mockReturnValue(mockJudgeAdapter as any);
+    vi.mocked(modelAdapter.extractCode)
+      .mockReturnValueOnce(firstCode)
+      .mockReturnValueOnce(secondCode);
+    vi.mocked(runtime.evaluateModel).mockResolvedValue({
+      errors: [],
+      warnings: [],
+      evaluation: {
+        summary: { errorCount: 0, warningCount: 0 },
+        stats: {
+          available: true,
+          data: {
+            triangles: 12,
+            bodies: 1,
+            boundingBox: { min: [0, 0, 0], max: [10, 10, 10] },
+            volume: 1000,
+            checks: { hasZeroVolume: false, hasDegenerateBoundingBox: false },
+          },
+        },
+      },
+    } as any);
+    const mockRenderSession = {
+      renderCode: vi.fn()
+        .mockResolvedValueOnce(["/tmp/snap1.png"])
+        .mockResolvedValueOnce(["/tmp/snap2.png"]),
+    };
+    vi.mocked(imageSimilarity.scoreImageSimilarity).mockResolvedValue({ score: 80, pairs: [] });
+
+    const result = await runEval(task, config, {
+      judgeConfig,
+      renderSession: mockRenderSession as any,
+    });
+
+    expect(result.pass).toBe(true);
+    expect(result.iterations).toBe(2);
+    expect(result.feedback).toContain("revised proportions");
+    expect(result.screenshot_paths).toEqual(["/tmp/snap2.png"]);
+    expect(mockAdapter.generate).toHaveBeenCalledTimes(2);
+    expect(mockAdapter.generate.mock.calls[1][0].images).toHaveLength(2);
+    expect(mockAdapter.generate.mock.calls[1][0].messages[0].content).toContain("Candidate render");
+    expect(mockAdapter.generate.mock.calls[1][0].messages[0].content).toContain("too short");
+  });
+
+  it("does not reuse a prior screenshot when a later render fails", async () => {
+    const mockAdapter = {
+      supportsVision: true,
+      generate: vi.fn()
+        .mockResolvedValueOnce({ text: "return box(10, 10, 10);", usage: { total_tokens: 10 } })
+        .mockResolvedValueOnce({ text: "return box(10, 10, 10);", usage: { total_tokens: 10 } }),
+    };
+    const mockJudgeAdapter = {
+      supportsVision: true,
+      generate: vi.fn().mockResolvedValue({
+        text: "SCORE: 1\nPASS: no\nFEEDBACK: The candidate is visually wrong.",
+        usage: { total_tokens: 5 },
+      }),
+    };
+    vi.mocked(modelAdapter.createModelAdapter)
+      .mockReturnValueOnce(mockAdapter as any)
+      .mockReturnValue(mockJudgeAdapter as any);
+    vi.mocked(modelAdapter.extractCode).mockReturnValue("return box(10, 10, 10);");
+    vi.mocked(runtime.evaluateModel).mockResolvedValue({
+      errors: [],
+      warnings: [],
+      evaluation: {
+        summary: { errorCount: 0, warningCount: 0 },
+        stats: {
+          available: true,
+          data: {
+            triangles: 12,
+            bodies: 1,
+            boundingBox: { min: [0, 0, 0], max: [10, 10, 10] },
+            volume: 1000,
+            checks: { hasZeroVolume: false, hasDegenerateBoundingBox: false },
+          },
+        },
+      },
+    } as any);
+    const mockRenderSession = {
+      renderCode: vi.fn()
+        .mockResolvedValueOnce(["/tmp/snap1.png"])
+        .mockRejectedValueOnce(new Error("render crashed")),
+    };
+
+    const result = await runEval(
+      { ...task, max_iterations: 2 },
+      config,
+      { judgeConfig, renderSession: mockRenderSession as any },
+    );
+
+    expect(result.pass).toBe(false);
+    expect(result.screenshot_paths).toEqual([]);
+    expect(result.feedback).toContain("No current-iteration candidate renders");
   });
 });
