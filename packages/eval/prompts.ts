@@ -47,8 +47,12 @@ export function buildRetryPrompt(
   prevSource: string,
   errors: string[],
   score: ScoreBreakdown,
+  feedback: string[] = [],
 ): string {
   const issues = errors.length > 0 ? errors.map((error) => `- ${error}`).join("\n") : "- No runtime errors reported.";
+  const visualFeedback = feedback.length > 0
+    ? feedback.map((entry) => `- ${entry}`).join("\n")
+    : "- No render or judge feedback available.";
 
   return [
     "Your previous CadLad .forge.ts response did not satisfy the task.",
@@ -61,6 +65,8 @@ export function buildRetryPrompt(
     "",
     "What went wrong:",
     issues,
+    "Visual/agent feedback:",
+    visualFeedback,
     `- Scores: total=${score.total.toFixed(2)}, geometry=${score.geometry.toFixed(2)}, constraints=${score.constraints.toFixed(2)}, api=${score.api.toFixed(2)}, judge=${score.judge.toFixed(2)}`,
     "",
     "Previous code:",
@@ -68,6 +74,9 @@ export function buildRetryPrompt(
     prevSource.trim(),
     "```",
     "",
+    feedback.some((entry) => entry.toLowerCase().includes("candidate render"))
+      ? "Candidate render images are attached to this retry. Inspect every view before editing the model."
+      : "",
     "Return ONLY corrected .forge.ts code in a ```typescript fence.",
   ].join("\n");
 }

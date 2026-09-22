@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scoreEval } from "../scorer.js";
+import { applyJudgeScore, describeScoreFailures, scoreEval } from "../scorer.js";
 import type { TaskSpec } from "../types.js";
 import type { EvaluationBundle } from "@cadlad/kernel/types.js";
 
@@ -81,5 +81,62 @@ describe("scoreEval", () => {
     expect(result.weights.constraints).toBeCloseTo(0.3333, 3);
     expect(result.weights.api).toBeCloseTo(0.2222, 3);
     expect(result.judge).toBe(0);
+  });
+
+  it("uses the task threshold instead of a hardcoded pass score", () => {
+    const task: TaskSpec = {
+      id: "strict-threshold",
+      difficulty: 1,
+      description: "strict threshold",
+      acceptance: {},
+      api_surface: [],
+      pass_threshold: 101,
+    };
+
+    const result = scoreEval(task, makeBundle(), "return box(10, 10, 10);");
+
+    expect(result.total).toBe(100);
+    expect(result.pass).toBe(false);
+  });
+
+  it("keeps a zero judge verdict as an applied failing gate", () => {
+    const task: TaskSpec = {
+      id: "judge-gate",
+      difficulty: 1,
+      description: "judge gate",
+      acceptance: {},
+      api_surface: [],
+      pass_threshold: 70,
+    };
+    const base = scoreEval(task, makeBundle(), "return box(10, 10, 10);");
+    const result = applyJudgeScore(base, 0, { pass: false, threshold: task.pass_threshold });
+
+    expect(result.judge).toBe(0);
+    expect(result.weights.judge).toBeCloseTo(0.1);
+    expect(result.pass).toBe(false);
+  });
+
+  it("describes deterministic misses in retry-friendly language", () => {
+    const task: TaskSpec = {
+      id: "feedback",
+      difficulty: 1,
+      description: "feedback",
+      acceptance: {
+        body_count: 2,
+        volume_min: 30000,
+        has_subtraction: true,
+        has_params: ["width"],
+      },
+      api_surface: [],
+    };
+
+    const failures = describeScoreFailures(task, makeBundle(), "return box(10, 10, 10);");
+
+    expect(failures).toEqual(expect.arrayContaining([
+      "body count is 1; expected 2",
+      "volume 22000.00 is below 30000",
+      "required subtraction is missing",
+      "missing required parameters: width",
+    ]));
   });
 });

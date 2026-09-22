@@ -10,7 +10,7 @@
 - ✅ Core eval loop shipped (`types`, `model-adapter`, `scorer`, `prompts`, `runner`, CLI wiring).
 - ✅ Batch + reporting shipped (`batch`, `eval-report`, issues/deadweight summaries).
 - ✅ CI plumbing shipped (`scripts/ci-eval.sh`, workflow).
-- 🟡 Judge plumbing is mostly shipped in runner/scoring, but `--judge/--no-judge` CLI ergonomics still need final wiring.
+- ✅ Visual judge plumbing, retry feedback, candidate-image handoff, and `--judge/--no-judge` CLI controls are shipped.
 - 🟡 Ad-hoc task synthesis (`cadlad eval --task "..."`) and benchmark reference image pack are still open.
 
 ---
@@ -345,8 +345,8 @@ This is the fastest path to "works in local dev, CI, and OpenAI-hosted codegen s
 **Day 8: LLM-as-Judge (optional visual eval)**
 - [x] `src/eval/judge.ts` — send screenshots + task description to a vision model
   - "Does this look like {description}? Score 1-5. What's wrong?"
-- [x] Integrate judge score into overall scoring (weighted: 60% deterministic, 40% judge)
-- [ ] Can be skipped (`--no-judge`) for non-vision models or speed (runner supports optional judge; CLI flag wiring still pending)
+- [x] Integrate judge score into overall scoring (weighted: 90% deterministic, 10% judge, with the judge as a pass gate)
+- [x] Can be skipped (`--no-judge`) for non-vision models or speed; configured judge verdicts are acceptance gates
 
 **Day 9: Multi-model batch + parallelism**
 - [x] `--model` flag accepts multiple values
@@ -428,7 +428,7 @@ constraint_score (0-100):
 api_score (0-100):
   - each required API method present in source: 100/N pts each
 
-judge_score (0-100):  [optional, 0 if skipped → weight redistributed]
+judge_score (0-100):  [optional; skipped runs redistribute the weight, configured runs keep the judge weight and gate pass/fail]
   - LLM vision rating 1-5 mapped to 0-100
 ```
 

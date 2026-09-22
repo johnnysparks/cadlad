@@ -34,11 +34,23 @@ describe("eval prompts", () => {
       judge: 0,
       weights: { geometry: 0.44, constraints: 0.33, api: 0.22, judge: 0 },
     };
-    const prompt = buildRetryPrompt(task, "return box(1,1,1);", ["Volume too low"], score);
+    const prompt = buildRetryPrompt(
+      task,
+      "return box(1,1,1);",
+      ["Volume too low"],
+      score,
+      [
+        "Candidate render images are available for views: candidate-iso.png.",
+        "Judge feedback: the block is too small.",
+      ],
+    );
 
     expect(prompt).toContain("What went wrong");
     expect(prompt).toContain("Volume too low");
     expect(prompt).toContain("Scores: total=75.00");
+    expect(prompt).toContain("Candidate render images are available");
+    expect(prompt).toContain("the block is too small");
+    expect(prompt).toContain("Candidate render images are attached to this retry");
     expect(prompt).toContain("```typescript");
   });
 

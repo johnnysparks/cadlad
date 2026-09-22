@@ -58,7 +58,7 @@ export async function judgeModel(opts: {
     "Respond in EXACTLY this format:",
     "SCORE: <1-5>",
     "PASS: <yes/no>",
-    "FEEDBACK: <one sentence summary of the candidate's accuracy>",
+    "FEEDBACK: <one sentence with concrete discrepancies and a corrective action; mention proportions, missing features, or placement when applicable>",
     opts.source ? `\nCANDIDATE SOURCE CODE (optional context):\n${opts.source}` : "",
   ].join("\n");
 

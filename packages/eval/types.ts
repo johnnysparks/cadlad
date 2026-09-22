@@ -98,6 +98,10 @@ export interface EvalResult {
   log_path: string;
   source_path: string;
   model: string;
+  judge?: number;
+  screenshot_paths?: string[];
+  feedback?: string;
+  image_similarity?: number;
 }
 
 export interface ScoringRubric {
@@ -136,6 +140,7 @@ export type EventType =
   | "score.computed"
   | "judge.prompt_sent"
   | "judge.verdict"
+  | "judge.unavailable"
   | "decide.action"
   | "build.retry"
   | "run.completed"
