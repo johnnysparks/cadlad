@@ -44,7 +44,7 @@ REJECTED=""
 for NAME in $DIFFS; do
   REF_IMG="$SNAPSHOTS_DIR/${NAME}/reference.png"
   CUR_IMG="/tmp/cadlad-snapshots/${NAME}.png"
-  EXAMPLE_FILE="$EXAMPLES_DIR/${NAME}/${NAME}.forge.js"
+  EXAMPLE_FILE="$EXAMPLES_DIR/${NAME}/${NAME}.forge.ts"
 
   if [ ! -f "$REF_IMG" ] || [ ! -f "$CUR_IMG" ]; then
     echo "Skipping $NAME — missing image files"

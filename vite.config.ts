@@ -8,6 +8,7 @@ export default defineConfig({
   root: "apps/studio-web",
   publicDir: "../../public",
   build: {
+    target: "es2022",
     outDir: "../../dist",
     sourcemap: true,
     rollupOptions: {
@@ -19,6 +20,7 @@ export default defineConfig({
     },
   },
   worker: {
+    plugins: () => [tsconfigPaths()],
     format: "es",
   },
   optimizeDeps: {

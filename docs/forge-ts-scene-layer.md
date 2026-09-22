@@ -142,7 +142,7 @@ Render is optional and late. Agents get full structured feedback without renderi
 
 - Models that don't use `defineScene()` still work through the existing evaluation path
 - `model` can be a direct `Solid`/`Assembly` value or a factory function
-- `.forge.js` and `.forge.ts` files without `defineScene()` evaluate normally
+- `.forge.ts` files without `defineScene()` evaluate normally
 
 ## Key files
 

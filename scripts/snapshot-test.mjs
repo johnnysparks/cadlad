@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { discoverModels } from "./model-files.mjs";
 /**
  * Snapshot tests for CadLad example models.
  *
@@ -11,7 +12,7 @@
  *   node scripts/snapshot-test.mjs --url http://localhost:5177
  */
 
-import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync, readdirSync } from "node:fs";
 import { join, basename, resolve } from "node:path";
 import { execSync } from "node:child_process";
@@ -25,19 +26,19 @@ const ROOT = resolve(__dirname, "..");
 // Never install it ourselves; just use what the environment has.
 async function loadPuppeteer() {
   // 1. Project node_modules
-  try { return await import("puppeteer"); } catch {}
+  try { return await import("puppeteer"); } catch { /* Try the next environment candidate. */ }
   // 2. Common temp install location
-  try { return await import("/tmp/cadlad_sniff/node_modules/puppeteer/lib/esm/puppeteer/puppeteer.js"); } catch {}
+  try { return await import("/tmp/cadlad_sniff/node_modules/puppeteer/lib/esm/puppeteer/puppeteer.js"); } catch { /* Try the next environment candidate. */ }
   // 3. Ask node to resolve it globally
   try {
     const globalPath = execSync("node -e \"console.log(require.resolve('puppeteer'))\"", { encoding: "utf-8" }).trim();
     if (globalPath) return await import(globalPath);
-  } catch {}
+  } catch { /* Try the next environment candidate. */ }
   // 4. npx cache (resolve without installing)
   try {
     const npxPath = execSync("npx --no-install puppeteer --version 2>/dev/null && npx --no-install -p puppeteer node -e \"console.log(require.resolve('puppeteer'))\"", { encoding: "utf-8" }).trim();
     if (npxPath) return await import(npxPath);
-  } catch {}
+  } catch { /* Try the next environment candidate. */ }
 
   console.error(`Puppeteer not found in environment.
 Install it anywhere — the script searches project, global, and temp locations:
@@ -60,7 +61,7 @@ function findChromeBinary() {
         const p = join(pwBase, d, "chrome-linux", "chrome");
         if (existsSync(p)) return p;
       }
-    } catch {}
+    } catch { /* Try the next environment candidate. */ }
   }
   // Puppeteer cache
   const ppBase = join(home, ".cache", "puppeteer", "chrome");
@@ -71,7 +72,7 @@ function findChromeBinary() {
         const p = join(ppBase, d, "chrome-linux64", "chrome");
         if (existsSync(p)) return p;
       }
-    } catch {}
+    } catch { /* Try the next environment candidate. */ }
   }
   return null;
 }
@@ -93,34 +94,9 @@ function argVal(flag) {
 async function main() {
   await mkdir(TMP_DIR, { recursive: true });
 
-  // Discover examples: each subfolder contains a {name}.forge.js file
-  const entries = await readdir(EXAMPLES_DIR, { withFileTypes: true });
-  const files = [];
+  const files = await discoverModels(EXAMPLES_DIR);
 
-  // Folder-based projects (layout: projects/{name}/{name}.forge.js)
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      const dirFiles = await readdir(join(EXAMPLES_DIR, entry.name));
-      const forge = dirFiles.find((f) => f.endsWith(".forge.js"));
-      if (forge) files.push(join(entry.name, forge));
-    }
-  }
-
-  // Fallback: flat .forge.js files in root (transitional compatibility)
-  for (const entry of entries) {
-    if (!entry.isDirectory() && entry.name.endsWith(".forge.js")) {
-      files.push(entry.name);
-    }
-  }
-
-  files.sort();
-
-  if (files.length === 0) {
-    console.error("No .forge.js files found in", EXAMPLES_DIR);
-    process.exit(1);
-  }
-
-  console.log(`Found ${files.length} examples: ${files.map(f => basename(f, ".forge.js")).join(", ")}`);
+  console.log(`Found ${files.length} examples: ${files.map(f => basename(f, ".forge.ts")).join(", ")}`);
 
   const puppeteer = await loadPuppeteer();
   const launch = puppeteer.default?.launch ? puppeteer.default : puppeteer;
@@ -152,7 +128,7 @@ async function main() {
   const results = [];
 
   for (const file of files) {
-    const name = basename(file, ".forge.js");
+    const name = basename(file, ".forge.ts");
     const code = await readFile(join(EXAMPLES_DIR, file), "utf-8");
     const snapshotDir = join(SNAPSHOTS_DIR, name);
     const refPath = join(snapshotDir, "reference.png");

@@ -43,7 +43,7 @@ function findChromeBinary() {
         const p = join(pwBase, d, "chrome-linux", "chrome");
         if (existsSync(p)) return p;
       }
-    } catch {}
+    } catch { /* Try the next environment candidate. */ }
   }
 
   const ppBase = join(home, ".cache", "puppeteer", "chrome");
@@ -54,7 +54,7 @@ function findChromeBinary() {
         const p = join(ppBase, d, "chrome-linux64", "chrome");
         if (existsSync(p)) return p;
       }
-    } catch {}
+    } catch { /* Try the next environment candidate. */ }
   }
 
   const systemChrome = runMaybe("which google-chrome || which chromium || which chromium-browser");

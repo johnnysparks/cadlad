@@ -16,31 +16,7 @@ import {
 } from "@cadlad/rendering/scene-builder.js";
 import type { Body } from "@cadlad/kernel/types.js";
 
-interface Example {
-  name: string;
-  file: string;
-  code: string;
-}
-
-// Vite glob import — reads all .forge.js files as raw strings at build time
-const exampleModules = import.meta.glob("../projects/*/*.forge.js", {
-  query: "?raw",
-  import: "default",
-  eager: true,
-}) as Record<string, string>;
-
-const examples: Example[] = Object.entries(exampleModules)
-  .map(([path, code]) => {
-    const file = path.split("/").pop()!;
-    const name = file
-      .replace(".forge.js", "")
-      .split("-")
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(" ");
-    const codeStr = typeof code === "string" ? code : String(code);
-    return { name, file, code: codeStr.trim() };
-  })
-  .sort((a, b) => a.name.localeCompare(b.name));
+import { examples } from "./examples.js";
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

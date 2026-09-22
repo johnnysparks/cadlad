@@ -13,7 +13,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc --noEmit && vite build",
     "build:cli": "tsc -p apps/cli/tsconfig.json",
     "preview": "vite preview",
     "snap": "node scripts/render-node.mjs",

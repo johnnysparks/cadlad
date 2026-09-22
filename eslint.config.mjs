@@ -19,6 +19,7 @@ export default tseslint.config(
       'apps/**/*.{ts,tsx,mts,cts,js,mjs,cjs}',
       'packages/**/*.{ts,tsx,mts,cts,js,mjs,cjs}',
       'infra/**/*.{ts,tsx,mts,cts,js,mjs,cjs}',
+      'scripts/**/*.mjs',
     ],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
