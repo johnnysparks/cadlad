@@ -51,6 +51,7 @@ The roadmap is split into per-phase docs in `docs/`. Read [docs/roadmap.md](docs
 - Use `param()` for slider-driven parameters with min/max/unit
 - Primitives: `box()`, `cylinder()`, `sphere()`, `roundedRect()`, `roundedBox()`, `taperedBox()`
 - 2D → 3D: `Sketch.begin()`, `rect()`, `circle()`, `slot()`, `lShape()`, `channel()`, `tShape()` → `.extrude()` / `.extrudeAlong(dir, h)` / `.revolve()` / `.sweep(path)`
+- Raw 2D → 3D: `extrudePolygon(points, height)` is available as a validated escape hatch; prefer `Sketch` when you need chained drawing or profile diagnostics.
 - Standalone: `sweep(profile, path)`, `loft(profiles, heights)`
 - Booleans: `.union()`, `.subtract()`, `.intersect()`, `.subtractAll()`, `.unionAll()`, `.intersectAll()`
 - Construction geometry: `toolBody("name", solid)` for non-rendered cutter/helper solids used in boolean ops
@@ -75,6 +76,7 @@ The roadmap is split into per-phase docs in `docs/`. Read [docs/roadmap.md](docs
 | Tool | Input | Method | Contract |
 |---|---|---|---|
 | **Extrude** | 2D sketch | `sketch.extrude(height)` | Pushes profile along Z. Height > 0. Validates sketch, auto-corrects CW→CCW winding. |
+| **ExtrudePolygon** | finite 2D polygon | `extrudePolygon(points, height)` | Pushes a raw polygon along +Z. Requires ≥3 points, non-zero area, and positive finite height; auto-corrects CW→CCW winding. |
 | **ExtrudeAlong** | 2D sketch + direction | `sketch.extrudeAlong([x,y,z], height)` | Pushes profile along arbitrary direction. Eliminates manual rotate after extrude. |
 | **Revolve** | 2D sketch | `sketch.revolve(segments?)` | Rotates profile around Y axis. Default 32 segments. Profile must be on positive X side. |
 | **Sweep** | 2D sketch + 3D path | `sketch.sweep(path)` or `sweep(profile, path)` | Extrudes profile along 3D path. Path ≥ 2 points, profile ≥ 3 points. Profile oriented perpendicular to path tangent. |

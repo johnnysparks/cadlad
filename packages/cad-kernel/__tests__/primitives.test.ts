@@ -73,6 +73,13 @@ describe("extrudePolygon", () => {
     const s = extrudePolygon(pts, 5);
     expect(s.volume()).toBeCloseTo(500, 0);
   });
+
+  it("rejects invalid profiles and heights", () => {
+    expect(() => extrudePolygon([[0, 0], [1, 0]], 5)).toThrow("at least 3 points");
+    expect(() => extrudePolygon([[0, 0], [1, 0], [2, 0]], 5)).toThrow("non-zero");
+    expect(() => extrudePolygon([[0, 0], [1, 0], [0, 1]], 0)).toThrow("positive finite");
+    expect(() => extrudePolygon([[0, 0], [Number.NaN, 0], [0, 1]], 5)).toThrow("finite coordinates");
+  });
 });
 
 describe("roundedBox", () => {

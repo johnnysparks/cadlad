@@ -13,7 +13,7 @@ export { Sketch, ConstrainedSketch, rect, circle, slot, lShape, channel, tShape 
 export type { ConstraintSolveOptions } from "./sketch.js";
 
 // 3D Primitives
-export { box, cylinder, sphere, roundedRect, roundedBox, taperedBox, sweep, loft } from "@cadlad/kernel/primitives.js";
+export { box, cylinder, sphere, roundedRect, roundedBox, taperedBox, extrudePolygon, sweep, loft } from "@cadlad/kernel/primitives.js";
 
 // Solid class (for type annotations in user scripts)
 export { Solid } from "@cadlad/kernel/solid.js";

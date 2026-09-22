@@ -46,6 +46,18 @@ describe("capability registry", () => {
     expect(result.bodies[0].mesh.indices.length).toBeGreaterThan(0);
   });
 
+  it("exposes raw polygon extrusion as a validated public escape hatch", async () => {
+    const result = await evaluateModel(`
+      const profile: Vec2[] = [[-20, -10], [20, -10], [20, 10], [-20, 10]];
+      return extrudePolygon(profile, 10);
+    `);
+
+    expect(result.errors).toEqual([]);
+    expect(result.bodies).toHaveLength(1);
+    expect(result.bodies[0].mesh.indices.length).toBeGreaterThan(0);
+    expect(result.evaluation.stats.data?.volume).toBeCloseTo(8000, 0);
+  });
+
   it("runs every registry-advertised example through the shared CLI, Studio, and eval runtime path", async () => {
     const examples = CAPABILITIES.filter((capability) => capability.example);
     const task: TaskSpec = {

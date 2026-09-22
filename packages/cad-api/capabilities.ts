@@ -20,6 +20,7 @@ import {
   roundedRect,
   roundedBox,
   taperedBox,
+  extrudePolygon,
   sweep,
   loft,
 } from "@cadlad/kernel/primitives.js";
@@ -83,6 +84,14 @@ const globalCapabilities: GlobalCapability[] = [
     name: "taperedBox", category: "Primitives", exposure: "global", binding: taperedBox,
     signature: "taperedBox(height, widthBottom, depthBottom, widthTop, depthTop)", description: "Create a box that tapers between two rectangular sections.", detailLevel: "refined",
     declaration: "declare function taperedBox(height: number, widthBottom: number, depthBottom: number, widthTop: number, depthTop: number): Solid;",
+  },
+  {
+    name: "extrudePolygon", category: "Sketching", exposure: "global", binding: extrudePolygon,
+    signature: "extrudePolygon(points, height)",
+    description: "Extrude a validated finite 2D polygon along +Z; use Sketch for chained drawing and richer profile diagnostics.", detailLevel: "refined",
+    example: "const profile: Vec2[] = [[-20, -10], [20, -10], [20, 10], [-20, 10]];\nreturn extrudePolygon(profile, 10);",
+    notes: "Raw polygon escape hatch. Prefer Sketch.begin()/rect() when building profiles interactively or from agent-generated geometry.",
+    declaration: "declare function extrudePolygon(points: Vec2[], height: number): Solid;",
   },
   {
     name: "sweep", category: "Primitives", exposure: "global", binding: sweep,
