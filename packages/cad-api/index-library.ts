@@ -6,7 +6,7 @@
 
 export {
   param,
-  box, cylinder, sphere, roundedRect, roundedBox, taperedBox, sweep, loft,
+  box, cylinder, sphere, roundedRect, roundedBox, taperedBox, extrudePolygon, sweep, loft,
   Sketch, rect, circle, slot, lShape, channel, tShape,
   Solid,
   Assembly, assembly,

@@ -61,6 +61,19 @@ export function extrudePolygon(
   points: Vec2[],
   height: number,
 ): Solid {
+  if (!Number.isFinite(height) || height <= 0) {
+    throw new Error("extrudePolygon: height must be a positive finite number");
+  }
+  if (points.length < 3) {
+    throw new Error("extrudePolygon: profile must contain at least 3 points");
+  }
+  if (points.some(([x, y]) => !Number.isFinite(x) || !Number.isFinite(y))) {
+    throw new Error("extrudePolygon: profile points must contain finite coordinates");
+  }
+  if (Math.abs(signedArea(points)) < 1e-10) {
+    throw new Error("extrudePolygon: profile area must be non-zero");
+  }
+
   let pts = points;
   if (signedArea(pts) < 0) {
     // Clockwise → reverse to CCW. Log so the user learns.
