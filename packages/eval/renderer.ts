@@ -19,6 +19,13 @@ export type ViewAngle = "iso" | "front" | "back" | "left" | "right" | "top" | "b
 export const ALL_VIEWS: ViewAngle[] = ["iso", "front", "back", "left", "right", "top", "bottom"];
 export const DEFAULT_VIEWS: ViewAngle[] = ["iso", "front", "right", "top"];
 
+export type BrowserEvaluationSummary = {
+  errors: string[];
+  diagnostics: unknown[];
+  summary: { errorCount: number; warningCount: number } | undefined;
+  stats: { available: boolean; data?: unknown } | undefined;
+};
+
 /**
  * A long-lived browser session for capturing model renders.
  * Create once per eval run, share across iterations.
@@ -91,6 +98,44 @@ export class RenderSession {
   }
 
   /**
+   * Evaluate model code in the actual Studio worker and return the serializable
+   * diagnostics/statistics used for parity checks.
+   */
+  async evaluateCode(code: string): Promise<BrowserEvaluationSummary> {
+    await this.page.evaluate((src: string) => {
+      console.log("[browser] setCode called");
+      (window as Window & { __cadlad?: { setCode(c: string): void } }).__cadlad!.setCode(src);
+    }, code);
+
+    console.log(`[renderer] Code injected. Calling run()...`);
+    const result = await this.page.evaluate(async () => {
+      console.log("[browser] api.run() starting");
+      const api = (window as Window & {
+        __cadlad?: {
+          run(): Promise<{
+            errors: string[];
+            diagnostics?: unknown[];
+            evaluation?: {
+              summary?: { errorCount: number; warningCount: number };
+              stats?: { available: boolean; data?: unknown };
+            };
+          }>;
+        };
+      }).__cadlad!;
+      const r = await api.run();
+      console.log("[browser] api.run() finished", r?.errors);
+      return {
+        errors: r?.errors ?? [],
+        diagnostics: r?.diagnostics ?? [],
+        summary: r?.evaluation?.summary,
+        stats: r?.evaluation?.stats,
+      };
+    });
+
+    return result;
+  }
+
+  /**
    * Inject model code, wait for render to complete, then capture each view.
    * Returns absolute paths to written PNG files.
    */
@@ -103,20 +148,7 @@ export class RenderSession {
     console.log(`[renderer] Rendering code for ${modelName}...`);
     await mkdir(outputDir, { recursive: true });
 
-    // Inject code and run — run() awaits the actual render completion
-    await this.page.evaluate((src: string) => {
-      console.log("[browser] setCode called");
-      (window as Window & { __cadlad?: { setCode(c: string): void } }).__cadlad!.setCode(src);
-    }, code);
-
-    console.log(`[renderer] Code injected. Calling run()...`);
-    const result = await this.page.evaluate(async () => {
-      console.log("[browser] api.run() starting");
-      const api = (window as Window & { __cadlad?: { run(): Promise<{ errors: string[] }> } }).__cadlad!;
-      const r = await api.run();
-      console.log("[browser] api.run() finished", r?.errors);
-      return { errors: r?.errors ?? [] };
-    });
+    const result = await this.evaluateCode(code);
 
     if (result.errors.length > 0) {
       throw new Error(`Model errors: ${result.errors.join("; ")}`);

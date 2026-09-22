@@ -81,6 +81,7 @@ self.onmessage = async (e: MessageEvent) => {
         bodies,
         toolBodies,
         errors: result.errors,
+        diagnostics: result.diagnostics,
         params: result.params,
         evaluation: result.evaluation,
         hints: result.hints,

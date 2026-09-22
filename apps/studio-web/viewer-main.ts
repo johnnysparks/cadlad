@@ -38,6 +38,7 @@ function toModelResult(r: Awaited<ReturnType<EvalWorkerClient["run"]>>): ModelRe
     bodies: r.bodies,
     toolBodies: r.toolBodies,
     errors: r.errors,
+    diagnostics: r.diagnostics,
     params: r.params,
     evaluation: r.evaluation,
     hints: r.hints,
