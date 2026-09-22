@@ -15,15 +15,11 @@ import { normalizeScene, defineScene, mm, runScenePostModelValidation, paramSwee
 import { constraint } from "./constraints.js";
 import type { SceneConstraint } from "./constraints.js";
 
-// All API symbols that get injected into model scope
-import { param } from "./params.js";
-import { Sketch, rect, circle } from "./sketch.js";
-import { box, cylinder, sphere, roundedRect, roundedBox, taperedBox, sweep, loft } from "@cadlad/kernel/primitives.js";
-import { assembly } from "./assembly.js";
-import { plane, axis, datum } from "./reference.js";
 import { isToolBody, toolBody } from "./toolbody.js";
 import { withLayeredValidation } from "@cadlad/validation/layered-validation.js";
 import { computeModelStats } from "@cadlad/rendering/model-stats.js";
+import { CAPABILITY_BINDINGS } from "./capabilities.js";
+import { compileModelSource } from "./source-compiler.js";
 
 /**
  * Evaluate a model script string and return the result.
@@ -72,30 +68,12 @@ export async function evaluateModel(
   };
 
   try {
-    // Build a function that receives the API as arguments
-    const apiNames = [
-      "param", "Sketch", "rect", "circle",
-      "box", "cylinder", "sphere", "roundedRect", "roundedBox", "taperedBox",
-      "sweep", "loft",
-      "assembly", "Solid", "Assembly",
-      "defineScene", "mm", "constraint",
-      "paramSweepTest",
-      "plane", "axis", "datum",
-      "toolBody",
-    ];
-    const apiValues = [
-      param, Sketch, rect, circle,
-      box, cylinder, sphere, roundedRect, roundedBox, taperedBox,
-      sweep, loft,
-      assembly, Solid, Assembly,
-      defineScene, mm, constraint,
-      paramSweepTest,
-      plane, axis, datum,
-      toolBody,
-    ];
+    // Build a function that receives the registry-defined API as arguments.
+    const apiNames = Object.keys(CAPABILITY_BINDINGS);
+    const apiValues = apiNames.map((name) => CAPABILITY_BINDINGS[name]);
 
     // Wrap user code so it can use top-level return
-    const wrappedCode = `"use strict";\n${code}`;
+    const wrappedCode = `"use strict";\n${compileModelSource(code)}`;
 
     const fn = new Function(...apiNames, wrappedCode);
     const result = fn(...apiValues);

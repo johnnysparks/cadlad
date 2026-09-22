@@ -7,7 +7,13 @@
   "exports": {
     ".": "./index-library.js",
     "./runtime": "./runtime.js",
-    "./sketch": "./sketch.js"
+    "./runtime.js": "./runtime.js",
+    "./sketch": "./sketch.js",
+    "./sketch.js": "./sketch.js",
+    "./capabilities": "./capabilities.js",
+    "./capabilities.js": "./capabilities.js",
+    "./source-compiler": "./source-compiler.js",
+    "./source-compiler.js": "./source-compiler.js"
   },
   "dependencies": {
     "@cadlad/kernel": "*"

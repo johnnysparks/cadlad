@@ -15,6 +15,7 @@ interface WorkerResult {
   bodies: Body[];
   toolBodies: Body[];
   errors: string[];
+  diagnostics: ModelResult["diagnostics"];
   params: ParamDef[];
   evaluation: EvaluationBundle;
   hints: Hint[];
@@ -46,14 +47,14 @@ export class EvalWorkerClient {
 
     this.worker.onmessage = (e: MessageEvent) => {
       console.log("[eval-worker-client] Received message from worker:", e.data.id, e.data.ok);
-      const { id, ok, bodies, toolBodies, errors, params, evaluation, hints, camera } = e.data;
+      const { id, ok, bodies, toolBodies, errors, diagnostics, params, evaluation, hints, camera } = e.data;
       const entry = this.pending.get(id);
       if (!entry) return; // superseded run — ignore
 
       this.pending.delete(id);
 
       if (!ok) {
-        entry.resolve({ bodies: [], toolBodies: [], errors, params: [], evaluation: emptyEvalBundle(), hints: [], camera: undefined });
+        entry.resolve({ bodies: [], toolBodies: [], errors, diagnostics: [], params: [], evaluation: emptyEvalBundle(), hints: [], camera: undefined });
         return;
       }
 
@@ -61,6 +62,7 @@ export class EvalWorkerClient {
         bodies: deserializeBodies(bodies),
         toolBodies: deserializeBodies(toolBodies),
         errors,
+        diagnostics,
         params,
         evaluation,
         hints,

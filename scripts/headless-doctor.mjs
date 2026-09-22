@@ -57,6 +57,15 @@ function findChromeBinary() {
     } catch { /* Try the next environment candidate. */ }
   }
 
+  const macCandidates = [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    join(home, "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+  ];
+  for (const p of macCandidates) {
+    if (existsSync(p)) return p;
+  }
+
   const systemChrome = runMaybe("which google-chrome || which chromium || which chromium-browser");
   return systemChrome || null;
 }

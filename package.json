@@ -17,6 +17,7 @@
     "build:cli": "tsc -p apps/cli/tsconfig.json",
     "preview": "vite preview",
     "snap": "node scripts/render-node.mjs",
+    "test:browser": "node --import tsx scripts/browser-capability-parity.mjs",
     "headless:doctor": "node scripts/headless-doctor.mjs",
     "test": "node scripts/test.mjs",
     "test:watch": "vitest",

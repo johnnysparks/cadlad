@@ -13,7 +13,7 @@ export { Sketch, ConstrainedSketch, rect, circle, slot, lShape, channel, tShape 
 export type { ConstraintSolveOptions } from "./sketch.js";
 
 // 3D Primitives
-export { box, cylinder, sphere, roundedRect, sweep, loft } from "@cadlad/kernel/primitives.js";
+export { box, cylinder, sphere, roundedRect, roundedBox, taperedBox, sweep, loft } from "@cadlad/kernel/primitives.js";
 
 // Solid class (for type annotations in user scripts)
 export { Solid } from "@cadlad/kernel/solid.js";
@@ -53,3 +53,14 @@ export type { Plane, Axis, Datum, MidplaneAxis, BBoxAnchor } from "./reference.j
 // Tool bodies (construction geometry)
 export { toolBody } from "./toolbody.js";
 export { ToolBody } from "./toolbody.js";
+
+// Shared capability metadata and source compiler
+export {
+  CAPABILITIES,
+  CAPABILITY_BINDINGS,
+  buildCapabilityReference,
+  buildCapabilityExamples,
+  buildCapabilityDeclarations,
+  getRuntimeCapabilityNames,
+} from "./capabilities.js";
+export { compileModelSource } from "./source-compiler.js";
