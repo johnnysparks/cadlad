@@ -3,6 +3,7 @@
  */
 
 import * as monaco from "monaco-editor";
+import { buildCapabilityDeclarations } from "@cadlad/api/capabilities.js";
 
 // Configure Monaco workers for web
 self.MonacoEnvironment = {
@@ -158,95 +159,8 @@ return {
 };
 `;
 
-/** CadLad API type declarations for IntelliSense */
-const CADLAD_TYPES = `
-declare function param(name: string, defaultValue: number, opts?: {
-  min?: number; max?: number; step?: number; unit?: string;
-}): number;
-
-declare function box(x: number, y: number, z: number): Solid;
-declare function cylinder(height: number, radiusBottom: number, radiusTop?: number, segments?: number): Solid;
-declare function sphere(radius: number, segments?: number): Solid;
-declare function roundedRect(width: number, depth: number, radius: number, height?: number): Solid;
-declare function assembly(name: string): Assembly;
-declare function toolBody(name: string, solid: Solid): ToolBody;
-type CameraView = "front" | "back" | "top" | "bottom" | "left" | "right" | "iso";
-type CrossSectionAxis = "x" | "y" | "z";
-type Vec3 = [number, number, number];
-type Body = { mesh: { positions: Float32Array; indices: Uint32Array } };
-type BooleanOperand = Solid | ToolBody;
-
-declare type ToolBody = {
-  _isToolBody: true;
-  name: string;
-  solid: Solid;
-};
-
-declare function rect(width: number, height: number): Sketch;
-declare function circle(radius: number, segments?: number): Sketch;
-
-declare class Solid {
-  union(other: Solid): Solid;
-  unionAll(...parts: Solid[]): Solid;
-  subtract(other: Solid): Solid;
-  subtractAll(...tools: BooleanOperand[]): Solid;
-  intersect(other: Solid): Solid;
-  intersectAll(...parts: BooleanOperand[]): Solid;
-  translate(x: number, y: number, z: number): Solid;
-  rotate(x: number, y: number, z: number): Solid;
-  scale(x: number, y?: number, z?: number): Solid;
-  mirror(normal: [number, number, number]): Solid;
-  mirrorUnion(normal: [number, number, number]): Solid;
-  mirrorAssembly(normal: [number, number, number], namePrefix?: string): Assembly;
-  quarterUnion(normal1: [number, number, number], normal2: [number, number, number]): Solid;
-  linearPattern(count: number, stepX?: number, stepY?: number, stepZ?: number): Solid;
-  linearPatternAssembly(
-    count: number,
-    step?: [number, number, number],
-    namePrefix?: string
-  ): Assembly;
-  circularPattern(
-    count: number,
-    axis?: "x" | "y" | "z",
-    totalAngleDeg?: number,
-    center?: [number, number, number]
-  ): Solid;
-  circularPatternAssembly(
-    count: number,
-    axis?: "x" | "y" | "z",
-    totalAngleDeg?: number,
-    center?: [number, number, number],
-    namePrefix?: string
-  ): Assembly;
-  color(c: string | [number, number, number, number]): Solid;
-  named(name: string): Solid;
-  smooth(subdivisions?: number, minSharpAngle?: number): Solid;
-  fillet(subdivisions?: number): Solid;
-  volume(): number;
-  surfaceArea(): number;
-}
-
-declare class Sketch {
-  static begin(x?: number, y?: number): Sketch;
-  moveTo(x: number, y: number): Sketch;
-  lineTo(x: number, y: number): Sketch;
-  lineBy(dx: number, dy: number): Sketch;
-  arcTo(x: number, y: number, radius: number, segments?: number): Sketch;
-  tangentArcTo(x: number, y: number, segments?: number): Sketch;
-  close(): Sketch;
-  validate(): Array<{ type: "error" | "warning"; message: string }>;
-  extrude(height: number): Solid;
-  extrudeAlong(direction: [number, number, number], height: number): Solid;
-  revolve(segments?: number): Solid;
-  points(): [number, number][];
-}
-
-declare class Assembly {
-  add(name: string, solid: Solid, position?: [number, number, number]): Assembly;
-  toSolid(): Solid;
-  toBodies(): Body[];
-}
-`;
+/** CadLad API type declarations for IntelliSense, generated from the registry. */
+const CADLAD_TYPES = buildCapabilityDeclarations();
 
 export function createEditor(container: HTMLElement): monaco.editor.IStandaloneCodeEditor {
   // Add CadLad type declarations for IntelliSense
