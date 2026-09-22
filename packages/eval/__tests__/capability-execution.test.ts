@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { CAPABILITIES } from "@cadlad/api/capabilities.js";
 import { runEval } from "../runner.js";
 import * as modelAdapter from "../model-adapter.js";
+import type { TaskSpec } from "../types.js";
 
 vi.mock("../model-adapter.js", async () => {
   const actual = await vi.importActual<typeof import("../model-adapter.js")>("../model-adapter.js");
@@ -33,7 +34,7 @@ describe("eval capability execution", () => {
         }),
       });
 
-      const task = {
+      const task: TaskSpec = {
         id: `capability-${capability.name}-${index}`,
         difficulty: 1,
         description: `Execute the ${capability.name} capability example.`,
@@ -42,7 +43,7 @@ describe("eval capability execution", () => {
         reference_images: [],
         max_iterations: 1,
         pass_threshold: 0,
-      } as const;
+      };
 
       const result = await runEval(task, {
         provider: "manual",
