@@ -33,6 +33,8 @@ describe("retained corpus", () => {
       expect(cli.errors).toEqual([]);
       expect(gallery.bodies.length).toBeGreaterThan(0);
       expect(cli.evaluation.stats.data).toEqual(gallery.evaluation.stats.data);
+      expect(cli.diagnostics).toEqual(gallery.diagnostics);
+      expect(cli.evaluation.summary).toEqual(gallery.evaluation.summary);
       for (const body of gallery.bodies) {
         expect(body.mesh.indices.length).toBeGreaterThan(0);
         expect(Array.from(body.mesh.positions).every(Number.isFinite)).toBe(true);

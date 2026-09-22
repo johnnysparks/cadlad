@@ -17,15 +17,14 @@ describe("loadModelSource", () => {
     }
   });
 
-  it("transpiles TypeScript syntax in .forge.ts files", async () => {
+  it("returns TypeScript source for the shared runtime compiler", async () => {
     const dir = mkdtempSync(join(tmpdir(), "cadlad-source-loader-"));
     try {
       const file = join(dir, "typed.forge.ts");
       writeFileSync(file, "const size: number = 12;\nreturn box(size, size, size);", "utf-8");
 
       const source = await loadModelSource(file);
-      expect(source).toContain("const size = 12;");
-      expect(source).not.toContain(": number");
+      expect(source).toContain("const size: number = 12;");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -46,7 +46,7 @@ describe("capability registry", () => {
     expect(result.bodies[0].mesh.indices.length).toBeGreaterThan(0);
   });
 
-  it("runs every registry-advertised example through the shared CLI/runtime path", async () => {
+  it("runs every registry-advertised example through the shared CLI, Studio, and eval runtime path", async () => {
     const examples = CAPABILITIES.filter((capability) => capability.example);
     const task: TaskSpec = {
       id: "capability-registry",
@@ -75,4 +75,24 @@ describe("capability registry", () => {
       rmSync(temp, { recursive: true, force: true });
     }
   }, 30_000);
+
+  it("keeps syntax diagnostics identical when loaded by the CLI or evaluated directly", async () => {
+    const source = "return box(";
+    const temp = mkdtempSync(join(tmpdir(), "cadlad-diagnostics-"));
+    try {
+      const file = join(temp, "invalid.forge.ts");
+      writeFileSync(file, source, "utf8");
+      const loaded = await loadModelSource(file);
+      const direct = await evaluateModel(source);
+      const cli = await evaluateModel(loaded);
+
+      expect(loaded).toBe(source);
+      expect(cli.errors).toEqual(direct.errors);
+      expect(cli.diagnostics).toEqual(direct.diagnostics);
+      expect(cli.evaluation.summary).toEqual(direct.evaluation.summary);
+      expect(cli.evaluation.stats.data).toEqual(direct.evaluation.stats.data);
+    } finally {
+      rmSync(temp, { recursive: true, force: true });
+    }
+  });
 });

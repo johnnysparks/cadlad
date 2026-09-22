@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { compileModelSource } from "@cadlad/api/source-compiler.js";
 
 export async function loadModelSource(file: string): Promise<string> {
   const absolutePath = resolve(file);
@@ -12,5 +11,7 @@ export async function loadModelSource(file: string): Promise<string> {
     );
   }
 
-  return compileModelSource(rawSource, { fileName: absolutePath });
+  // Compilation belongs to evaluateModel so CLI, Studio, and eval all receive
+  // the same source and the same syntax/runtime diagnostics.
+  return rawSource;
 }
