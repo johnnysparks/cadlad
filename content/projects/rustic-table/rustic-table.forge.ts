@@ -1,22 +1,45 @@
 // Rustic four-leg dining table reconstructed from a single perspective image.
 //
+// Authored dimensions are inches because this fixture is intended for US
+// dimensional lumber. CadLad's kernel still receives millimetres; the one-time
+// conversion below keeps the stock relationships explicit and unambiguous.
 // This is a level-1 assembly model: every visible woodworking member remains
-// separately addressable, while fasteners are symbolic cylinders. The image
-// does not establish hidden joinery or exact stock sizes, so those details are
-// intentionally deferred.
+// separately addressable, while fasteners are symbolic cylinders.
 
-const tableL = param("Table Length", 1800, { min: 1200, max: 2600, unit: "mm" });
-const tableD = param("Table Depth", 900, { min: 700, max: 1300, unit: "mm" });
-const tableH = param("Table Height", 760, { min: 650, max: 950, unit: "mm" });
-const topT = param("Top Thickness", 65, { min: 40, max: 100, unit: "mm" });
-const legS = param("Leg Section", 120, { min: 70, max: 180, unit: "mm" });
-const legInset = param("Leg Setback", 55, { min: 20, max: 100, unit: "mm" });
-const apronH = param("Apron Height", 145, { min: 90, max: 220, unit: "mm" });
-const apronT = param("Apron Thickness", 35, { min: 20, max: 60, unit: "mm" });
+const INCH = 25.4;
+const toMm = (inches) => inches * INCH;
 
-const plankCount = 6;
-const plankGap = 2;
-const plankD = (tableD - plankGap * (plankCount - 1)) / plankCount;
+const tableLIn = param("Table Length", 72, { min: 60, max: 96, unit: "in" });
+const tableHIn = param("Table Height", 30, { min: 26, max: 36, unit: "in" });
+const plankCount = Math.round(param("Top Board Count", 6, {
+  min: 5,
+  max: 8,
+  step: 1,
+  unit: "boards",
+}));
+const legInsetIn = param("Leg Setback", 2, { min: 1, max: 4, unit: "in" });
+
+// Actual finished dimensions for nominal dimensional lumber.
+const topThicknessIn = 1.5; // nominal 2x6 thickness
+const topBoardWidthIn = 5.5; // nominal 2x6 width
+const legSectionIn = 3.5; // nominal 4x4 section
+const apronHeightIn = 5.5; // nominal 2x6 width
+const apronThicknessIn = 1.5; // nominal 2x6 thickness
+const plankGapIn = 0.125; // 1/8" seam between top boards
+const apronOverlapIn = 0.5; // overlap into adjoining members for a stable layout
+
+const tableL = toMm(tableLIn);
+const tableD = toMm(plankCount * topBoardWidthIn + (plankCount - 1) * plankGapIn);
+const tableH = toMm(tableHIn);
+const topT = toMm(topThicknessIn);
+const plankD = toMm(topBoardWidthIn);
+const legS = toMm(legSectionIn);
+const legInset = toMm(legInsetIn);
+const apronH = toMm(apronHeightIn);
+const apronT = toMm(apronThicknessIn);
+const plankGap = toMm(plankGapIn);
+const apronOverlap = toMm(apronOverlapIn);
+
 const legH = tableH - topT;
 const topZ = tableH - topT / 2;
 const legZ = legH / 2;
@@ -29,7 +52,6 @@ const legY = tableD / 2 - legInset - legS / 2;
 
 // Aprons terminate at the inside faces of the legs and tuck in slightly for a
 // plausible, construction-friendly relationship.
-const apronOverlap = 10;
 const longApronL = tableL - 2 * (legInset + legS) + apronOverlap * 4;
 const shortApronL = tableD - 2 * (legInset + legS) + apronOverlap * 4;
 const frontApronY = -(tableD / 2 - legInset - legS - apronT / 2 + apronOverlap);
@@ -42,13 +64,13 @@ const hardwareColor = "#b8b7ae";
 
 const table = assembly("Rustic Table");
 
-// Six long boards make the top seam pattern visible while preserving a clean
+// Long boards make the top seam pattern visible while preserving a clean
 // overall rectangular envelope.
 for (let i = 0; i < plankCount; i += 1) {
   const y = -tableD / 2 + plankD / 2 + i * (plankD + plankGap);
   table.add(
     `top-plank-${i + 1}`,
-    box(tableL, plankD, topT).color(topColors[i]),
+    box(tableL, plankD, topT).color(topColors[i % topColors.length]),
     [0, y, topZ],
   );
 }
@@ -73,9 +95,9 @@ table.add("apron-right", shortApron, [sideApronX, 0, apronZ]);
 // Symbolic exposed bolt heads. Threads and hidden joinery are deliberately
 // omitted; these are only the visible round hardware cues from the image.
 const boltZ = apronZ;
-const bolt = cylinder(6, 11, 11, 24).color(hardwareColor);
-const frontBoltY = -(tableD / 2 - legInset) - 3;
-const sideBoltX = -(tableL / 2 - legInset) - 3;
+const bolt = cylinder(toMm(0.25), toMm(0.375), toMm(0.375), 24).color(hardwareColor);
+const frontBoltY = -(tableD / 2 - legInset) - toMm(0.125);
+const sideBoltX = -(tableL / 2 - legInset) - toMm(0.125);
 
 table.add("bolt-front-left", bolt.rotate(90, 0, 0), [-legX, frontBoltY, boltZ]);
 table.add("bolt-front-right", bolt.rotate(90, 0, 0), [legX, frontBoltY, boltZ]);
